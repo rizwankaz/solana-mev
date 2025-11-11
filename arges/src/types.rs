@@ -1,0 +1,168 @@
+use serde::{Deserialize, Serialize};
+use solana_transaction_status::{
+    EncodedTransaction, UiTransactionStatusMeta,
+};
+
+/// block fetcher config
+#[derive(Debug, Clone)]
+pub struct FetcherConfig {
+    /// RPC endpoint URL
+    pub rpc_url: String,
+    
+    /// maximum retries for failed requests
+    pub max_retries: u32,
+    
+    /// delay between retries
+    pub retry_delay_ms: u64,
+    
+    /// rate limit: max requests per second
+    pub rate_limit: u32,
+    
+    /// request timeout
+    pub timeout_secs: u64,
+}
+
+impl Default for FetcherConfig {
+    fn default() -> Self {
+        Self {
+            rpc_url: "https://api.mainnet-beta.solana.com".to_string(),
+            max_retries: 3,
+            retry_delay_ms: 1000,
+            rate_limit: 10,
+            timeout_secs: 30,
+        }
+    }
+}
+
+/// fetched block with metadata
+#[derive(Debug, Clone)]
+pub struct FetchedBlock {
+    pub slot: u64,
+    pub blockhash: String,
+    pub previous_blockhash: String,
+    pub parent_slot: u64,
+    pub block_time: Option<i64>,
+    pub transactions: Vec<FetchedTransaction>,
+    pub rewards: Vec<Reward>,
+    pub block_height: Option<u64>,
+}
+
+impl FetchedBlock {
+    /// get block timestamp
+    pub fn timestamp(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+        self.block_time.and_then(|ts| {
+            chrono::DateTime::from_timestamp(ts, 0)
+        })
+    }
+    
+    /// count successful txs
+    pub fn successful_tx_count(&self) -> usize {
+        self.transactions
+            .iter()
+            .filter(|tx| tx.is_success())
+            .count()
+    }
+    
+    /// total cus consumed
+    pub fn total_compute_units(&self) -> u64 {
+        self.transactions
+            .iter()
+            .filter_map(|tx| tx.compute_units_consumed())
+            .sum()
+    }
+    
+    /// Total fees paid
+    pub fn total_fees(&self) -> u64 {
+        self.transactions
+            .iter()
+            .filter_map(|tx| tx.fee())
+            .sum()
+    }
+}
+
+/// A transaction within a block
+#[derive(Debug, Clone)]
+pub struct FetchedTransaction {
+    pub signature: String,
+    pub transaction: EncodedTransaction,
+    pub meta: Option<UiTransactionStatusMeta>,
+    pub index: usize,
+}
+
+impl FetchedTransaction {
+    /// Check if transaction succeeded
+    pub fn is_success(&self) -> bool {
+        self.meta
+            .as_ref()
+            .map(|m| m.err.is_none())
+            .unwrap_or(false)
+    }
+    
+    /// Get compute units consumed
+    pub fn compute_units_consumed(&self) -> Option<u64> {
+        self.meta.as_ref().and_then(|m| {
+            // Handle OptionSerializer by converting to Option
+            match m.compute_units_consumed {
+                solana_transaction_status::option_serializer::OptionSerializer::Some(units) => Some(units),
+                solana_transaction_status::option_serializer::OptionSerializer::None => None,
+                solana_transaction_status::option_serializer::OptionSerializer::Skip => None,
+            }
+        })
+    }
+    
+    /// Get transaction fee
+    pub fn fee(&self) -> Option<u64> {
+        self.meta.as_ref().map(|m| m.fee)
+    }
+    
+    /// Get signer (first account in transaction)
+    pub fn signer(&self) -> Option<String> {
+        match &self.transaction {
+            EncodedTransaction::Json(tx) => {
+                match &tx.message {
+                    solana_transaction_status::UiMessage::Parsed(parsed) => {
+                        parsed.account_keys.first().map(|key| key.pubkey.clone())
+                    },
+                    solana_transaction_status::UiMessage::Raw(raw) => {
+                        raw.account_keys.first().cloned()
+                    },
+                }
+            },
+            _ => None,
+        }
+    }
+}
+
+/// Block reward
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Reward {
+    pub pubkey: String,
+    pub lamports: i64,
+    pub post_balance: u64,
+    pub reward_type: Option<String>,
+    pub commission: Option<u8>,
+}
+
+/// Error types
+#[derive(Debug, thiserror::Error)]
+pub enum FetcherError {
+    #[error("RPC error: {0}")]
+    RpcError(#[from] solana_client::client_error::ClientError),
+    
+    #[error("Block not available at slot {slot}")]
+    BlockNotAvailable { slot: u64 },
+    
+    #[error("Rate limit exceeded")]
+    RateLimitExceeded,
+    
+    #[error("Max retries exceeded for slot {slot}")]
+    MaxRetriesExceeded { slot: u64 },
+    
+    #[error("Invalid block data: {0}")]
+    InvalidBlockData(String),
+    
+    #[error("Join error: {0}")]
+    JoinError(#[from] tokio::task::JoinError),
+}
+
+pub type Result<T> = std::result::Result<T, FetcherError>;
