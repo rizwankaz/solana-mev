@@ -1,10 +1,13 @@
 mod fetcher;
 mod stream;
 mod types;
+mod dex;
+mod mev;
 
 use fetcher::BlockFetcher;
 use stream::BlockStream;
 use types::FetcherConfig;
+use mev::MevDetector;
 use std::sync::Arc;
 use tracing::{info, error};
 
@@ -134,6 +137,73 @@ async fn main() -> anyhow::Result<()> {
     }
     
     info!("examples complete");
-    
+
+    info!("\n");
+
+    // MEV detection example
+    info!("mev detection");
+    info!("analyzing recent blocks for mev");
+
+    let mev_detector = MevDetector::new();
+
+    // Fetch a few recent blocks
+    let mev_start_slot = current_slot.saturating_sub(20);
+    let mev_end_slot = mev_start_slot + 10;
+
+    let results = fetcher.fetch_range(mev_start_slot, mev_end_slot).await;
+
+    let mut blocks = Vec::new();
+    for (_slot, result) in results {
+        if let Ok(block) = result {
+            blocks.push(block);
+        }
+    }
+
+    info!("analyzing {} blocks for mev", blocks.len());
+
+    let mut total_mev_events = 0;
+    let mut total_profit = 0i64;
+
+    for block in &blocks {
+        match mev_detector.detect_block(block) {
+            Ok(analysis) => {
+                if analysis.has_mev() {
+                    info!(
+                        "  + slot {}: {} mev events, {} lamports profit, {} swaps",
+                        block.slot,
+                        analysis.events.len(),
+                        analysis.total_profit(),
+                        analysis.swap_count
+                    );
+
+                    total_mev_events += analysis.events.len();
+                    total_profit += analysis.total_profit();
+
+                    // Show details of each MEV event
+                    for event in &analysis.events {
+                        info!("    - {}: {} lamports profit (confidence: {:.2})",
+                            event.mev_type.name(),
+                            event.profit_lamports.unwrap_or(0),
+                            event.confidence
+                        );
+                    }
+                }
+            },
+            Err(e) => {
+                error!("  - slot {}: mev detection error: {:?}", block.slot, e);
+            }
+        }
+    }
+
+    info!("\nmev summary:");
+    info!("  total events: {}", total_mev_events);
+    info!("  total profit: {} lamports ({:.4} SOL)", total_profit, total_profit as f64 / 1e9);
+    info!("  blocks analyzed: {}", blocks.len());
+    info!("  blocks with mev: {}", blocks.iter().filter(|b| {
+        mev_detector.detect_block(b).map(|a| a.has_mev()).unwrap_or(false)
+    }).count());
+
+    info!("\nall examples complete");
+
     Ok(())
 }
