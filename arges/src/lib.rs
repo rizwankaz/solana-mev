@@ -80,7 +80,7 @@ pub use types::{FetchedBlock, FetchedTransaction, FetcherConfig, FetcherError};
 pub use dex::{DexParser, DexProtocol, ParsedSwap};
 
 pub use mev::{
-    MevDetector, MevEvent, MevType, MevClassifier,
+    MevDetector, MevEvent, MevType, MevMetadata, MevClassifier,
     SlotMevMetrics, EpochMevMetrics,
     ArbitrageMetadata, SandwichMetadata, LiquidationMetadata, JitMetadata,
     AdaptiveMevDetector, EnhancedMevAnalysis,

@@ -1,5 +1,5 @@
 // Import from the library crate
-use arges::{BlockFetcher, BlockStream, FetcherConfig, FetcherError, MevDetector};
+use arges::{BlockFetcher, BlockStream, FetcherConfig, FetcherError, MevDetector, MevMetadata};
 use std::sync::Arc;
 use tracing::{info, error};
 
@@ -161,23 +161,65 @@ async fn main() -> anyhow::Result<()> {
             Ok(analysis) => {
                 if analysis.has_mev() {
                     info!(
-                        "  + slot {}: {} mev events, {} lamports profit, {} swaps",
+                        "  ✓ Slot {}: {} MEV events, {:.4} SOL profit, {} swaps",
                         block.slot,
                         analysis.events.len(),
-                        analysis.total_profit(),
+                        analysis.total_profit() as f64 / 1e9,
                         analysis.swap_count
                     );
 
                     total_mev_events += analysis.events.len();
                     total_profit += analysis.total_profit();
 
-                    // Show details of each MEV event
+                    // Show details of each MEV event with transaction signatures
                     for event in &analysis.events {
-                        info!("    - {}: {} lamports profit (confidence: {:.2})",
+                        let profit_sol = event.profit_lamports.unwrap_or(0) as f64 / 1e9;
+
+                        // Get transaction signature and extractor
+                        let tx_sig = if !event.transactions.is_empty() {
+                            &event.transactions[0]
+                        } else {
+                            "N/A"
+                        };
+
+                        let extractor = event.extractor.as_deref().unwrap_or("Unknown");
+
+                        info!(
+                            "    → {}: {:.6} SOL (confidence: {:.0}%)",
                             event.mev_type.name(),
-                            event.profit_lamports.unwrap_or(0),
-                            event.confidence
+                            profit_sol,
+                            event.confidence * 100.0
                         );
+                        info!(
+                            "      TX: https://solscan.io/tx/{}",
+                            tx_sig
+                        );
+                        info!(
+                            "      Extractor: https://solscan.io/address/{}",
+                            extractor
+                        );
+
+                        // Show additional details based on MEV type
+                        match &event.metadata {
+                            MevMetadata::Arbitrage(arb) => {
+                                info!(
+                                    "      Path: {} ({})",
+                                    arb.token_path.join(" → "),
+                                    arb.dexs.join(", ")
+                                );
+                            },
+                            MevMetadata::Sandwich(sandwich) => {
+                                info!("      Victim TX: https://solscan.io/tx/{}", sandwich.victim_tx);
+                                if let Some(loss) = sandwich.victim_loss {
+                                    info!("      Victim loss: {:.6} SOL", loss as f64 / 1e9);
+                                }
+                            },
+                            MevMetadata::Liquidation(liq) => {
+                                info!("      Protocol: {}", liq.protocol);
+                                info!("      Bonus: {:.6} SOL", liq.liquidation_bonus as f64 / 1e9);
+                            },
+                            _ => {}
+                        }
                     }
                 }
             },
@@ -187,15 +229,19 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    info!("\nmev summary:");
-    info!("  total events: {}", total_mev_events);
-    info!("  total profit: {} lamports ({:.4} SOL)", total_profit, total_profit as f64 / 1e9);
-    info!("  blocks analyzed: {}", blocks.len());
-    info!("  blocks with mev: {}", blocks.iter().filter(|b| {
+    info!("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    info!("📊 MEV SUMMARY");
+    info!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    info!("  Total events: {}", total_mev_events);
+    info!("  Total profit: {:.4} SOL ({} lamports)", total_profit as f64 / 1e9, total_profit);
+    info!("  Blocks analyzed: {}", blocks.len());
+    info!("  Blocks with MEV: {}", blocks.iter().filter(|b| {
         mev_detector.detect_block(b).map(|a| a.has_mev()).unwrap_or(false)
     }).count());
+    info!("  Average per block: {:.4} SOL", (total_profit as f64 / 1e9) / blocks.len() as f64);
+    info!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
-    info!("\nall examples complete");
+    info!("\n✅ all examples complete");
 
     Ok(())
 }
