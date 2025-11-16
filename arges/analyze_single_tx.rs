@@ -1,13 +1,18 @@
 // Analyze a single transaction to debug MEV detection
 use arges::{BlockFetcher, DexParser, FetcherConfig, MevDetector, ProfitCalculator, PriceOracle, MetadataCache, CexOracle, CexDexDetector};
 use std::sync::Arc;
+use solana_client::rpc_client::RpcClient;
+use solana_sdk::commitment_config::CommitmentConfig;
+use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Setup
+    let rpc_url = std::env::var("SOLANA_RPC_URL")
+        .unwrap_or_else(|_| "https://api.mainnet-beta.solana.com".to_string());
+
     let config = FetcherConfig {
-        rpc_url: std::env::var("SOLANA_RPC_URL")
-            .unwrap_or_else(|_| "https://api.mainnet-beta.solana.com".to_string()),
+        rpc_url: rpc_url.clone(),
         max_retries: 3,
         retry_delay_ms: 1000,
         rate_limit: 5,
@@ -15,6 +20,13 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let fetcher = Arc::new(BlockFetcher::new(config));
+
+    // Create RPC client for mint resolution
+    let rpc_client = Arc::new(RpcClient::new_with_timeout_and_commitment(
+        rpc_url,
+        Duration::from_secs(30),
+        CommitmentConfig::confirmed(),
+    ));
 
     // Fetch the block containing the transaction
     let slot = 380404433;
@@ -61,8 +73,9 @@ async fn main() -> anyhow::Result<()> {
             }
         }
 
-        // Parse swaps from this transaction
-        let swaps = DexParser::parse_transaction(tx, idx)?;
+        // Parse swaps from this transaction with RPC-based mint resolution
+        println!("\n🔍 Parsing swaps with RPC-based mint resolution...");
+        let swaps = DexParser::parse_transaction(tx, idx, Some(&rpc_client)).await?;
         println!("\n📊 Detected {} swap(s):", swaps.len());
         for (i, swap) in swaps.iter().enumerate() {
             println!("\n  Swap {}:", i + 1);
@@ -125,7 +138,8 @@ async fn main() -> anyhow::Result<()> {
 
         let detector = MevDetector::new()
             .with_profit_calculator(Arc::clone(&profit_calculator))
-            .with_cex_dex_detector(Arc::clone(&cex_dex_detector));
+            .with_cex_dex_detector(Arc::clone(&cex_dex_detector))
+            .with_rpc_client(Arc::clone(&rpc_client));
 
         let analysis = detector.detect_block_with_pricing(&block).await?;
 

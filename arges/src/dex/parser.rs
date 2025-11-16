@@ -8,15 +8,72 @@ use solana_transaction_status::{
     UiParsedInstruction, UiTransactionTokenBalance,
 };
 use serde_json::Value;
+use solana_client::rpc_client::RpcClient;
+use solana_sdk::pubkey::Pubkey;
+use std::str::FromStr;
+use std::sync::Arc;
+use std::collections::HashMap;
 
 /// Main DEX parser that can parse transactions from any supported DEX
 pub struct DexParser;
 
 impl DexParser {
+    /// Fetch mint address from a token account via RPC
+    async fn fetch_mint_from_account(
+        rpc_client: &RpcClient,
+        account_address: &str,
+        cache: &mut HashMap<String, Option<String>>,
+    ) -> Option<String> {
+        // Check cache first
+        if let Some(cached) = cache.get(account_address) {
+            return cached.clone();
+        }
+
+        // Parse account address
+        let pubkey = match Pubkey::from_str(account_address) {
+            Ok(pk) => pk,
+            Err(_) => {
+                cache.insert(account_address.to_string(), None);
+                return None;
+            }
+        };
+
+        // Fetch account info
+        let account = match rpc_client.get_account(&pubkey) {
+            Ok(acc) => acc,
+            Err(e) => {
+                eprintln!("[DEBUG] Failed to fetch account {}: {}", &account_address[..8], e);
+                cache.insert(account_address.to_string(), None);
+                return None;
+            }
+        };
+
+        // SPL Token account data format:
+        // Bytes 0-31: mint (32 bytes)
+        // Bytes 32-63: owner (32 bytes)
+        // Bytes 64-71: amount (8 bytes)
+        // ...
+        if account.data.len() < 32 {
+            eprintln!("[DEBUG] Account {} data too short: {} bytes", &account_address[..8], account.data.len());
+            cache.insert(account_address.to_string(), None);
+            return None;
+        }
+
+        // Extract mint (first 32 bytes)
+        let mint_bytes: [u8; 32] = account.data[0..32].try_into().ok()?;
+        let mint_pubkey = Pubkey::new_from_array(mint_bytes);
+        let mint_str = mint_pubkey.to_string();
+
+        eprintln!("[DEBUG] Fetched mint for {}: {}", &account_address[..8], &mint_str);
+        cache.insert(account_address.to_string(), Some(mint_str.clone()));
+        Some(mint_str)
+    }
+
     /// Parse all swaps from a transaction
-    pub fn parse_transaction(
+    pub async fn parse_transaction(
         tx: &FetchedTransaction,
         tx_index: usize,
+        rpc_client: Option<&RpcClient>,
     ) -> Result<Vec<ParsedSwap>> {
         let mut swaps = Vec::new();
 
@@ -64,7 +121,7 @@ impl DexParser {
 
         // If no swaps found from balances, try parsing from inner instructions
         if swaps.is_empty() {
-            if let Some(detected) = Self::parse_from_inner_instructions(tx, tx_index, pre_balances, post_balances)? {
+            if let Some(detected) = Self::parse_from_inner_instructions(tx, tx_index, pre_balances, post_balances, rpc_client).await? {
                 swaps.extend(detected);
             }
         }
@@ -73,11 +130,12 @@ impl DexParser {
     }
 
     /// Parse swaps from inner instructions (token transfers)
-    fn parse_from_inner_instructions(
+    async fn parse_from_inner_instructions(
         tx: &FetchedTransaction,
         tx_index: usize,
         pre_balances: Option<&Vec<UiTransactionTokenBalance>>,
         post_balances: Option<&Vec<UiTransactionTokenBalance>>,
+        rpc_client: Option<&RpcClient>,
     ) -> Result<Option<Vec<ParsedSwap>>> {
         // Get inner instructions from metadata
         let inner_instructions = tx.meta.as_ref().and_then(|m| {
@@ -133,6 +191,9 @@ impl DexParser {
 
         eprintln!("[DEBUG] Built account->mint map with {} entries", account_to_mint.len());
 
+        // RPC cache for fetched mints
+        let mut rpc_mint_cache: HashMap<String, Option<String>> = HashMap::new();
+
         // Parse token transfers from inner instructions
         let mut transfers = Vec::new();
 
@@ -140,18 +201,38 @@ impl DexParser {
             for instruction in &inner_ix.instructions {
                 // Try to parse any instruction that might be a token transfer
                 if let Some(mut transfer) = Self::try_parse_token_transfer(instruction) {
-                    // If mint is missing, try to resolve it from account_to_mint map
+                    // If mint is missing, try to resolve it
                     if transfer.mint.is_none() {
-                        // Try source account
+                        // 1. Try from balance-based account_to_mint map
                         if let Some(mint) = account_to_mint.get(&transfer.source) {
-                            eprintln!("[DEBUG] Resolved mint for source {}: {}", &transfer.source[..8], mint);
+                            eprintln!("[DEBUG] Resolved mint for source {} from balances: {}", &transfer.source[..8], mint);
                             transfer.mint = Some(mint.clone());
                         }
                         // If still None, try destination account
                         if transfer.mint.is_none() {
                             if let Some(mint) = account_to_mint.get(&transfer.destination) {
-                                eprintln!("[DEBUG] Resolved mint for destination {}: {}", &transfer.destination[..8], mint);
+                                eprintln!("[DEBUG] Resolved mint for destination {} from balances: {}", &transfer.destination[..8], mint);
                                 transfer.mint = Some(mint.clone());
+                            }
+                        }
+
+                        // 2. If still None and RPC client available, fetch via RPC
+                        if transfer.mint.is_none() && rpc_client.is_some() {
+                            eprintln!("[DEBUG] Attempting RPC fetch for source account {}", &transfer.source[..8]);
+                            if let Some(mint) = Self::fetch_mint_from_account(
+                                rpc_client.unwrap(),
+                                &transfer.source,
+                                &mut rpc_mint_cache,
+                            ).await {
+                                eprintln!("[DEBUG] Resolved mint for source {} via RPC: {}", &transfer.source[..8], &mint);
+                                transfer.mint = Some(mint);
+                            } else if let Some(mint) = Self::fetch_mint_from_account(
+                                rpc_client.unwrap(),
+                                &transfer.destination,
+                                &mut rpc_mint_cache,
+                            ).await {
+                                eprintln!("[DEBUG] Resolved mint for destination {} via RPC: {}", &transfer.destination[..8], &mint);
+                                transfer.mint = Some(mint);
                             }
                         }
                     }
@@ -159,6 +240,8 @@ impl DexParser {
                 }
             }
         }
+
+        eprintln!("[DEBUG] RPC cache size: {} entries", rpc_mint_cache.len());
 
         // If we found transfers, try to match them into swaps
         if transfers.is_empty() {
@@ -528,11 +611,14 @@ impl DexParser {
     }
 
     /// Extract all swaps from a block of transactions
-    pub fn parse_block(transactions: &[FetchedTransaction]) -> Vec<ParsedSwap> {
+    pub async fn parse_block(
+        transactions: &[FetchedTransaction],
+        rpc_client: Option<&RpcClient>,
+    ) -> Vec<ParsedSwap> {
         let mut all_swaps = Vec::new();
 
         for (idx, tx) in transactions.iter().enumerate() {
-            if let Ok(swaps) = Self::parse_transaction(tx, idx) {
+            if let Ok(swaps) = Self::parse_transaction(tx, idx, rpc_client).await {
                 all_swaps.extend(swaps);
             }
         }

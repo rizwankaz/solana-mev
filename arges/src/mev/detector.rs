@@ -16,6 +16,7 @@ use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
+use solana_client::rpc_client::RpcClient;
 
 /// Comprehensive MEV detector that orchestrates all detection strategies
 pub struct MevDetector {
@@ -39,6 +40,9 @@ pub struct MevDetector {
 
     /// Profit calculator for accurate SOL-denominated profits (optional)
     profit_calculator: Option<Arc<ProfitCalculator>>,
+
+    /// RPC client for fetching additional data (optional)
+    rpc_client: Option<Arc<RpcClient>>,
 
     /// Configuration
     config: DetectorConfig,
@@ -103,6 +107,7 @@ impl MevDetector {
             cex_dex_detector: None,
             classifier: MevClassifier::default(),
             profit_calculator: None,
+            rpc_client: None,
             config,
         }
     }
@@ -119,19 +124,26 @@ impl MevDetector {
         self
     }
 
+    /// Set RPC client for fetching additional on-chain data (enables mint resolution for transactions without balance metadata)
+    pub fn with_rpc_client(mut self, client: Arc<RpcClient>) -> Self {
+        self.rpc_client = Some(client);
+        self
+    }
+
     /// Get mutable reference to classifier (for adding known bots, etc.)
     pub fn classifier_mut(&mut self) -> &mut MevClassifier {
         &mut self.classifier
     }
 
     /// Detect all MEV in a single block
-    pub fn detect_block(&self, block: &FetchedBlock) -> Result<BlockMevAnalysis> {
+    pub async fn detect_block(&self, block: &FetchedBlock) -> Result<BlockMevAnalysis> {
         info!("Analyzing block {} for MEV", block.slot);
 
         let mut all_events = Vec::new();
 
         // Parse all swaps from the block
-        let swaps = DexParser::parse_block(&block.transactions);
+        let rpc_ref = self.rpc_client.as_ref().map(|c| c.as_ref());
+        let swaps = DexParser::parse_block(&block.transactions, rpc_ref).await;
         debug!("Parsed {} swaps from block {}", swaps.len(), block.slot);
 
         // Run each detector if enabled
@@ -203,12 +215,13 @@ impl MevDetector {
     /// based on real token prices and metadata.
     pub async fn detect_block_with_pricing(&self, block: &FetchedBlock) -> Result<BlockMevAnalysis> {
         // First, run regular detection
-        let mut analysis = self.detect_block(block)?;
+        let mut analysis = self.detect_block(block).await?;
 
         // Run CEX-DEX detection if enabled (requires async)
+        let rpc_ref = self.rpc_client.as_ref().map(|c| c.as_ref());
         if self.config.detect_cex_dex {
             if let Some(cex_dex_detector) = &self.cex_dex_detector {
-                let swaps = DexParser::parse_block(&block.transactions);
+                let swaps = DexParser::parse_block(&block.transactions, rpc_ref).await;
                 match cex_dex_detector.detect(block, &swaps).await {
                     Ok(events) => {
                         debug!("Found {} CEX-DEX arbitrage events", events.len());
@@ -226,7 +239,7 @@ impl MevDetector {
             info!("Enriching {} MEV events with accurate profit calculations", analysis.events.len());
 
             // Parse swaps for profit calculation
-            let swaps = DexParser::parse_block(&block.transactions);
+            let swaps = DexParser::parse_block(&block.transactions, rpc_ref).await;
 
             for event in &mut analysis.events {
                 match self.calculate_accurate_profit(event, &swaps, block, calc).await {
@@ -378,12 +391,12 @@ impl MevDetector {
     }
 
     /// Detect MEV across multiple blocks
-    pub fn detect_blocks(&self, blocks: &[FetchedBlock]) -> Result<Vec<BlockMevAnalysis>> {
+    pub async fn detect_blocks(&self, blocks: &[FetchedBlock]) -> Result<Vec<BlockMevAnalysis>> {
         let mut analyses = Vec::new();
 
         // Analyze each block individually
         for block in blocks {
-            match self.detect_block(block) {
+            match self.detect_block(block).await {
                 Ok(analysis) => analyses.push(analysis),
                 Err(e) => {
                     warn!("Failed to analyze block {}: {}", block.slot, e);
@@ -394,7 +407,7 @@ impl MevDetector {
         // If cross-block detection is enabled, look for patterns across blocks
         if self.config.enable_cross_block {
             info!("Running cross-block MEV detection");
-            let cross_block_events = self.detect_cross_block_patterns(blocks)?;
+            let cross_block_events = self.detect_cross_block_patterns(blocks).await?;
             debug!(
                 "Found {} cross-block MEV events",
                 cross_block_events.len()
@@ -421,13 +434,14 @@ impl MevDetector {
     }
 
     /// Detect cross-block MEV patterns
-    fn detect_cross_block_patterns(&self, blocks: &[FetchedBlock]) -> Result<Vec<MevEvent>> {
+    async fn detect_cross_block_patterns(&self, blocks: &[FetchedBlock]) -> Result<Vec<MevEvent>> {
         let mut events = Vec::new();
 
         // Collect all swaps by slot
+        let rpc_ref = self.rpc_client.as_ref().map(|c| c.as_ref());
         let mut swaps_by_slot: HashMap<u64, Vec<_>> = HashMap::new();
         for block in blocks {
-            let swaps = DexParser::parse_block(&block.transactions);
+            let swaps = DexParser::parse_block(&block.transactions, rpc_ref).await;
             swaps_by_slot.insert(block.slot, swaps);
         }
 

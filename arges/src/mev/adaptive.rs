@@ -77,7 +77,7 @@ impl AdaptiveMevDetector {
     }
 
     /// Detect MEV in a block with adaptive thresholds
-    pub fn detect_block(&mut self, block: &FetchedBlock) -> Result<EnhancedMevAnalysis> {
+    pub async fn detect_block(&mut self, block: &FetchedBlock) -> Result<EnhancedMevAnalysis> {
         // Update network state
         if block.slot % self.config.network_update_interval == 0 {
             self.network_monitor.update_from_block(block)?;
@@ -91,7 +91,7 @@ impl AdaptiveMevDetector {
         };
 
         // Run base MEV detection
-        let base_analysis = self.detector.detect_block(block)?;
+        let base_analysis = self.detector.detect_block(block).await?;
 
         // Detect Jito bundles
         let bundles = if self.config.enable_jito_detection {
