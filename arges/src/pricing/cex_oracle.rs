@@ -144,6 +144,11 @@ impl TokenMapping {
         self.mappings.get(mint).map(|(symbol, _)| symbol.as_str())
     }
 
+    /// Get token decimals for a Solana mint address
+    pub fn get_decimals(&self, mint: &str) -> Option<u8> {
+        self.mappings.get(mint).map(|(_, decimals)| *decimals)
+    }
+
     /// Add a custom mapping
     pub fn add_mapping(&mut self, mint: String, symbol: String, decimals: u8) {
         self.mappings.insert(mint, (symbol, decimals));
@@ -186,6 +191,11 @@ impl CexOracle {
             .ok_or_else(|| anyhow!("No CEX mapping for mint: {}", mint))?;
 
         self.get_aggregated_price(symbol).await
+    }
+
+    /// Get token decimals for a Solana mint address
+    pub fn get_decimals(&self, mint: &str) -> Option<u8> {
+        self.token_mapping.get_decimals(mint)
     }
 
     /// Get aggregated price from multiple exchanges

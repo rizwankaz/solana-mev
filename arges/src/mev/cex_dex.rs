@@ -6,10 +6,10 @@
 use crate::dex::ParsedSwap;
 use crate::types::FetchedBlock;
 use crate::mev::types::*;
-use crate::pricing::cex_oracle::{CexOracle, AggregatedCexPrice};
-use anyhow::Result;
+use crate::pricing::cex_oracle::CexOracle;
+use anyhow::{anyhow, Result};
 use std::sync::Arc;
-use tracing::{debug, warn};
+use tracing::debug;
 
 /// CEX-DEX arbitrage metadata
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -41,8 +41,8 @@ pub struct CexDexMetadata {
     /// Price difference (%)
     pub price_diff_pct: f64,
 
-    /// Trade amount (in tokens)
-    pub amount: u64,
+    /// Trade amount (in normalized tokens, not raw units)
+    pub amount: f64,
 
     /// Estimated profit (in USD)
     pub estimated_profit_usd: f64,
@@ -114,20 +114,31 @@ impl CexDexDetector {
             }
         };
 
+        // Get token decimals for proper normalization
+        let token_in_decimals = self.cex_oracle.get_decimals(&swap.token_in)
+            .ok_or_else(|| anyhow!("No decimals info for token_in: {}", swap.token_in))?;
+        let token_out_decimals = self.cex_oracle.get_decimals(&swap.token_out)
+            .ok_or_else(|| anyhow!("No decimals info for token_out: {}", swap.token_out))?;
+
+        // Normalize amounts by decimals (raw units -> actual tokens)
+        // For example: 1,000,000 raw USDC (6 decimals) = 1.0 USDC
+        let amount_in_normalized = (swap.amount_in as f64) / 10_f64.powi(token_in_decimals as i32);
+        let amount_out_normalized = (swap.amount_out as f64) / 10_f64.powi(token_out_decimals as i32);
+
         // Calculate DEX execution price
         // For swap of token_in -> token_out:
         // DEX price = (amount_in_usd / amount_out_tokens)
         // This is the USD price per token_out
 
-        let amount_in_usd = (swap.amount_in as f64) * token_in_cex_price.avg_price;
-        let amount_out_tokens = swap.amount_out as f64;
+        let amount_in_usd = amount_in_normalized * token_in_cex_price.avg_price;
+        let amount_out_tokens = amount_out_normalized;
 
         // Skip if amounts are too small
         if amount_in_usd < self.min_trade_size_usd {
             return Ok(None);
         }
 
-        // DEX price for token_out (in USD per token, need to account for decimals)
+        // DEX price for token_out (in USD per token)
         let dex_price_per_output_token = amount_in_usd / amount_out_tokens;
 
         // CEX price for token_out
@@ -190,7 +201,7 @@ impl CexDexDetector {
             cex_bid: token_out_cex_price.best_bid,
             cex_ask: token_out_cex_price.best_ask,
             price_diff_pct: price_diff_pct.abs(),
-            amount: swap.amount_out,
+            amount: amount_out_normalized,
             estimated_profit_usd,
             cex_exchanges: token_out_cex_price.exchange_prices
                 .iter()
