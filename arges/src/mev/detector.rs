@@ -305,10 +305,14 @@ impl MevDetector {
                     // Calculate victim loss in SOL using fair price averaging
                     // Fair price ≈ average of frontrun and backrun prices
                     // This approximates the pre-sandwich pool state
-                    let frontrun_price = fr.amount_out as f64 / fr.amount_in as f64;
-                    let backrun_price = br.amount_out as f64 / br.amount_in as f64;
-                    let fair_price = (frontrun_price + backrun_price) / 2.0;
-                    let expected_output = (vic.amount_in as f64 * fair_price) as u64;
+                    //
+                    // Frontrun and victim trade same direction (e.g., SOL -> TOKEN)
+                    // Backrun trades opposite direction (TOKEN -> SOL)
+                    // We need to express both prices in same units (tokens per SOL)
+                    let frontrun_rate = fr.amount_out as f64 / fr.amount_in as f64; // tokens per SOL
+                    let backrun_rate = br.amount_in as f64 / br.amount_out as f64;  // tokens per SOL (inverted)
+                    let fair_rate = (frontrun_rate + backrun_rate) / 2.0;
+                    let expected_output = (vic.amount_in as f64 * fair_rate) as u64;
                     let victim_loss_sol = calc.calculate_victim_loss(vic, expected_output).await.unwrap_or(0.0);
 
                     // Get USD values
