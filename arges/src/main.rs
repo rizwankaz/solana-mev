@@ -5,25 +5,16 @@ use arges::{
 };
 use std::sync::Arc;
 use tracing::{info, error};
-use std::fs::OpenOptions;
-use std::io::Write;
-use tracing_subscriber::fmt::writer::MakeWriterExt;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Create output file
-    let log_file = OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(true)
-        .open("mev_analysis_output.txt")?;
+    // Create file appender for output
+    let file_appender = tracing_appender::rolling::never(".", "mev_analysis_output.txt");
 
-    // Configure tracing to write to both file and stdout (with less verbose console output)
-    let file_writer = std::sync::Mutex::new(log_file);
-
+    // Configure tracing to write to file
     tracing_subscriber::fmt()
         .with_env_filter("arges=debug")
-        .with_writer(move || file_writer.lock().unwrap())
+        .with_writer(file_appender)
         .with_ansi(false)  // Disable color codes in file
         .init();
     
