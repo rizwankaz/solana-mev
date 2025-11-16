@@ -285,10 +285,13 @@ impl MevDetector {
                     // Calculate sandwich profit in SOL
                     let profit_sol = calc.calculate_sandwich_profit(fr, br, block).await?;
 
-                    // Calculate victim loss in SOL
-                    // Use backrun price as "fair" price to calculate expected output
+                    // Calculate victim loss in SOL using fair price averaging
+                    // Fair price ≈ average of frontrun and backrun prices
+                    // This approximates the pre-sandwich pool state
+                    let frontrun_price = fr.amount_out as f64 / fr.amount_in as f64;
                     let backrun_price = br.amount_out as f64 / br.amount_in as f64;
-                    let expected_output = (vic.amount_in as f64 * backrun_price) as u64;
+                    let fair_price = (frontrun_price + backrun_price) / 2.0;
+                    let expected_output = (vic.amount_in as f64 * fair_price) as u64;
                     let victim_loss_sol = calc.calculate_victim_loss(vic, expected_output).await.unwrap_or(0.0);
 
                     // Get USD values
