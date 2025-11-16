@@ -92,9 +92,17 @@ impl ArbitrageDetector {
         for start_token in token_flow.keys() {
             if let Some(cycle) = self.find_cycle(start_token, &token_flow, self.max_hops) {
                 // Calculate profit
-                let (_profit, net_profit) = self.calculate_arbitrage_profit(&cycle);
+                let (_gross_profit, net_profit) = self.calculate_arbitrage_profit(&cycle);
 
-                if net_profit >= self.min_profit_lamports {
+                // For WSOL, we can filter by lamport threshold
+                // For other tokens, include all profitable cycles
+                let should_include = if start_token == WSOL_ADDRESS {
+                    net_profit >= self.min_profit_lamports
+                } else {
+                    net_profit > 0
+                };
+
+                if should_include {
                     // Found profitable arbitrage!
                     let metadata = ArbitrageMetadata {
                         dexs: cycle.iter().map(|s| s.dex.name().to_string()).collect(),
@@ -213,15 +221,18 @@ impl ArbitrageDetector {
                         continue;
                     }
 
-                    // Only calculate SOL profit for WSOL pairs
-                    let profit = if swap1.token_in == WSOL_ADDRESS {
-                        (swap2.amount_out as i64) - (swap1.amount_in as i64)
+                    // Calculate raw profit in the base token
+                    let token_profit = (swap2.amount_out as i64) - (swap1.amount_in as i64);
+
+                    // For WSOL, we can filter by lamport threshold
+                    // For other tokens, include all profitable cycles
+                    let should_include = if swap1.token_in == WSOL_ADDRESS {
+                        token_profit >= self.min_profit_lamports
                     } else {
-                        // For non-WSOL tokens, we can't calculate lamport profit without price data
-                        continue;
+                        token_profit > 0
                     };
 
-                    if profit >= self.min_profit_lamports {
+                    if should_include {
                         let metadata = ArbitrageMetadata {
                             dexs: vec![swap1.dex.name().to_string(), swap2.dex.name().to_string()],
                             token_path: vec![
@@ -232,7 +243,7 @@ impl ArbitrageDetector {
                             swaps: vec![self.swap_to_details(swap1), self.swap_to_details(swap2)],
                             input_amount: swap1.amount_in,
                             output_amount: swap2.amount_out,
-                            net_profit: profit,
+                            net_profit: token_profit,
                             hop_count: 2,
                         };
 
@@ -241,7 +252,8 @@ impl ArbitrageDetector {
                             slot: block.slot,
                             timestamp: block.timestamp().unwrap_or_else(chrono::Utc::now),
                             transactions: vec![swap1.signature.clone(), swap2.signature.clone()],
-                            profit_lamports: Some(profit),
+                            // For WSOL this is lamports, for other tokens it's raw amount
+                            profit_lamports: Some(token_profit),
                             profit_usd: None,
                             tokens: vec![swap1.token_in.clone(), swap1.token_out.clone()],
                             metadata: MevMetadata::Arbitrage(metadata),
@@ -281,22 +293,21 @@ impl ArbitrageDetector {
             let last_token = &tx_swaps[tx_swaps.len() - 1].token_out;
 
             if first_token == last_token {
-                // Only track WSOL arbitrage for accurate SOL profit calculation
-                // Other tokens would need price oracle data
-                if first_token != WSOL_ADDRESS {
-                    warn!(
-                        "Skipping non-WSOL arbitrage cycle for token {} - need price oracle for accurate profit",
-                        first_token
-                    );
-                    continue;
-                }
-
-                // Calculate profit - amounts are in lamports for WSOL
+                // Calculate raw profit in token terms
                 let input = tx_swaps[0].amount_in;
                 let output = tx_swaps[tx_swaps.len() - 1].amount_out;
-                let profit = (output as i64) - (input as i64);
+                let token_profit = (output as i64) - (input as i64);
 
-                if profit >= self.min_profit_lamports {
+                // For WSOL, we can filter by lamport threshold
+                // For other tokens, we'll detect them all and let profit calculator filter
+                let should_include = if first_token == WSOL_ADDRESS {
+                    token_profit >= self.min_profit_lamports
+                } else {
+                    // Include all non-WSOL cycles - profit calculator will provide accurate SOL value
+                    token_profit > 0
+                };
+
+                if should_include {
                     let user = &tx_swaps[0].user;
 
                     let metadata = ArbitrageMetadata {
@@ -305,7 +316,7 @@ impl ArbitrageDetector {
                         swaps: tx_swaps.iter().map(|s| self.swap_to_details(s)).collect(),
                         input_amount: input,
                         output_amount: output,
-                        net_profit: profit,
+                        net_profit: token_profit,
                         hop_count: tx_swaps.len(),
                     };
 
@@ -314,7 +325,9 @@ impl ArbitrageDetector {
                         slot: block.slot,
                         timestamp: block.timestamp().unwrap_or_else(chrono::Utc::now),
                         transactions: vec![tx_sig.clone()],
-                        profit_lamports: Some(profit),
+                        // For WSOL this is lamports, for other tokens it's raw amount
+                        // Profit calculator will convert to accurate SOL value
+                        profit_lamports: Some(token_profit),
                         profit_usd: None,
                         tokens: self.extract_unique_tokens(tx_swaps),
                         metadata: MevMetadata::Arbitrage(metadata),
@@ -329,6 +342,10 @@ impl ArbitrageDetector {
     }
 
     /// Calculate arbitrage profit from a cycle of swaps
+    ///
+    /// Returns (gross_profit, net_profit) in raw token amounts
+    /// For WSOL: amounts are in lamports (can estimate fees)
+    /// For other tokens: raw amounts (profit calculator will convert to SOL)
     fn calculate_arbitrage_profit(&self, cycle: &[ParsedSwap]) -> (i64, i64) {
         if cycle.is_empty() {
             return (0, 0);
@@ -349,22 +366,20 @@ impl ArbitrageDetector {
         let input = cycle[0].amount_in as i64;
         let output = cycle[cycle.len() - 1].amount_out as i64;
 
-        // Only calculate profit for WSOL cycles (where amounts are in lamports)
-        // For other tokens, we'd need decimal information and price data
-        if first_token == WSOL_ADDRESS {
-            let gross_profit = output - input;
+        let gross_profit = output - input;
+
+        // For WSOL, we can estimate fees in lamports
+        // For other tokens, we'll use the gross profit (fees will be calculated accurately later)
+        let net_profit = if first_token == WSOL_ADDRESS {
             let estimated_fees: i64 = cycle.len() as i64 * 5000; // 5000 lamports per tx
-            let net_profit = gross_profit - estimated_fees;
-            (gross_profit, net_profit)
+            gross_profit - estimated_fees
         } else {
-            // For non-WSOL tokens, we can't reliably calculate lamport-denominated profit
-            // without knowing token decimals and prices
-            warn!(
-                "Cannot calculate SOL profit for non-WSOL arbitrage cycle (token: {}). Need price oracle.",
-                first_token
-            );
-            (0, 0)
-        }
+            // For non-WSOL tokens, return gross profit
+            // The profit calculator will handle accurate fee calculation
+            gross_profit
+        };
+
+        (gross_profit, net_profit)
     }
 
     /// Extract token path from swaps
