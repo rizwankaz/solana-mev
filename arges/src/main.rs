@@ -1,7 +1,7 @@
 // Import from the library crate
 use arges::{
-    BlockFetcher, BlockStream, FetcherConfig, FetcherError, MevDetector, MevMetadata,
-    MetadataCache, PriceOracle, ProfitCalculator,
+    BlockFetcher, BlockStream, CexDexDetector, CexOracle, FetcherConfig, FetcherError,
+    MevDetector, MevMetadata, MetadataCache, PriceOracle, ProfitCalculator,
 };
 use std::sync::Arc;
 use tracing::{info, error};
@@ -151,6 +151,10 @@ async fn main() -> anyhow::Result<()> {
         Arc::clone(&price_oracle),
     ));
 
+    // Initialize CEX-DEX detector
+    let cex_oracle = Arc::new(CexOracle::new());
+    let cex_dex_detector = Arc::new(CexDexDetector::new(Arc::clone(&cex_oracle)));
+
     // Warmup caches
     info!("warming up pricing caches");
     if let Err(e) = profit_calculator.warmup().await {
@@ -158,7 +162,8 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let mev_detector = MevDetector::new()
-        .with_profit_calculator(Arc::clone(&profit_calculator));
+        .with_profit_calculator(Arc::clone(&profit_calculator))
+        .with_cex_dex_detector(Arc::clone(&cex_dex_detector));
 
     // Fetch a few recent blocks
     let mev_start_slot = current_slot.saturating_sub(20);

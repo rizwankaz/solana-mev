@@ -84,11 +84,13 @@ pub use mev::{
     MevDetector, MevEvent, MevType, MevMetadata, MevClassifier,
     SlotMevMetrics, EpochMevMetrics,
     ArbitrageMetadata, SandwichMetadata, LiquidationMetadata, JitMetadata,
-    AdaptiveMevDetector, EnhancedMevAnalysis,
+    AdaptiveMevDetector, EnhancedMevAnalysis, CexDexDetector, CexDexMetadata,
 };
 
 pub use jito::{BundleDetector, JitoBundle, TipTracker, TipPayment};
 
 pub use network::{NetworkMonitor, NetworkState, NetworkMetrics, CongestionLevel};
 
-pub use pricing::{MetadataCache, PriceOracle, ProfitCalculator, TokenMetadata, TokenPrice};
+pub use pricing::{
+    MetadataCache, PriceOracle, ProfitCalculator, TokenMetadata, TokenPrice, CexOracle, CexPrice,
+};
