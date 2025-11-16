@@ -1,5 +1,8 @@
 // Import from the library crate
-use arges::{BlockFetcher, BlockStream, FetcherConfig, FetcherError, MevDetector, MevMetadata};
+use arges::{
+    BlockFetcher, BlockStream, FetcherConfig, FetcherError, MevDetector, MevMetadata,
+    MetadataCache, PriceOracle, ProfitCalculator,
+};
 use std::sync::Arc;
 use tracing::{info, error};
 
@@ -132,11 +135,30 @@ async fn main() -> anyhow::Result<()> {
 
     info!("\n");
 
-    // MEV detection example
+    // MEV detection example with accurate pricing
     info!("mev detection");
-    info!("analyzing recent blocks for mev");
+    info!("analyzing recent blocks for mev with accurate pricing");
 
-    let mev_detector = MevDetector::new();
+    // Initialize pricing components
+    info!("initializing price oracle and metadata cache");
+    let rpc_url = std::env::var("SOLANA_RPC_URL")
+        .unwrap_or_else(|_| "https://api.mainnet-beta.solana.com".to_string());
+
+    let metadata_cache = Arc::new(MetadataCache::new(rpc_url));
+    let price_oracle = Arc::new(PriceOracle::new());
+    let profit_calculator = Arc::new(ProfitCalculator::new(
+        Arc::clone(&metadata_cache),
+        Arc::clone(&price_oracle),
+    ));
+
+    // Warmup caches
+    info!("warming up pricing caches");
+    if let Err(e) = profit_calculator.warmup().await {
+        error!("failed to warmup pricing caches: {}", e);
+    }
+
+    let mev_detector = MevDetector::new()
+        .with_profit_calculator(Arc::clone(&profit_calculator));
 
     // Fetch a few recent blocks
     let mev_start_slot = current_slot.saturating_sub(20);
@@ -151,15 +173,17 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    info!("analyzing {} blocks for mev", blocks.len());
+    info!("analyzing {} blocks for mev with accurate pricing", blocks.len());
 
     let mut total_mev_events = 0;
     let mut total_profit = 0i64;
+    let mut blocks_with_mev = 0;
 
     for block in &blocks {
-        match mev_detector.detect_block(block) {
+        match mev_detector.detect_block_with_pricing(block).await {
             Ok(analysis) => {
                 if analysis.has_mev() {
+                    blocks_with_mev += 1;
                     info!(
                         "  ✓ Slot {}: {} MEV events, {:.4} SOL profit, {} swaps",
                         block.slot,
@@ -235,10 +259,8 @@ async fn main() -> anyhow::Result<()> {
     info!("  Total events: {}", total_mev_events);
     info!("  Total profit: {:.4} SOL ({} lamports)", total_profit as f64 / 1e9, total_profit);
     info!("  Blocks analyzed: {}", blocks.len());
-    info!("  Blocks with MEV: {}", blocks.iter().filter(|b| {
-        mev_detector.detect_block(b).map(|a| a.has_mev()).unwrap_or(false)
-    }).count());
-    info!("  Average per block: {:.4} SOL", (total_profit as f64 / 1e9) / blocks.len() as f64);
+    info!("  Blocks with MEV: {}", blocks_with_mev);
+    info!("  Average per block: {:.4} SOL", (total_profit as f64 / 1e9) / blocks.len().max(1) as f64);
     info!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
     info!("\n✅ all examples complete");

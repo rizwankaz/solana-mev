@@ -114,7 +114,12 @@ impl FetchedTransaction {
     pub fn fee(&self) -> Option<u64> {
         self.meta.as_ref().map(|m| m.fee)
     }
-    
+
+    /// Get transaction signature
+    pub fn signature(&self) -> Option<String> {
+        Some(self.signature.clone())
+    }
+
     /// Get signer (first account in transaction)
     pub fn signer(&self) -> Option<String> {
         match &self.transaction {

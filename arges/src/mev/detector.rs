@@ -9,9 +9,11 @@ use super::liquidation::LiquidationDetector;
 use super::sandwich::SandwichDetector;
 use super::types::*;
 use crate::dex::DexParser;
+use crate::pricing::ProfitCalculator;
 use crate::types::FetchedBlock;
 use anyhow::Result;
 use std::collections::HashMap;
+use std::sync::Arc;
 use tracing::{debug, info, warn};
 
 /// Comprehensive MEV detector that orchestrates all detection strategies
@@ -30,6 +32,9 @@ pub struct MevDetector {
 
     /// MEV classifier
     classifier: MevClassifier,
+
+    /// Profit calculator for accurate SOL-denominated profits (optional)
+    profit_calculator: Option<Arc<ProfitCalculator>>,
 
     /// Configuration
     config: DetectorConfig,
@@ -88,8 +93,15 @@ impl MevDetector {
             liquidation_detector: LiquidationDetector::default(),
             jit_detector: JitDetector::default(),
             classifier: MevClassifier::default(),
+            profit_calculator: None,
             config,
         }
+    }
+
+    /// Set profit calculator for accurate SOL-denominated profit calculations
+    pub fn with_profit_calculator(mut self, calculator: Arc<ProfitCalculator>) -> Self {
+        self.profit_calculator = Some(calculator);
+        self
     }
 
     /// Get mutable reference to classifier (for adding known bots, etc.)
@@ -168,6 +180,111 @@ impl MevDetector {
             metrics,
             swap_count: swaps.len(),
         })
+    }
+
+    /// Detect MEV in a block with accurate SOL-denominated profit calculation
+    ///
+    /// This async version uses the ProfitCalculator to compute accurate profits
+    /// based on real token prices and metadata.
+    pub async fn detect_block_with_pricing(&self, block: &FetchedBlock) -> Result<BlockMevAnalysis> {
+        // First, run regular detection
+        let mut analysis = self.detect_block(block)?;
+
+        // If profit calculator is available, enrich events with accurate profits
+        if let Some(calc) = &self.profit_calculator {
+            info!("Enriching {} MEV events with accurate profit calculations", analysis.events.len());
+
+            // Parse swaps for profit calculation
+            let swaps = DexParser::parse_block(&block.transactions);
+
+            for event in &mut analysis.events {
+                match self.calculate_accurate_profit(event, &swaps, block, calc).await {
+                    Ok((profit_sol, profit_usd)) => {
+                        // Update profit in lamports (convert SOL back to lamports for consistency)
+                        event.profit_lamports = Some((profit_sol * 1e9) as i64);
+                        event.profit_usd = Some(profit_usd);
+                        debug!(
+                            "Updated {} event profit: {} SOL (${} USD)",
+                            event.mev_type.name(),
+                            profit_sol,
+                            profit_usd
+                        );
+                    }
+                    Err(e) => {
+                        warn!(
+                            "Failed to calculate accurate profit for {} event: {}",
+                            event.mev_type.name(),
+                            e
+                        );
+                    }
+                }
+            }
+
+            // Recalculate metrics with accurate profits
+            analysis.metrics = self.classifier.aggregate_slot_metrics(block, &analysis.events);
+        }
+
+        Ok(analysis)
+    }
+
+    /// Calculate accurate profit for an MEV event
+    async fn calculate_accurate_profit(
+        &self,
+        event: &MevEvent,
+        swaps: &[crate::dex::ParsedSwap],
+        block: &FetchedBlock,
+        calc: &ProfitCalculator,
+    ) -> Result<(f64, f64)> {
+        use crate::dex::ParsedSwap;
+
+        match &event.metadata {
+            MevMetadata::Arbitrage(arb) => {
+                // Find the swaps involved in this arbitrage
+                let event_swaps: Vec<&ParsedSwap> = swaps
+                    .iter()
+                    .filter(|s| event.transactions.contains(&s.signature))
+                    .collect();
+
+                if event_swaps.is_empty() {
+                    return Err(anyhow::anyhow!("No swaps found for arbitrage event"));
+                }
+
+                let (gross, net) = calc.calculate_cycle_profit(&event_swaps, block).await?;
+
+                // Get USD value
+                let sol_price_usd = calc.price_oracle.get_price_usd(crate::pricing::WSOL_ADDRESS).await?;
+                let profit_usd = net * sol_price_usd;
+
+                Ok((net, profit_usd))
+            }
+            MevMetadata::Sandwich(sandwich) => {
+                // Find frontrun and backrun swaps
+                let frontrun = swaps.iter().find(|s| s.signature == sandwich.frontrun_tx);
+                let backrun = swaps.iter().find(|s| s.signature == sandwich.backrun_tx);
+
+                if let (Some(fr), Some(br)) = (frontrun, backrun) {
+                    let profit_sol = calc.calculate_sandwich_profit(fr, br, block).await?;
+
+                    let sol_price_usd = calc.price_oracle.get_price_usd(crate::pricing::WSOL_ADDRESS).await?;
+                    let profit_usd = profit_sol * sol_price_usd;
+
+                    Ok((profit_sol, profit_usd))
+                } else {
+                    Err(anyhow::anyhow!("Could not find frontrun/backrun swaps"))
+                }
+            }
+            _ => {
+                // For other MEV types, use the existing profit_lamports value
+                if let Some(lamports) = event.profit_lamports {
+                    let sol = lamports as f64 / 1e9;
+                    let sol_price_usd = calc.price_oracle.get_price_usd(crate::pricing::WSOL_ADDRESS).await?;
+                    let usd = sol * sol_price_usd;
+                    Ok((sol, usd))
+                } else {
+                    Ok((0.0, 0.0))
+                }
+            }
+        }
     }
 
     /// Detect MEV across multiple blocks

@@ -4,13 +4,11 @@
 
 use super::types::*;
 use crate::dex::ParsedSwap;
+use crate::pricing::WSOL_ADDRESS;
 use crate::types::FetchedBlock;
 use anyhow::Result;
 use std::collections::{HashMap, HashSet};
 use tracing::warn;
-
-/// Wrapped SOL (WSOL) token address
-pub const WSOL_ADDRESS: &str = "So11111111111111111111111111111111111111112";
 
 /// Arbitrage detector
 pub struct ArbitrageDetector {

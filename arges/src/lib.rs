@@ -71,6 +71,7 @@ pub mod dex;
 pub mod mev;
 pub mod jito;
 pub mod network;
+pub mod pricing;
 
 // Re-export commonly used types
 pub use fetcher::BlockFetcher;
@@ -89,3 +90,5 @@ pub use mev::{
 pub use jito::{BundleDetector, JitoBundle, TipTracker, TipPayment};
 
 pub use network::{NetworkMonitor, NetworkState, NetworkMetrics, CongestionLevel};
+
+pub use pricing::{MetadataCache, PriceOracle, ProfitCalculator, TokenMetadata, TokenPrice};
