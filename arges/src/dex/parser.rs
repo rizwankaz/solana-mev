@@ -178,14 +178,23 @@ impl DexParser {
             }
         }
 
-        // For each owner, check if they have a swap pattern (1 decrease + 1 increase)
+        // For each owner, check if they have a swap pattern
         // CRITICAL: Only match balance changes from the SAME owner
         // This prevents false positives from mixing balance changes across different users
         for (owner, owner_changes) in changes_by_owner.iter() {
             let decreases: Vec<_> = owner_changes.iter().filter(|(_, c)| *c < 0).collect();
             let increases: Vec<_> = owner_changes.iter().filter(|(_, c)| *c > 0).collect();
 
-            // Simple swap pattern: exactly 1 token decrease + 1 token increase for same owner
+            // Detect different swap patterns:
+            // 1. Simple swap: 1 decrease + 1 increase (A → B)
+            // 2. Multi-hop swap: 1 decrease + N increases (A → B → C → D, net: A → D)
+            // 3. Aggregator route: multiple intermediate tokens
+
+            if decreases.is_empty() || increases.is_empty() {
+                continue; // No swap pattern
+            }
+
+            // For single decrease and single increase: straightforward swap
             if decreases.len() == 1 && increases.len() == 1 {
                 let (token_in, amount_in_signed) = decreases[0];
                 let (token_out, amount_out) = increases[0];
@@ -209,6 +218,58 @@ impl DexParser {
                     tx_index,
                     instruction_index,
                 });
+            }
+            // Multi-hop or complex swap: find net input/output tokens
+            // For multi-hop (A → B → C), B will have both +/-, so we find tokens with only + or only -
+            else if decreases.len() >= 1 && increases.len() >= 1 {
+                // Find tokens that only decrease (input tokens)
+                // Find tokens that only increase (output tokens)
+                let mut token_nets: std::collections::HashMap<&String, i128> = std::collections::HashMap::new();
+
+                for (token, change) in owner_changes {
+                    *token_nets.entry(token).or_insert(0) += change;
+                }
+
+                // Find primary input (largest decrease) and output (largest increase)
+                let mut max_decrease: Option<(&String, i128)> = None;
+                let mut max_increase: Option<(&String, i128)> = None;
+
+                for (token, net_change) in token_nets.iter() {
+                    if *net_change < 0 {
+                        if max_decrease.map_or(true, |(_, amt)| net_change < &amt) {
+                            max_decrease = Some((*token, *net_change));
+                        }
+                    } else if *net_change > 0 {
+                        if max_increase.map_or(true, |(_, amt)| net_change > &amt) {
+                            max_increase = Some((*token, *net_change));
+                        }
+                    }
+                }
+
+                // Create swap from primary input to primary output
+                if let (Some((token_in, amount_in_net)), Some((token_out, amount_out_net))) =
+                    (max_decrease, max_increase)
+                {
+                    let dex = DexProtocol::from_program_id(program);
+
+                    detected_swaps.push(ParsedSwap {
+                        dex,
+                        program_id: program.to_string(),
+                        pool: "Unknown".to_string(),
+                        user: owner.clone(),
+                        token_in: (*token_in).clone(),
+                        token_out: (*token_out).clone(),
+                        amount_in: amount_in_net.unsigned_abs() as u64,
+                        amount_out: amount_out_net as u64,
+                        min_amount_out: None,
+                        price_before: None,
+                        price_after: None,
+                        price_impact: None,
+                        signature: signature.to_string(),
+                        tx_index,
+                        instruction_index,
+                    });
+                }
             }
         }
 
