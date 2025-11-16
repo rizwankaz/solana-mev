@@ -28,21 +28,12 @@ impl TokenPrice {
     }
 }
 
-/// Jupiter API price response (v6 format)
-#[derive(Debug, Deserialize)]
-struct JupiterPriceResponse {
-    data: HashMap<String, JupiterTokenPrice>,
-}
+/// Jupiter API price response (lite-api v3 format)
+/// Returns a direct map of mint address to price data
+type JupiterPriceResponse = HashMap<String, JupiterTokenPrice>;
 
 #[derive(Debug, Deserialize)]
 struct JupiterTokenPrice {
-    id: String,
-    #[serde(rename = "mintSymbol")]
-    mint_symbol: Option<String>,
-    #[serde(rename = "vsToken")]
-    vs_token: Option<String>,
-    #[serde(rename = "vsTokenSymbol")]
-    vs_token_symbol: Option<String>,
     price: f64,
 }
 
@@ -144,7 +135,6 @@ impl PriceOracle {
             .map_err(|e| anyhow!("Failed to parse Jupiter response: {}", e))?;
 
         let token_price = price_response
-            .data
             .get(mint)
             .ok_or_else(|| anyhow!("No price data for {} in Jupiter response", mint))?;
 
@@ -215,7 +205,6 @@ impl PriceOracle {
             .map_err(|e| anyhow!("Failed to parse SOL price response: {}", e))?;
 
         let sol_price = price_response
-            .data
             .get(super::WSOL_ADDRESS)
             .ok_or_else(|| anyhow!("No SOL price in Jupiter response"))?;
 
