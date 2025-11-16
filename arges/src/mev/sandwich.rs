@@ -277,17 +277,19 @@ impl SandwichDetector {
         //
         // Note: Victim is always in same direction as frontrun (validated in check_sandwich_pattern)
 
-        // Calculate prices (output/input ratio)
-        let frontrun_price = frontrun.amount_out as f64 / frontrun.amount_in as f64;
-        let backrun_price = backrun.amount_out as f64 / backrun.amount_in as f64;
-        let victim_price = victim.amount_out as f64 / victim.amount_in as f64;
+        // Calculate exchange rates in consistent units
+        // Frontrun and victim trade same direction (e.g., SOL -> TOKEN)
+        // Backrun trades opposite direction (TOKEN -> SOL)
+        let frontrun_rate = frontrun.amount_out as f64 / frontrun.amount_in as f64; // tokens per SOL
+        let backrun_rate = backrun.amount_in as f64 / backrun.amount_out as f64;    // tokens per SOL (inverted)
+        let victim_rate = victim.amount_out as f64 / victim.amount_in as f64;       // tokens per SOL
 
-        // Fair price ≈ average of pre-sandwich and post-sandwich prices
+        // Fair rate ≈ average of pre-sandwich and post-sandwich rates
         // This assumes the pool returns to approximately the same state
-        let fair_price = (frontrun_price + backrun_price) / 2.0;
+        let fair_rate = (frontrun_rate + backrun_rate) / 2.0;
 
-        // Victim should have received more at fair price
-        let fair_output = (victim.amount_in as f64 * fair_price) as u64;
+        // Victim should have received more at fair rate
+        let fair_output = (victim.amount_in as f64 * fair_rate) as u64;
         let actual_output = victim.amount_out;
 
         // Loss in output token terms
