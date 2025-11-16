@@ -35,7 +35,13 @@ type JupiterPriceResponse = HashMap<String, JupiterTokenPrice>;
 
 #[derive(Debug, Deserialize)]
 struct JupiterTokenPrice {
-    price: f64,
+    #[serde(rename = "usdPrice")]
+    usd_price: f64,
+    #[serde(rename = "blockId")]
+    block_id: Option<u64>,
+    decimals: Option<u8>,
+    #[serde(rename = "priceChange24h")]
+    price_change_24h: Option<f64>,
 }
 
 /// Price oracle using Jupiter API
@@ -145,7 +151,7 @@ impl PriceOracle {
             .get(mint)
             .ok_or_else(|| anyhow!("No price data for {} in Jupiter response", mint))?;
 
-        let price_usd = token_price.price;
+        let price_usd = token_price.usd_price;
 
         // Get SOL price to calculate price in SOL
         let sol_price_usd = if mint == super::WSOL_ADDRESS {
@@ -220,7 +226,7 @@ impl PriceOracle {
             .get(super::WSOL_ADDRESS)
             .ok_or_else(|| anyhow!("No SOL price in Jupiter response"))?;
 
-        let price_usd = sol_price.price;
+        let price_usd = sol_price.usd_price;
 
         // Cache SOL price
         let mut cache = self.cache.write().await;
