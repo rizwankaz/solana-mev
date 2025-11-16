@@ -1,13 +1,5 @@
-mod fetcher;
-mod stream;
-mod types;
-mod dex;
-mod mev;
-
-use fetcher::BlockFetcher;
-use stream::BlockStream;
-use types::FetcherConfig;
-use mev::MevDetector;
+// Import from the library crate
+use arges::{BlockFetcher, BlockStream, FetcherConfig, FetcherError, MevDetector};
 use std::sync::Arc;
 use tracing::{info, error};
 
@@ -91,7 +83,7 @@ async fn main() -> anyhow::Result<()> {
                     block.successful_tx_count()
                 );
             },
-            Err(types::FetcherError::BlockNotAvailable { .. }) => {
+            Err(FetcherError::BlockNotAvailable { .. }) => {
                 skip_count += 1;
                 info!("  - Slot {}: skipped (no block produced)", slot);
             },
