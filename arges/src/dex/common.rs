@@ -129,6 +129,16 @@ pub struct TokenTransfer {
     pub amount: u64,
 }
 
+/// Token transfer info parsed from inner instructions
+#[derive(Debug, Clone)]
+pub(crate) struct TokenTransferInfo {
+    pub source: String,
+    pub destination: String,
+    pub authority: Option<String>,
+    pub mint: Option<String>,
+    pub amount: u64,
+}
+
 /// Helper to calculate price impact
 pub fn calculate_price_impact(amount_in: u64, amount_out: u64, price_before: f64) -> Option<f64> {
     if price_before == 0.0 || amount_in == 0 {
