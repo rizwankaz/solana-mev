@@ -20,13 +20,16 @@ impl DexParser {
         let mut swaps = Vec::new();
 
         // Get the transaction data
-        let _transaction = match &tx.transaction {
+        let ui_transaction = match &tx.transaction {
             solana_transaction_status::EncodedTransaction::Json(ui_tx) => ui_tx,
             _ => return Ok(swaps), // Skip non-JSON encoded transactions
         };
 
-        // NOTE: Simplified - would need to properly parse instructions from UiMessage
-        // For now, we rely on token balance changes to detect swaps
+        // TODO: Ideally, we would parse instructions to find DEX calls
+        // However, many transactions lack pre/post token balance metadata
+        // This requires parsing inner instructions and token transfer logs
+        // which is complex and error-prone
+        let _signer = tx.signer().unwrap_or_else(|| "Unknown".to_string());
 
         // Get token balances for amount calculation
         let pre_balances = tx
