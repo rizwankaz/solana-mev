@@ -2,6 +2,7 @@
 
 use anyhow::{anyhow, Result};
 use serde::Deserialize;
+use serde_json;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -129,10 +130,16 @@ impl PriceOracle {
             ));
         }
 
-        let price_response: JupiterPriceResponse = response
-            .json()
+        // Get response text for debugging
+        let response_text = response
+            .text()
             .await
-            .map_err(|e| anyhow!("Failed to parse Jupiter response: {}", e))?;
+            .map_err(|e| anyhow!("Failed to read response text: {}", e))?;
+
+        debug!("Jupiter API response: {}", response_text);
+
+        let price_response: JupiterPriceResponse = serde_json::from_str(&response_text)
+            .map_err(|e| anyhow!("Failed to parse Jupiter response: {} - Response was: {}", e, response_text))?;
 
         let token_price = price_response
             .get(mint)
@@ -199,10 +206,15 @@ impl PriceOracle {
             .await
             .map_err(|e| anyhow!("Failed to fetch SOL price: {}", e))?;
 
-        let price_response: JupiterPriceResponse = response
-            .json()
+        let response_text = response
+            .text()
             .await
-            .map_err(|e| anyhow!("Failed to parse SOL price response: {}", e))?;
+            .map_err(|e| anyhow!("Failed to read SOL price response text: {}", e))?;
+
+        debug!("Jupiter SOL price API response: {}", response_text);
+
+        let price_response: JupiterPriceResponse = serde_json::from_str(&response_text)
+            .map_err(|e| anyhow!("Failed to parse SOL price response: {} - Response was: {}", e, response_text))?;
 
         let sol_price = price_response
             .get(super::WSOL_ADDRESS)

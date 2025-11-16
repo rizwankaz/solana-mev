@@ -9,7 +9,7 @@ use tracing::{info, error};
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
-        .with_env_filter("arges=info,warn")
+        .with_env_filter("arges=debug")
         .init();
     
     info!("block fetcher go brrr");
