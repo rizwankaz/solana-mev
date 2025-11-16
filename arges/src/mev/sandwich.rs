@@ -80,13 +80,60 @@ impl SandwichDetector {
         // - First and third swaps are opposite directions
         // - Middle swap is larger than threshold
 
-        for i in 0..sorted_swaps.len() {
-            for j in i + 1..sorted_swaps.len() {
-                for k in j + 1..sorted_swaps.len() {
-                    let frontrun = sorted_swaps[i];
-                    let victim = sorted_swaps[j];
-                    let backrun = sorted_swaps[k];
+        // Track processed frontrun/backrun pairs to avoid duplicates
+        let mut processed_pairs = std::collections::HashSet::new();
 
+        for i in 0..sorted_swaps.len() {
+            for k in i + 2..sorted_swaps.len() {
+                let frontrun = sorted_swaps[i];
+                let backrun = sorted_swaps[k];
+
+                // Check if this is a valid frontrun/backrun pair
+                if !self.is_valid_sandwich_pair(frontrun, backrun) {
+                    continue;
+                }
+
+                // Create unique key for this pair
+                let pair_key = format!("{}:{}", frontrun.signature, backrun.signature);
+                if processed_pairs.contains(&pair_key) {
+                    continue;
+                }
+                processed_pairs.insert(pair_key);
+
+                // Find the largest victim between frontrun and backrun
+                let mut best_victim: Option<&ParsedSwap> = None;
+                let mut best_victim_size = 0u64;
+
+                for j in i + 1..k {
+                    let potential_victim = sorted_swaps[j];
+
+                    // Check if this swap could be a victim
+                    if potential_victim.user == frontrun.user {
+                        continue; // Same user as sandwicher
+                    }
+
+                    if potential_victim.amount_in < self.min_victim_size {
+                        continue; // Too small
+                    }
+
+                    // Check if victim trades the same tokens
+                    let victim_direction = (&potential_victim.token_in, &potential_victim.token_out);
+                    let frontrun_direction = (&frontrun.token_in, &frontrun.token_out);
+                    let backrun_direction = (&backrun.token_in, &backrun.token_out);
+
+                    if victim_direction != frontrun_direction && victim_direction != backrun_direction {
+                        continue;
+                    }
+
+                    // Track the largest victim
+                    if potential_victim.amount_in > best_victim_size {
+                        best_victim = Some(potential_victim);
+                        best_victim_size = potential_victim.amount_in;
+                    }
+                }
+
+                // If we found a victim, create one sandwich event
+                if let Some(victim) = best_victim {
                     if let Some(sandwich) =
                         self.check_sandwich_pattern(frontrun, victim, backrun, block)?
                     {
@@ -97,6 +144,30 @@ impl SandwichDetector {
         }
 
         Ok(events)
+    }
+
+    /// Check if two swaps form a valid frontrun/backrun pair
+    fn is_valid_sandwich_pair(&self, frontrun: &ParsedSwap, backrun: &ParsedSwap) -> bool {
+        // Same user
+        if frontrun.user != backrun.user {
+            return false;
+        }
+
+        // Opposite directions
+        let frontrun_direction = (&frontrun.token_in, &frontrun.token_out);
+        let backrun_direction = (&backrun.token_in, &backrun.token_out);
+
+        if frontrun_direction != (backrun_direction.1, backrun_direction.0) {
+            return false;
+        }
+
+        // Profitable
+        let profit = (backrun.amount_out as i64) - (frontrun.amount_in as i64);
+        if profit < self.min_profit_lamports {
+            return false;
+        }
+
+        true
     }
 
     /// Check if three swaps form a sandwich pattern
