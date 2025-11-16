@@ -236,6 +236,23 @@ impl MevDetector {
                 }
             }
 
+            // Filter out negative-profit events (failed arbitrage attempts, not real MEV)
+            let original_count = analysis.events.len();
+            analysis.events.retain(|event| {
+                if let Some(profit_lamports) = event.profit_lamports {
+                    profit_lamports > 0
+                } else {
+                    true // Keep events without profit calculation
+                }
+            });
+            let filtered_count = original_count - analysis.events.len();
+            if filtered_count > 0 {
+                debug!(
+                    "Filtered out {} negative-profit events (failed arbitrage attempts)",
+                    filtered_count
+                );
+            }
+
             // Recalculate metrics with accurate profits
             analysis.metrics = self.classifier.aggregate_slot_metrics(block, &analysis.events);
         }

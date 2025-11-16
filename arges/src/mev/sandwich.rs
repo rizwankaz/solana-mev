@@ -202,9 +202,10 @@ impl SandwichDetector {
             return Ok(None);
         }
 
-        // 5. Victim trades same tokens (in either direction)
+        // 5. Victim must trade in SAME direction as frontrun to suffer a loss
+        // (If victim trades opposite direction, they actually benefit from the price move)
         let victim_direction = (&victim.token_in, &victim.token_out);
-        if victim_direction != frontrun_direction && victim_direction != backrun_direction {
+        if victim_direction != frontrun_direction {
             return Ok(None);
         }
 
@@ -273,16 +274,8 @@ impl SandwichDetector {
         // 1. Frontrun: Buys token, moves price UP
         // 2. Victim: Buys at inflated price (gets LESS output than fair)
         // 3. Backrun: Sells token, moves price back DOWN
-
-        // Check if victim is buying or selling the same direction as frontrun
-        // Victim loses when trading in the same direction as frontrun
-        let victim_in_same_direction = victim.token_in == frontrun.token_in;
-
-        if !victim_in_same_direction {
-            // Victim is trading opposite direction, different sandwich type
-            // Still calculate loss but use different logic
-            return 0;
-        }
+        //
+        // Note: Victim is always in same direction as frontrun (validated in check_sandwich_pattern)
 
         // Calculate prices (output/input ratio)
         let frontrun_price = frontrun.amount_out as f64 / frontrun.amount_in as f64;
