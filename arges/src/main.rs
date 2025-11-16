@@ -1,10 +1,12 @@
 // Import from the library crate
 use arges::{
-    BlockFetcher, BlockStream, CexDexDetector, CexOracle, FetcherConfig, FetcherError,
-    MevDetector, MevMetadata, MetadataCache, PriceOracle, ProfitCalculator,
+    BlockFetcher, CexDexDetector, CexOracle, FetcherConfig, FetcherError,
+    MevDetector, MetadataCache, PriceOracle, ProfitCalculator,
 };
 use std::sync::Arc;
-use tracing::{info, error};
+use std::fs::File;
+use std::io::Write;
+use tracing::{info, error, warn};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -13,14 +15,15 @@ async fn main() -> anyhow::Result<()> {
 
     // Configure tracing to write to file
     tracing_subscriber::fmt()
-        .with_env_filter("arges=debug")
+        .with_env_filter("arges=info")  // Changed to info to reduce verbosity
         .with_writer(file_appender)
-        .with_ansi(false)  // Disable color codes in file
+        .with_ansi(false)
         .init();
-    
-    info!("block fetcher go brrr");
-    
-    // fetcher config
+
+    println!("🚀 MEV Analysis Over 24 Hours - Starting...");
+    info!("Starting 24-hour MEV analysis");
+
+    // Configuration
     let config = FetcherConfig {
         rpc_url: std::env::var("SOLANA_RPC_URL")
             .unwrap_or_else(|_| "https://api.mainnet-beta.solana.com".to_string()),
@@ -29,128 +32,40 @@ async fn main() -> anyhow::Result<()> {
         rate_limit: 5,
         timeout_secs: 30,
     };
-    
+
     let fetcher = Arc::new(BlockFetcher::new(config));
-    
-    // current slot
+
+    // Get current slot
     let current_slot = fetcher.get_current_slot().await?;
-    info!("current slot: {}\n", current_slot);
-    
-    // fetch block
-    info!("fetch block");
-    let recent_slot = current_slot.saturating_sub(10);
-    
-    match fetcher.fetch_block(recent_slot).await {
-        Ok(block) => {
-            info!("+ block {}", block.slot);
-            info!("  hash {}", &block.blockhash);
-            info!("  parent slot: {}", block.parent_slot);
-            info!("  transactions: {}", block.transactions.len());
-            info!("  successful: {}", block.successful_tx_count());
-            info!("  fees: {} lamports", block.total_fees());
-            info!("  compute units: {}", block.total_compute_units());
-            
-            if let Some(timestamp) = block.timestamp() {
-                info!("  time: {}", timestamp.format("%Y-%m-%d %H:%M:%S"));
-            }
-            
-            // txs
-            if !block.transactions.is_empty() {
-                info!("  first 3 transactions:");
-                for tx in block.transactions.iter().take(3) {
-                    let status = if tx.is_success() { "+" } else { "-" };
-                    info!("    {} {}", status, &tx.signature);
-                }
-            }
-        },
-        Err(e) => error!("failed to fetch block: {:?}", e),
-    }
-    
-    info!("\n");
-    
-    // fetch range
-    info!("fetch range");
-    let start_slot = recent_slot.saturating_sub(10);
-    let end_slot = start_slot + 5;
-    
-    info!("fetching slots {} to {}", start_slot, end_slot);
-    
-    let results = fetcher.fetch_range(start_slot, end_slot).await;
-    
-    let mut success_count = 0;
-    let mut skip_count = 0;
-    let mut error_count = 0;
-    
-    for (slot, result) in results {
-        match result {
-            Ok(block) => {
-                success_count += 1;
-                info!(
-                    "  + slot {}: {} txs, {} successful",
-                    slot,
-                    block.transactions.len(),
-                    block.successful_tx_count()
-                );
-            },
-            Err(FetcherError::BlockNotAvailable { .. }) => {
-                skip_count += 1;
-                info!("  - Slot {}: skipped (no block produced)", slot);
-            },
-            Err(e) => {
-                error_count += 1;
-                error!("  - Slot {}: error {:?}", slot, e);
-            }
-        }
-    }
-    
-    info!("success: {}", success_count);
-    info!("skips: {}", skip_count);
-    info!("errors: {}", error_count);
-    
-    info!("\n");
-    
-    // stream
-    info!("stream recents");
-    info!("streaming blocks starting from slot {}", recent_slot);
-    
-    let mut stream = BlockStream::new(Arc::clone(&fetcher), recent_slot);
-    
-    let mut count = 0;
-    while let Some((slot, result)) = stream.next().await {
-        match result {
-            Ok(block) => {
-                info!(
-                    "  | slot {}: {} transactions, {} lamports in fees",
-                    slot,
-                    block.transactions.len(),
-                    block.total_fees()
-                );
-            },
-            Err(e) => {
-                error!("  - slot {}: error {:?}", slot, e);
-            }
-        }
-        
-        count += 1;
-        if count >= 5 {
-            break;
-        }
-    }
-    
-    info!("examples complete");
+    println!("📍 Current slot: {}", current_slot);
+    info!("Current slot: {}", current_slot);
 
-    info!("\n");
+    // Calculate 24-hour slot range
+    // Solana has ~2.5 slots/second (400ms per slot)
+    // 24 hours = 24 * 60 * 60 / 0.4 = 216,000 slots
+    const SLOTS_PER_24_HOURS: u64 = 216_000;
 
-    // MEV detection example with accurate pricing
-    info!("mev detection");
-    info!("analyzing recent blocks for mev with accurate pricing");
+    // For testing/practicality, you can sample every Nth slot
+    // Set SAMPLE_RATE to 1 for all slots, 10 for every 10th slot, etc.
+    let sample_rate: u64 = std::env::var("SAMPLE_RATE")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(100); // Default: sample every 100th slot
+
+    let start_slot = current_slot.saturating_sub(SLOTS_PER_24_HOURS);
+
+    println!("📊 Analyzing slots {} to {} (sample rate: 1/{})",
+             start_slot, current_slot, sample_rate);
+    println!("⏱️  This will analyze ~{} slots", SLOTS_PER_24_HOURS / sample_rate);
+    info!("Analysis range: {} to {} (sample rate: 1/{})",
+          start_slot, current_slot, sample_rate);
 
     // Initialize pricing components
-    info!("initializing price oracle and metadata cache");
-    let rpc_url = std::env::var("SOLANA_RPC_URL")
-        .unwrap_or_else(|_| "https://api.mainnet-beta.solana.com".to_string());
-
-    let metadata_cache = Arc::new(MetadataCache::new(rpc_url));
+    println!("🔧 Initializing pricing oracles...");
+    let metadata_cache = Arc::new(MetadataCache::new(
+        std::env::var("SOLANA_RPC_URL")
+            .unwrap_or_else(|_| "https://api.mainnet-beta.solana.com".to_string())
+    ));
     let price_oracle = Arc::new(PriceOracle::new());
     let profit_calculator = Arc::new(ProfitCalculator::new(
         Arc::clone(&metadata_cache),
@@ -162,122 +77,140 @@ async fn main() -> anyhow::Result<()> {
     let cex_dex_detector = Arc::new(CexDexDetector::new(Arc::clone(&cex_oracle)));
 
     // Warmup caches
-    info!("warming up pricing caches");
+    info!("Warming up pricing caches");
     if let Err(e) = profit_calculator.warmup().await {
-        error!("failed to warmup pricing caches: {}", e);
+        error!("Failed to warmup pricing caches: {}", e);
     }
 
     let mev_detector = MevDetector::new()
         .with_profit_calculator(Arc::clone(&profit_calculator))
         .with_cex_dex_detector(Arc::clone(&cex_dex_detector));
 
-    // Fetch a few recent blocks
-    let mev_start_slot = current_slot.saturating_sub(20);
-    let mev_end_slot = mev_start_slot + 10;
+    // Create CSV file for results
+    let mut csv_file = File::create("mev_per_slot_24h.csv")?;
+    writeln!(csv_file, "slot,timestamp,mev_events,total_profit_sol,total_profit_lamports,arbitrage_count,sandwich_count,swap_count")?;
 
-    let results = fetcher.fetch_range(mev_start_slot, mev_end_slot).await;
+    println!("📝 Output will be written to: mev_per_slot_24h.csv");
 
-    let mut blocks = Vec::new();
-    for (_slot, result) in results {
-        if let Ok(block) = result {
-            blocks.push(block);
-        }
-    }
-
-    info!("analyzing {} blocks for mev with accurate pricing", blocks.len());
-
+    // Track overall statistics
+    let mut total_slots_analyzed = 0;
+    let mut total_slots_with_mev = 0;
+    let mut total_mev_profit = 0i64;
     let mut total_mev_events = 0;
-    let mut total_profit = 0i64;
-    let mut blocks_with_mev = 0;
 
-    for block in &blocks {
-        match mev_detector.detect_block_with_pricing(block).await {
-            Ok(analysis) => {
-                if analysis.has_mev() {
-                    blocks_with_mev += 1;
-                    info!(
-                        "  ✓ Slot {}: {} MEV events, {:.4} SOL profit, {} swaps",
-                        block.slot,
-                        analysis.events.len(),
-                        analysis.total_profit() as f64 / 1e9,
-                        analysis.swap_count
-                    );
+    // Progress tracking
+    let total_slots_to_analyze = SLOTS_PER_24_HOURS / sample_rate;
+    let mut progress_counter = 0;
+    let progress_interval = (total_slots_to_analyze / 20).max(1); // Update every 5%
 
-                    total_mev_events += analysis.events.len();
-                    total_profit += analysis.total_profit();
+    println!("\n🔍 Starting analysis...\n");
 
-                    // Show details of each MEV event with transaction signatures
-                    for event in &analysis.events {
-                        let profit_sol = event.profit_lamports.unwrap_or(0) as f64 / 1e9;
+    // Analyze slots
+    for i in (0..SLOTS_PER_24_HOURS).step_by(sample_rate as usize) {
+        let slot = start_slot + i;
+        progress_counter += 1;
 
-                        // Get transaction signature and extractor
-                        let tx_sig = if !event.transactions.is_empty() {
-                            &event.transactions[0]
-                        } else {
-                            "N/A"
-                        };
+        // Progress update
+        if progress_counter % progress_interval == 0 {
+            let progress_pct = (progress_counter * 100) / total_slots_to_analyze;
+            println!("⏳ Progress: {}% ({}/{} slots)",
+                     progress_pct, progress_counter, total_slots_to_analyze);
+        }
 
-                        let extractor = event.extractor.as_deref().unwrap_or("Unknown");
+        match fetcher.fetch_block(slot).await {
+            Ok(block) => {
+                total_slots_analyzed += 1;
 
-                        info!(
-                            "    → {}: {:.6} SOL (confidence: {:.0}%)",
-                            event.mev_type.name(),
-                            profit_sol,
-                            event.confidence * 100.0
-                        );
-                        info!(
-                            "      TX: https://solscan.io/tx/{}",
-                            tx_sig
-                        );
-                        info!(
-                            "      Extractor: https://solscan.io/address/{}",
-                            extractor
-                        );
+                // Analyze block for MEV
+                match mev_detector.detect_block_with_pricing(&block).await {
+                    Ok(analysis) => {
+                        let mev_events = analysis.events.len();
+                        let total_profit = analysis.total_profit();
+                        let timestamp = block.timestamp()
+                            .map(|t| t.timestamp())
+                            .unwrap_or(0);
 
-                        // Show additional details based on MEV type
-                        match &event.metadata {
-                            MevMetadata::Arbitrage(arb) => {
-                                info!(
-                                    "      Path: {} ({})",
-                                    arb.token_path.join(" → "),
-                                    arb.dexs.join(", ")
-                                );
-                            },
-                            MevMetadata::Sandwich(sandwich) => {
-                                info!("      Victim TX: https://solscan.io/tx/{}", sandwich.victim_tx);
-                                if let Some(loss) = sandwich.victim_loss {
-                                    info!("      Victim loss: {:.6} SOL", loss as f64 / 1e9);
-                                }
-                            },
-                            MevMetadata::Liquidation(liq) => {
-                                info!("      Protocol: {}", liq.protocol);
-                                info!("      Bonus: {:.6} SOL", liq.liquidation_bonus as f64 / 1e9);
-                            },
-                            _ => {}
+                        // Count event types
+                        let arbitrage_count = analysis.events.iter()
+                            .filter(|e| matches!(e.mev_type, arges::MevType::Arbitrage))
+                            .count();
+                        let sandwich_count = analysis.events.iter()
+                            .filter(|e| matches!(e.mev_type, arges::MevType::SandwichAttack))
+                            .count();
+
+                        if analysis.has_mev() {
+                            total_slots_with_mev += 1;
+                            total_mev_profit += total_profit;
+                            total_mev_events += mev_events;
+
+                            info!("Slot {}: {} MEV events, {:.6} SOL profit",
+                                  slot, mev_events, total_profit as f64 / 1e9);
                         }
+
+                        // Write to CSV
+                        writeln!(
+                            csv_file,
+                            "{},{},{},{:.9},{},{},{},{}",
+                            slot,
+                            timestamp,
+                            mev_events,
+                            total_profit as f64 / 1e9,
+                            total_profit,
+                            arbitrage_count,
+                            sandwich_count,
+                            analysis.swap_count
+                        )?;
+                    }
+                    Err(e) => {
+                        warn!("Failed to analyze slot {}: {:?}", slot, e);
+                        // Write zeros for failed analysis
+                        writeln!(csv_file, "{},0,0,0.0,0,0,0,0", slot)?;
                     }
                 }
-            },
+            }
+            Err(FetcherError::BlockNotAvailable { .. }) => {
+                // Skipped slot (no block produced)
+                writeln!(csv_file, "{},0,0,0.0,0,0,0,0", slot)?;
+            }
             Err(e) => {
-                error!("  - slot {}: mev detection error: {:?}", block.slot, e);
+                warn!("Failed to fetch slot {}: {:?}", slot, e);
+                writeln!(csv_file, "{},0,0,0.0,0,0,0,0", slot)?;
             }
         }
     }
+
+    csv_file.flush()?;
+
+    // Print summary
+    println!("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("📊 24-HOUR MEV ANALYSIS SUMMARY");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("  Slots analyzed: {}", total_slots_analyzed);
+    println!("  Slots with MEV: {} ({:.2}%)",
+             total_slots_with_mev,
+             (total_slots_with_mev as f64 / total_slots_analyzed.max(1) as f64) * 100.0);
+    println!("  Total MEV events: {}", total_mev_events);
+    println!("  Total MEV profit: {:.4} SOL ({} lamports)",
+             total_mev_profit as f64 / 1e9, total_mev_profit);
+    println!("  Average per slot: {:.6} SOL",
+             (total_mev_profit as f64 / 1e9) / total_slots_analyzed.max(1) as f64);
+    println!("  Average per MEV slot: {:.6} SOL",
+             (total_mev_profit as f64 / 1e9) / total_slots_with_mev.max(1) as f64);
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+    println!("\n✅ Analysis complete!");
+    println!("📁 Results saved to: mev_per_slot_24h.csv");
+    println!("📄 Detailed logs saved to: mev_analysis_output.txt");
 
     info!("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     info!("📊 MEV SUMMARY");
     info!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     info!("  Total events: {}", total_mev_events);
-    info!("  Total profit: {:.4} SOL ({} lamports)", total_profit as f64 / 1e9, total_profit);
-    info!("  Blocks analyzed: {}", blocks.len());
-    info!("  Blocks with MEV: {}", blocks_with_mev);
-    info!("  Average per block: {:.4} SOL", (total_profit as f64 / 1e9) / blocks.len().max(1) as f64);
+    info!("  Total profit: {:.4} SOL ({} lamports)", total_mev_profit as f64 / 1e9, total_mev_profit);
+    info!("  Slots analyzed: {}", total_slots_analyzed);
+    info!("  Slots with MEV: {}", total_slots_with_mev);
+    info!("  Average per slot: {:.6} SOL", (total_mev_profit as f64 / 1e9) / total_slots_analyzed.max(1) as f64);
     info!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-
-    info!("\n✅ all examples complete");
-
-    // Print to console where the output was saved
-    println!("\n✅ Analysis complete! Output saved to: mev_analysis_output.txt");
 
     Ok(())
 }
