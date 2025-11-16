@@ -153,10 +153,12 @@ impl DexParser {
         // Get the transaction signer (first account)
         let signer = tx.signer().unwrap_or_else(|| "Unknown".to_string());
 
-        // Build a map of token account address -> mint from balances
+        // Build maps of token account address -> mint and account -> owner from balances
         // This helps resolve mints for "transfer" instructions (which don't include mint)
+        // and identify which transfers are incoming vs outgoing
         use std::collections::HashMap;
         let mut account_to_mint: HashMap<String, String> = HashMap::new();
+        let mut account_to_owner: HashMap<String, String> = HashMap::new();
 
         // Get account keys to map indices to addresses
         let account_keys: Vec<String> = match &tx.transaction {
@@ -173,11 +175,15 @@ impl DexParser {
             _ => Vec::new(),
         };
 
-        // Map account indices from balances to get account_address -> mint mapping
+        // Map account indices from balances to get account_address -> mint and owner mappings
         if let Some(balances) = pre_balances {
             for balance in balances {
                 if let Some(account_addr) = account_keys.get(balance.account_index as usize) {
                     account_to_mint.insert(account_addr.clone(), balance.mint.clone());
+                    // Handle OptionSerializer for owner field
+                    if let OptionSerializer::Some(owner) = &balance.owner {
+                        account_to_owner.insert(account_addr.clone(), owner.clone());
+                    }
                 }
             }
         }
@@ -185,11 +191,16 @@ impl DexParser {
             for balance in balances {
                 if let Some(account_addr) = account_keys.get(balance.account_index as usize) {
                     account_to_mint.insert(account_addr.clone(), balance.mint.clone());
+                    // Handle OptionSerializer for owner field
+                    if let OptionSerializer::Some(owner) = &balance.owner {
+                        account_to_owner.insert(account_addr.clone(), owner.clone());
+                    }
                 }
             }
         }
 
         eprintln!("[DEBUG] Built account->mint map with {} entries", account_to_mint.len());
+        eprintln!("[DEBUG] Built account->owner map with {} entries", account_to_owner.len());
 
         // RPC cache for fetched mints
         let mut rpc_mint_cache: HashMap<String, Option<String>> = HashMap::new();
@@ -257,7 +268,7 @@ impl DexParser {
         }
 
         // Group transfers by source/destination to find swap patterns
-        let swaps = Self::match_transfers_to_swaps(&transfers, &signer, &tx.signature, tx_index)?;
+        let swaps = Self::match_transfers_to_swaps(&transfers, &signer, &account_to_owner, &tx.signature, tx_index)?;
 
         if swaps.is_empty() {
             Ok(None)
@@ -325,29 +336,36 @@ impl DexParser {
     fn match_transfers_to_swaps(
         transfers: &[TokenTransferInfo],
         signer: &str,
+        account_to_owner: &std::collections::HashMap<String, String>,
         signature: &str,
         tx_index: usize,
     ) -> Result<Vec<ParsedSwap>> {
         let mut swaps = Vec::new();
 
         // Simple heuristic: look for pairs of transfers where:
-        // 1. User sends token A (transfer FROM user's account)
-        // 2. User receives token B (transfer TO user's account)
+        // 1. User sends token A (transfer authorized by user from their token account)
+        // 2. User receives token B (transfer TO a token account owned by user)
         // This indicates a swap of A for B
 
         // Group transfers by direction relative to signer
-        let mut outgoing = Vec::new();  // User is authority/source
-        let mut incoming = Vec::new();  // User is destination
+        let mut outgoing = Vec::new();  // User authorized the transfer (sending tokens)
+        let mut incoming = Vec::new();  // Transfer to user's account (receiving tokens)
 
         for transfer in transfers {
-            // Check if user is the authority of this transfer (outgoing)
+            // Outgoing: User is the authority of this transfer
             if transfer.authority.as_ref().map_or(false, |auth| auth == signer) {
                 outgoing.push(transfer);
             }
 
-            // Check if user is the destination (incoming)
-            if transfer.destination == signer ||
-               transfer.authority.as_ref().map_or(false, |auth| auth == signer) {
+            // Incoming: The destination token account is owned by the user
+            // Check if we can determine the owner from balance metadata
+            if let Some(owner) = account_to_owner.get(&transfer.destination) {
+                if owner == signer {
+                    incoming.push(transfer);
+                }
+            }
+            // Fallback: if destination address directly matches signer (less common)
+            else if transfer.destination == signer {
                 incoming.push(transfer);
             }
         }
@@ -365,27 +383,32 @@ impl DexParser {
                 if let (Some(token_in_mint), Some(token_out_mint)) =
                     (&token_in_transfer.mint, &token_out_transfer.mint) {
 
-                    eprintln!("[DEBUG] Creating swap: {} {} -> {} {}",
-                        token_out_transfer.amount, token_out_mint,
-                        token_in_transfer.amount, token_in_mint);
+                    // Validate that this is actually a swap (different tokens)
+                    if token_in_mint == token_out_mint {
+                        eprintln!("[DEBUG] Skipping invalid swap: same token on both sides ({})", token_in_mint);
+                    } else {
+                        eprintln!("[DEBUG] Creating swap: {} {} -> {} {}",
+                            token_out_transfer.amount, token_out_mint,
+                            token_in_transfer.amount, token_in_mint);
 
-                    swaps.push(ParsedSwap {
-                        dex: DexProtocol::Unknown,  // Can't determine DEX from transfers alone
-                        program_id: "Unknown".to_string(),
-                        pool: "Unknown".to_string(),
-                        user: signer.to_string(),
-                        token_in: token_out_mint.clone(),  // User sent this out
-                        token_out: token_in_mint.clone(),  // User received this
-                        amount_in: token_out_transfer.amount,
-                        amount_out: token_in_transfer.amount,
-                        min_amount_out: None,
-                        price_before: None,
-                        price_after: None,
-                        price_impact: None,
-                        signature: signature.to_string(),
-                        tx_index,
-                        instruction_index: 0,
-                    });
+                        swaps.push(ParsedSwap {
+                            dex: DexProtocol::Unknown,  // Can't determine DEX from transfers alone
+                            program_id: "Unknown".to_string(),
+                            pool: "Unknown".to_string(),
+                            user: signer.to_string(),
+                            token_in: token_out_mint.clone(),  // User sent this out
+                            token_out: token_in_mint.clone(),  // User received this
+                            amount_in: token_out_transfer.amount,
+                            amount_out: token_in_transfer.amount,
+                            min_amount_out: None,
+                            price_before: None,
+                            price_after: None,
+                            price_impact: None,
+                            signature: signature.to_string(),
+                            tx_index,
+                            instruction_index: 0,
+                        });
+                    }
                 }
             }
         } else {
