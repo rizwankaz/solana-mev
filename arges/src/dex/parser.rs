@@ -572,6 +572,15 @@ impl DexParser {
                 let (token_in, amount_in_signed) = decreases[0];
                 let (token_out, amount_out) = increases[0];
 
+                // Filter out dust swaps (amounts less than 1000 base units)
+                // This helps remove fee payments and very small balance adjustments
+                if amount_in_signed.unsigned_abs() < 1000 || *amount_out < 1000 {
+                    eprintln!("[DEBUG]     Skipping dust swap: {} {} -> {} {} (below minimum threshold)",
+                        amount_in_signed.unsigned_abs(), &token_in[..8],
+                        amount_out, &token_out[..8]);
+                    continue;
+                }
+
                 eprintln!("[DEBUG]     Creating simple swap: {} {} -> {} {}",
                     amount_in_signed.unsigned_abs(), &token_in[..8],
                     amount_out, &token_out[..8]);
@@ -627,6 +636,14 @@ impl DexParser {
                 if let (Some((token_in, amount_in_net)), Some((token_out, amount_out_net))) =
                     (max_decrease, max_increase)
                 {
+                    // Filter out dust swaps (amounts less than 1000 base units)
+                    if amount_in_net.unsigned_abs() < 1000 || amount_out_net.unsigned_abs() < 1000 {
+                        eprintln!("[DEBUG]     Skipping dust multi-hop swap: {} {} -> {} {} (below minimum threshold)",
+                            amount_in_net.unsigned_abs(), &token_in[..8],
+                            amount_out_net, &token_out[..8]);
+                        continue;
+                    }
+
                     eprintln!("[DEBUG]     Creating multi-hop swap: {} {} -> {} {}",
                         amount_in_net.unsigned_abs(), &token_in[..8],
                         amount_out_net, &token_out[..8]);
