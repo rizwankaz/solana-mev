@@ -64,7 +64,7 @@ impl DexParser {
 
         // If no swaps found from balances, try parsing from inner instructions
         if swaps.is_empty() {
-            if let Some(detected) = Self::parse_from_inner_instructions(tx, tx_index)? {
+            if let Some(detected) = Self::parse_from_inner_instructions(tx, tx_index, pre_balances, post_balances)? {
                 swaps.extend(detected);
             }
         }
@@ -76,6 +76,8 @@ impl DexParser {
     fn parse_from_inner_instructions(
         tx: &FetchedTransaction,
         tx_index: usize,
+        pre_balances: Option<&Vec<UiTransactionTokenBalance>>,
+        post_balances: Option<&Vec<UiTransactionTokenBalance>>,
     ) -> Result<Option<Vec<ParsedSwap>>> {
         // Get inner instructions from metadata
         let inner_instructions = tx.meta.as_ref().and_then(|m| {
@@ -93,16 +95,66 @@ impl DexParser {
         // Get the transaction signer (first account)
         let signer = tx.signer().unwrap_or_else(|| "Unknown".to_string());
 
-        // Parse token transfers from inner instructions
-        // SPL Token program ID
-        const TOKEN_PROGRAM_ID: &str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+        // Build a map of token account address -> mint from balances
+        // This helps resolve mints for "transfer" instructions (which don't include mint)
+        use std::collections::HashMap;
+        let mut account_to_mint: HashMap<String, String> = HashMap::new();
 
+        // Get account keys to map indices to addresses
+        let account_keys: Vec<String> = match &tx.transaction {
+            solana_transaction_status::EncodedTransaction::Json(ui_tx) => {
+                match &ui_tx.message {
+                    solana_transaction_status::UiMessage::Parsed(parsed) => {
+                        parsed.account_keys.iter().map(|k| k.pubkey.clone()).collect()
+                    }
+                    solana_transaction_status::UiMessage::Raw(raw) => {
+                        raw.account_keys.clone()
+                    }
+                }
+            }
+            _ => Vec::new(),
+        };
+
+        // Map account indices from balances to get account_address -> mint mapping
+        if let Some(balances) = pre_balances {
+            for balance in balances {
+                if let Some(account_addr) = account_keys.get(balance.account_index as usize) {
+                    account_to_mint.insert(account_addr.clone(), balance.mint.clone());
+                }
+            }
+        }
+        if let Some(balances) = post_balances {
+            for balance in balances {
+                if let Some(account_addr) = account_keys.get(balance.account_index as usize) {
+                    account_to_mint.insert(account_addr.clone(), balance.mint.clone());
+                }
+            }
+        }
+
+        eprintln!("[DEBUG] Built account->mint map with {} entries", account_to_mint.len());
+
+        // Parse token transfers from inner instructions
         let mut transfers = Vec::new();
 
         for inner_ix in inner_instructions {
             for instruction in &inner_ix.instructions {
                 // Try to parse any instruction that might be a token transfer
-                if let Some(transfer) = Self::try_parse_token_transfer(instruction) {
+                if let Some(mut transfer) = Self::try_parse_token_transfer(instruction) {
+                    // If mint is missing, try to resolve it from account_to_mint map
+                    if transfer.mint.is_none() {
+                        // Try source account
+                        if let Some(mint) = account_to_mint.get(&transfer.source) {
+                            eprintln!("[DEBUG] Resolved mint for source {}: {}", &transfer.source[..8], mint);
+                            transfer.mint = Some(mint.clone());
+                        }
+                        // If still None, try destination account
+                        if transfer.mint.is_none() {
+                            if let Some(mint) = account_to_mint.get(&transfer.destination) {
+                                eprintln!("[DEBUG] Resolved mint for destination {}: {}", &transfer.destination[..8], mint);
+                                transfer.mint = Some(mint.clone());
+                            }
+                        }
+                    }
                     transfers.push(transfer);
                 }
             }
