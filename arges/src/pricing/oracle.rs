@@ -63,7 +63,7 @@ impl PriceOracle {
     pub fn new() -> Self {
         Self {
             cache: Arc::new(RwLock::new(HashMap::new())),
-            jupiter_api_url: "https://price.jup.ag/v6/price".to_string(),
+            jupiter_api_url: "https://lite-api.jup.ag/price/v3".to_string(),
             client: reqwest::Client::new(),
             cache_ttl: 60, // 60 seconds
         }
