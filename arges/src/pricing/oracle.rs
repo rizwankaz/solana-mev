@@ -1,7 +1,7 @@
 //! Price oracle for real-time token pricing
 
 use anyhow::{anyhow, Result};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -28,7 +28,7 @@ impl TokenPrice {
     }
 }
 
-/// Jupiter API price response
+/// Jupiter API price response (v6 format)
 #[derive(Debug, Deserialize)]
 struct JupiterPriceResponse {
     data: HashMap<String, JupiterTokenPrice>,
@@ -37,9 +37,13 @@ struct JupiterPriceResponse {
 #[derive(Debug, Deserialize)]
 struct JupiterTokenPrice {
     id: String,
-    #[serde(rename = "type")]
-    price_type: String,
-    price: String,
+    #[serde(rename = "mintSymbol")]
+    mint_symbol: Option<String>,
+    #[serde(rename = "vsToken")]
+    vs_token: Option<String>,
+    #[serde(rename = "vsTokenSymbol")]
+    vs_token_symbol: Option<String>,
+    price: f64,
 }
 
 /// Price oracle using Jupiter API
@@ -59,7 +63,7 @@ impl PriceOracle {
     pub fn new() -> Self {
         Self {
             cache: Arc::new(RwLock::new(HashMap::new())),
-            jupiter_api_url: "https://api.jup.ag/price/v2".to_string(),
+            jupiter_api_url: "https://price.jup.ag/v6/price".to_string(),
             client: reqwest::Client::new(),
             cache_ttl: 60, // 60 seconds
         }
@@ -144,10 +148,7 @@ impl PriceOracle {
             .get(mint)
             .ok_or_else(|| anyhow!("No price data for {} in Jupiter response", mint))?;
 
-        let price_usd = token_price
-            .price
-            .parse::<f64>()
-            .map_err(|e| anyhow!("Failed to parse price: {}", e))?;
+        let price_usd = token_price.price;
 
         // Get SOL price to calculate price in SOL
         let sol_price_usd = if mint == super::WSOL_ADDRESS {
@@ -218,10 +219,7 @@ impl PriceOracle {
             .get(super::WSOL_ADDRESS)
             .ok_or_else(|| anyhow!("No SOL price in Jupiter response"))?;
 
-        let price_usd = sol_price
-            .price
-            .parse::<f64>()
-            .map_err(|e| anyhow!("Failed to parse SOL price: {}", e))?;
+        let price_usd = sol_price.price;
 
         // Cache SOL price
         let mut cache = self.cache.write().await;
