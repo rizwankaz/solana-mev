@@ -125,6 +125,12 @@ impl CexDexDetector {
         let amount_in_normalized = (swap.amount_in as f64) / 10_f64.powi(token_in_decimals as i32);
         let amount_out_normalized = (swap.amount_out as f64) / 10_f64.powi(token_out_decimals as i32);
 
+        debug!(
+            "Swap amounts - IN: raw={}, decimals={}, normalized={:.6} | OUT: raw={}, decimals={}, normalized={:.6}",
+            swap.amount_in, token_in_decimals, amount_in_normalized,
+            swap.amount_out, token_out_decimals, amount_out_normalized
+        );
+
         // Calculate DEX execution price
         // For swap of token_in -> token_out:
         // DEX price = (amount_in_usd / amount_out_tokens)
@@ -132,6 +138,11 @@ impl CexDexDetector {
 
         let amount_in_usd = amount_in_normalized * token_in_cex_price.avg_price;
         let amount_out_tokens = amount_out_normalized;
+
+        debug!(
+            "Price calculation - token_in CEX price: ${:.6}, amount_in_usd: ${:.2}, token_out CEX price: ${:.6}",
+            token_in_cex_price.avg_price, amount_in_usd, token_out_cex_price.avg_price
+        );
 
         // Skip if amounts are too small
         if amount_in_usd < self.min_trade_size_usd {
