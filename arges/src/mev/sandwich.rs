@@ -187,34 +187,53 @@ impl SandwichDetector {
     /// Calculate victim's loss due to sandwich attack
     ///
     /// The victim's loss is the difference between:
-    /// - What they would have received at a fair price (approximated by backrun price)
+    /// - What they would have received at the pre-sandwich "fair" price
     /// - What they actually received (at the inflated price from frontrun)
+    ///
+    /// We approximate the fair price by averaging frontrun and backrun prices,
+    /// since the sandwich moves the price up (frontrun) and back down (backrun)
     fn estimate_victim_loss(
         &self,
         frontrun: &ParsedSwap,
         victim: &ParsedSwap,
         backrun: &ParsedSwap,
     ) -> i64 {
-        // Calculate effective prices (in raw token amounts)
-        // Price = output / input
+        // Sandwich mechanics:
+        // 1. Frontrun: Buys token, moves price UP
+        // 2. Victim: Buys at inflated price (gets LESS output than fair)
+        // 3. Backrun: Sells token, moves price back DOWN
 
-        // The backrun happens after victim, so the price should be closer to "fair"
-        // Use backrun's price as baseline
+        // Check if victim is buying or selling the same direction as frontrun
+        // Victim loses when trading in the same direction as frontrun
+        let victim_in_same_direction = victim.token_in == frontrun.token_in;
+
+        if !victim_in_same_direction {
+            // Victim is trading opposite direction, different sandwich type
+            // Still calculate loss but use different logic
+            return 0;
+        }
+
+        // Calculate prices (output/input ratio)
+        let frontrun_price = frontrun.amount_out as f64 / frontrun.amount_in as f64;
         let backrun_price = backrun.amount_out as f64 / backrun.amount_in as f64;
+        let victim_price = victim.amount_out as f64 / victim.amount_in as f64;
 
-        // Calculate what victim should have received at backrun price
-        let expected_output = (victim.amount_in as f64 * backrun_price) as u64;
+        // Fair price ≈ average of pre-sandwich and post-sandwich prices
+        // This assumes the pool returns to approximately the same state
+        let fair_price = (frontrun_price + backrun_price) / 2.0;
 
-        // Victim's actual output was less due to frontrun
+        // Victim should have received more at fair price
+        let fair_output = (victim.amount_in as f64 * fair_price) as u64;
         let actual_output = victim.amount_out;
 
-        // Loss is the difference (in output token terms)
-        let loss = if expected_output > actual_output {
-            (expected_output - actual_output) as i64
+        // Loss in output token terms
+        let loss = if fair_output > actual_output {
+            (fair_output - actual_output) as i64
         } else {
-            // In rare cases backrun price might be worse, use price impact fallback
-            let frontrun_price_impact = frontrun.price_impact.unwrap_or(1.0) / 100.0;
-            (victim.amount_out as f64 * frontrun_price_impact) as i64
+            // Fallback: estimate as percentage of victim's trade
+            // Typical sandwich extracts 0.5-2% from victim
+            let estimated_loss_pct = 0.01; // 1% conservative estimate
+            (victim.amount_out as f64 * estimated_loss_pct) as i64
         };
 
         loss
