@@ -135,7 +135,7 @@ async fn main() -> anyhow::Result<()> {
                             .filter(|e| matches!(e.mev_type, arges::MevType::Arbitrage))
                             .count();
                         let sandwich_count = analysis.events.iter()
-                            .filter(|e| matches!(e.mev_type, arges::MevType::SandwichAttack))
+                            .filter(|e| matches!(e.mev_type, arges::MevType::Sandwich))
                             .count();
 
                         if analysis.has_mev() {
