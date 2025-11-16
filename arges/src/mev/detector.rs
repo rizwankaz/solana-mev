@@ -199,16 +199,32 @@ impl MevDetector {
 
             for event in &mut analysis.events {
                 match self.calculate_accurate_profit(event, &swaps, block, calc).await {
-                    Ok((profit_sol, profit_usd)) => {
+                    Ok((profit_sol, profit_usd, victim_loss_sol_opt)) => {
                         // Update profit in lamports (convert SOL back to lamports for consistency)
                         event.profit_lamports = Some((profit_sol * 1e9) as i64);
                         event.profit_usd = Some(profit_usd);
-                        debug!(
-                            "Updated {} event profit: {} SOL (${} USD)",
-                            event.mev_type.name(),
-                            profit_sol,
-                            profit_usd
-                        );
+
+                        // Update victim loss for sandwich events
+                        if let Some(victim_loss_sol) = victim_loss_sol_opt {
+                            if let MevMetadata::Sandwich(ref mut sandwich) = event.metadata {
+                                sandwich.victim_loss = Some((victim_loss_sol * 1e9) as i64);
+                                debug!(
+                                    "Updated {} event: profit={} SOL (${:.2} USD), victim loss={} SOL (${:.2} USD)",
+                                    event.mev_type.name(),
+                                    profit_sol,
+                                    profit_usd,
+                                    victim_loss_sol,
+                                    victim_loss_sol * profit_usd / profit_sol
+                                );
+                            }
+                        } else {
+                            debug!(
+                                "Updated {} event profit: {} SOL (${} USD)",
+                                event.mev_type.name(),
+                                profit_sol,
+                                profit_usd
+                            );
+                        }
                     }
                     Err(e) => {
                         warn!(
@@ -228,13 +244,15 @@ impl MevDetector {
     }
 
     /// Calculate accurate profit for an MEV event
+    ///
+    /// Returns: (profit_sol, profit_usd, victim_loss_sol_opt)
     async fn calculate_accurate_profit(
         &self,
         event: &MevEvent,
         swaps: &[crate::dex::ParsedSwap],
         block: &FetchedBlock,
         calc: &ProfitCalculator,
-    ) -> Result<(f64, f64)> {
+    ) -> Result<(f64, f64, Option<f64>)> {
         use crate::dex::ParsedSwap;
 
         match &event.metadata {
@@ -255,22 +273,39 @@ impl MevDetector {
                 let sol_price_usd = calc.price_oracle.get_price_usd(crate::pricing::WSOL_ADDRESS).await?;
                 let profit_usd = net * sol_price_usd;
 
-                Ok((net, profit_usd))
+                Ok((net, profit_usd, None))
             }
             MevMetadata::Sandwich(sandwich) => {
-                // Find frontrun and backrun swaps
+                // Find frontrun, victim, and backrun swaps
                 let frontrun = swaps.iter().find(|s| s.signature == sandwich.frontrun_tx);
+                let victim = swaps.iter().find(|s| s.signature == sandwich.victim_tx);
                 let backrun = swaps.iter().find(|s| s.signature == sandwich.backrun_tx);
 
-                if let (Some(fr), Some(br)) = (frontrun, backrun) {
+                if let (Some(fr), Some(vic), Some(br)) = (frontrun, victim, backrun) {
+                    // Calculate sandwich profit in SOL
                     let profit_sol = calc.calculate_sandwich_profit(fr, br, block).await?;
 
+                    // Calculate victim loss in SOL
+                    // Use backrun price as "fair" price to calculate expected output
+                    let backrun_price = br.amount_out as f64 / br.amount_in as f64;
+                    let expected_output = (vic.amount_in as f64 * backrun_price) as u64;
+                    let victim_loss_sol = calc.calculate_victim_loss(vic, expected_output).await.unwrap_or(0.0);
+
+                    // Get USD values
                     let sol_price_usd = calc.price_oracle.get_price_usd(crate::pricing::WSOL_ADDRESS).await?;
                     let profit_usd = profit_sol * sol_price_usd;
 
-                    Ok((profit_sol, profit_usd))
+                    debug!(
+                        "Sandwich: profit={} SOL (${:.2}), victim loss={} SOL (${:.2})",
+                        profit_sol,
+                        profit_usd,
+                        victim_loss_sol,
+                        victim_loss_sol * sol_price_usd
+                    );
+
+                    Ok((profit_sol, profit_usd, Some(victim_loss_sol)))
                 } else {
-                    Err(anyhow::anyhow!("Could not find frontrun/backrun swaps"))
+                    Err(anyhow::anyhow!("Could not find frontrun/victim/backrun swaps"))
                 }
             }
             _ => {
@@ -279,9 +314,9 @@ impl MevDetector {
                     let sol = lamports as f64 / 1e9;
                     let sol_price_usd = calc.price_oracle.get_price_usd(crate::pricing::WSOL_ADDRESS).await?;
                     let usd = sol * sol_price_usd;
-                    Ok((sol, usd))
+                    Ok((sol, usd, None))
                 } else {
-                    Ok((0.0, 0.0))
+                    Ok((0.0, 0.0, None))
                 }
             }
         }

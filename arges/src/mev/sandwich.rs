@@ -184,25 +184,40 @@ impl SandwichDetector {
         }))
     }
 
-    /// Estimate victim's loss due to sandwich attack
+    /// Calculate victim's loss due to sandwich attack
+    ///
+    /// The victim's loss is the difference between:
+    /// - What they would have received at a fair price (approximated by backrun price)
+    /// - What they actually received (at the inflated price from frontrun)
     fn estimate_victim_loss(
         &self,
         frontrun: &ParsedSwap,
         victim: &ParsedSwap,
-        _backrun: &ParsedSwap,
+        backrun: &ParsedSwap,
     ) -> i64 {
-        // Simplified calculation:
-        // Victim would have gotten better price without frontrun
-        // Loss = difference between expected output and actual output
+        // Calculate effective prices (in raw token amounts)
+        // Price = output / input
 
-        // Calculate expected price without frontrun (very simplified)
-        let frontrun_price_impact = frontrun.price_impact.unwrap_or(0.0) / 100.0;
+        // The backrun happens after victim, so the price should be closer to "fair"
+        // Use backrun's price as baseline
+        let backrun_price = backrun.amount_out as f64 / backrun.amount_in as f64;
 
-        // Estimate victim's loss as a percentage of their trade
-        let loss_percentage = frontrun_price_impact;
-        let estimated_loss = (victim.amount_out as f64 * loss_percentage) as i64;
+        // Calculate what victim should have received at backrun price
+        let expected_output = (victim.amount_in as f64 * backrun_price) as u64;
 
-        estimated_loss
+        // Victim's actual output was less due to frontrun
+        let actual_output = victim.amount_out;
+
+        // Loss is the difference (in output token terms)
+        let loss = if expected_output > actual_output {
+            (expected_output - actual_output) as i64
+        } else {
+            // In rare cases backrun price might be worse, use price impact fallback
+            let frontrun_price_impact = frontrun.price_impact.unwrap_or(1.0) / 100.0;
+            (victim.amount_out as f64 * frontrun_price_impact) as i64
+        };
+
+        loss
     }
 
     /// Convert ParsedSwap to SwapDetails
