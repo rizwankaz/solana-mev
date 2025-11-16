@@ -43,6 +43,12 @@ impl MevClassifier {
             MevMetadata::Sandwich(sandwich) => Ok(sandwich.profit),
             MevMetadata::Liquidation(liq) => Ok(liq.liquidation_bonus),
             MevMetadata::JitLiquidity(jit) => Ok(jit.net_profit),
+            MevMetadata::CexDex(_) => {
+                // CEX-DEX profit is stored in profit_usd, convert to lamports if available
+                event.profit_lamports.ok_or_else(|| {
+                    anyhow::anyhow!("No profit data for CEX-DEX arbitrage")
+                })
+            }
             MevMetadata::AtomicBackrun(backrun) => Ok(backrun.profit),
             MevMetadata::PriorityFee(_) => {
                 // Priority fee MEV is harder to quantify

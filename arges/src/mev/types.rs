@@ -53,6 +53,9 @@ pub enum MevType {
     /// Just-in-time liquidity provision
     JitLiquidity,
 
+    /// CEX-DEX arbitrage
+    CexDex,
+
     /// Atomic backrun (following a large trade)
     AtomicBackrun,
 
@@ -74,6 +77,7 @@ pub enum MevMetadata {
     Sandwich(SandwichMetadata),
     Liquidation(LiquidationMetadata),
     JitLiquidity(JitMetadata),
+    CexDex(crate::mev::cex_dex::CexDexMetadata),
     AtomicBackrun(BackrunMetadata),
     PriorityFee(PriorityFeeMetadata),
     JitoBundle(JitoBundleMetadata),
@@ -387,6 +391,7 @@ impl MevType {
             MevType::Sandwich => "Sandwich Attack",
             MevType::Liquidation => "Liquidation",
             MevType::JitLiquidity => "JIT Liquidity",
+            MevType::CexDex => "CEX-DEX Arbitrage",
             MevType::AtomicBackrun => "Atomic Backrun",
             MevType::PriorityFee => "Priority Fee MEV",
             MevType::JitoBundle => "Jito Bundle",

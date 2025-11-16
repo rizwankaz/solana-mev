@@ -3,6 +3,7 @@
 //! Orchestrates all MEV detection strategies and provides unified interface
 
 use super::arbitrage::ArbitrageDetector;
+use super::cex_dex::CexDexDetector;
 use super::classifier::MevClassifier;
 use super::jit::JitDetector;
 use super::liquidation::LiquidationDetector;
@@ -30,6 +31,9 @@ pub struct MevDetector {
     /// JIT liquidity detector
     jit_detector: JitDetector,
 
+    /// CEX-DEX arbitrage detector (optional, requires CEX price oracle)
+    cex_dex_detector: Option<Arc<CexDexDetector>>,
+
     /// MEV classifier
     classifier: MevClassifier,
 
@@ -55,6 +59,9 @@ pub struct DetectorConfig {
     /// Enable JIT liquidity detection
     pub detect_jit: bool,
 
+    /// Enable CEX-DEX arbitrage detection
+    pub detect_cex_dex: bool,
+
     /// Minimum confidence score to report
     pub min_confidence: f64,
 
@@ -72,6 +79,7 @@ impl Default for DetectorConfig {
             detect_sandwich: true,
             detect_liquidation: true,
             detect_jit: true,
+            detect_cex_dex: true,
             min_confidence: 0.6,
             enable_cross_block: false,
             cross_block_window: 5,
@@ -92,6 +100,7 @@ impl MevDetector {
             sandwich_detector: SandwichDetector::default(),
             liquidation_detector: LiquidationDetector::default(),
             jit_detector: JitDetector::default(),
+            cex_dex_detector: None,
             classifier: MevClassifier::default(),
             profit_calculator: None,
             config,
@@ -101,6 +110,12 @@ impl MevDetector {
     /// Set profit calculator for accurate SOL-denominated profit calculations
     pub fn with_profit_calculator(mut self, calculator: Arc<ProfitCalculator>) -> Self {
         self.profit_calculator = Some(calculator);
+        self
+    }
+
+    /// Set CEX-DEX detector for CEX-DEX arbitrage detection
+    pub fn with_cex_dex_detector(mut self, detector: Arc<CexDexDetector>) -> Self {
+        self.cex_dex_detector = Some(detector);
         self
     }
 
@@ -189,6 +204,22 @@ impl MevDetector {
     pub async fn detect_block_with_pricing(&self, block: &FetchedBlock) -> Result<BlockMevAnalysis> {
         // First, run regular detection
         let mut analysis = self.detect_block(block)?;
+
+        // Run CEX-DEX detection if enabled (requires async)
+        if self.config.detect_cex_dex {
+            if let Some(cex_dex_detector) = &self.cex_dex_detector {
+                let swaps = DexParser::parse_block(&block.transactions);
+                match cex_dex_detector.detect(block, &swaps).await {
+                    Ok(events) => {
+                        debug!("Found {} CEX-DEX arbitrage events", events.len());
+                        analysis.events.extend(events);
+                    }
+                    Err(e) => warn!("CEX-DEX detection failed: {}", e),
+                }
+            } else if self.config.detect_cex_dex {
+                debug!("CEX-DEX detection enabled but no detector configured");
+            }
+        }
 
         // If profit calculator is available, enrich events with accurate profits
         if let Some(calc) = &self.profit_calculator {
