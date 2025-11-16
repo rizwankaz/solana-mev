@@ -47,16 +47,15 @@ impl DexParser {
 
         // Detect swaps from token balance changes
         if let (Some(pre), Some(post)) = (pre_balances, post_balances) {
-            if let Some(swap) = Self::detect_swap_from_balances(
+            let detected = Self::detect_swap_from_balances(
                 pre,
                 post,
                 "Unknown",
                 &tx.signature,
                 tx_index,
                 0,
-            )? {
-                swaps.push(swap);
-            }
+            )?;
+            swaps.extend(detected);
         }
 
         Ok(swaps)
@@ -117,14 +116,16 @@ impl DexParser {
         // Simplified: detect swaps by looking for token transfers in pre/post balances
         // This is a heuristic approach that works across all DEXs
         if let (Some(pre), Some(post)) = (pre_balances, post_balances) {
-            if let Some(swap) = Self::detect_swap_from_balances(
+            let swaps = Self::detect_swap_from_balances(
                 pre,
                 post,
                 "Unknown",
                 signature,
                 tx_index,
                 instruction_index,
-            )? {
+            )?;
+            // Return the first swap if any found (this function expects Option<ParsedSwap>)
+            if let Some(swap) = swaps.into_iter().next() {
                 return Ok(Some(swap));
             }
         }
@@ -133,6 +134,8 @@ impl DexParser {
     }
 
     /// Detect swaps by analyzing token balance changes
+    ///
+    /// Returns ALL detected swaps in the transaction (can be multiple users)
     fn detect_swap_from_balances(
         pre_balances: &[UiTransactionTokenBalance],
         post_balances: &[UiTransactionTokenBalance],
@@ -140,9 +143,13 @@ impl DexParser {
         signature: &str,
         tx_index: usize,
         instruction_index: usize,
-    ) -> Result<Option<ParsedSwap>> {
-        // Find balance changes
-        let mut changes: Vec<(String, i128, String)> = Vec::new(); // (mint, change, owner)
+    ) -> Result<Vec<ParsedSwap>> {
+        use std::collections::HashMap;
+
+        let mut detected_swaps = Vec::new();
+
+        // Find balance changes grouped by owner
+        let mut changes_by_owner: HashMap<String, Vec<(String, i128)>> = HashMap::new(); // owner -> [(mint, change)]
 
         for post in post_balances {
             if let Some(pre) = pre_balances
@@ -162,35 +169,38 @@ impl DexParser {
                 let change = post_amount - pre_amount;
 
                 if change != 0 {
-                    changes.push((
-                        post.mint.clone(),
-                        change,
-                        post.owner.clone().unwrap_or("Unknown".to_string()),
-                    ));
+                    let owner = post.owner.clone().unwrap_or("Unknown".to_string());
+                    changes_by_owner
+                        .entry(owner)
+                        .or_default()
+                        .push((post.mint.clone(), change));
                 }
             }
         }
 
-        // A swap typically involves: one token decreasing, another increasing
-        let decreases: Vec<_> = changes.iter().filter(|(_, c, _)| *c < 0).collect();
-        let increases: Vec<_> = changes.iter().filter(|(_, c, _)| *c > 0).collect();
+        // For each owner, check if they have a swap pattern (1 decrease + 1 increase)
+        // CRITICAL: Only match balance changes from the SAME owner
+        // This prevents false positives from mixing balance changes across different users
+        for (owner, owner_changes) in changes_by_owner.iter() {
+            let decreases: Vec<_> = owner_changes.iter().filter(|(_, c)| *c < 0).collect();
+            let increases: Vec<_> = owner_changes.iter().filter(|(_, c)| *c > 0).collect();
 
-        // Simple heuristic: if we have 1 decrease and 1 increase for the same owner, it's likely a swap
-        if decreases.len() >= 1 && increases.len() >= 1 {
-            // Find the user's decrease and increase
-            // This is simplified - in reality, you'd want more sophisticated matching
-            if let (Some(decrease), Some(increase)) = (decreases.first(), increases.first()) {
+            // Simple swap pattern: exactly 1 token decrease + 1 token increase for same owner
+            if decreases.len() == 1 && increases.len() == 1 {
+                let (token_in, amount_in_signed) = decreases[0];
+                let (token_out, amount_out) = increases[0];
+
                 let dex = DexProtocol::from_program_id(program);
 
-                return Ok(Some(ParsedSwap {
+                detected_swaps.push(ParsedSwap {
                     dex,
                     program_id: program.to_string(),
-                    pool: "Unknown".to_string(), // Would need to parse from accounts
-                    user: decrease.2.clone(),
-                    token_in: decrease.0.clone(),
-                    token_out: increase.0.clone(),
-                    amount_in: decrease.1.unsigned_abs() as u64,
-                    amount_out: increase.1 as u64,
+                    pool: "Unknown".to_string(),
+                    user: owner.clone(),
+                    token_in: token_in.clone(),
+                    token_out: token_out.clone(),
+                    amount_in: amount_in_signed.unsigned_abs() as u64,
+                    amount_out: *amount_out as u64,
                     min_amount_out: None,
                     price_before: None,
                     price_after: None,
@@ -198,11 +208,11 @@ impl DexParser {
                     signature: signature.to_string(),
                     tx_index,
                     instruction_index,
-                }));
+                });
             }
         }
 
-        Ok(None)
+        Ok(detected_swaps)
     }
 
     /// Extract all swaps from a block of transactions
