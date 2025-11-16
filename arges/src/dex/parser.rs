@@ -108,6 +108,7 @@ impl DexParser {
 
         // Detect swaps from token balance changes (if available)
         if let (Some(pre), Some(post)) = (pre_balances, post_balances) {
+            eprintln!("[DEBUG] Attempting balance-based swap detection: {} pre-balances, {} post-balances", pre.len(), post.len());
             let detected = Self::detect_swap_from_balances(
                 pre,
                 post,
@@ -116,7 +117,11 @@ impl DexParser {
                 tx_index,
                 0,
             )?;
+            eprintln!("[DEBUG] Balance-based detection found {} swaps", detected.len());
             swaps.extend(detected);
+        } else {
+            eprintln!("[DEBUG] Skipping balance-based detection: pre_balances={}, post_balances={}",
+                pre_balances.is_some(), post_balances.is_some());
         }
 
         // If no swaps found from balances, try parsing from inner instructions
@@ -526,21 +531,31 @@ impl DexParser {
                 let change = post_amount - pre_amount;
 
                 if change != 0 {
-                    let owner = post.owner.clone().unwrap_or("Unknown".to_string());
+                    // Handle OptionSerializer for owner field
+                    let owner = match &post.owner {
+                        OptionSerializer::Some(o) => o.clone(),
+                        _ => "Unknown".to_string(),
+                    };
                     changes_by_owner
-                        .entry(owner)
+                        .entry(owner.clone())
                         .or_default()
                         .push((post.mint.clone(), change));
+                    eprintln!("[DEBUG]   Balance change: owner={}, mint={}, change={}", &owner[..8.min(owner.len())], &post.mint[..8], change);
                 }
             }
         }
+
+        eprintln!("[DEBUG]   Found balance changes for {} owners", changes_by_owner.len());
 
         // For each owner, check if they have a swap pattern
         // CRITICAL: Only match balance changes from the SAME owner
         // This prevents false positives from mixing balance changes across different users
         for (owner, owner_changes) in changes_by_owner.iter() {
+            eprintln!("[DEBUG]   Analyzing owner {}: {} balance changes", &owner[..8.min(owner.len())], owner_changes.len());
             let decreases: Vec<_> = owner_changes.iter().filter(|(_, c)| *c < 0).collect();
             let increases: Vec<_> = owner_changes.iter().filter(|(_, c)| *c > 0).collect();
+
+            eprintln!("[DEBUG]     Decreases: {}, Increases: {}", decreases.len(), increases.len());
 
             // Detect different swap patterns:
             // 1. Simple swap: 1 decrease + 1 increase (A → B)
@@ -548,6 +563,7 @@ impl DexParser {
             // 3. Aggregator route: multiple intermediate tokens
 
             if decreases.is_empty() || increases.is_empty() {
+                eprintln!("[DEBUG]     Skipping: no swap pattern (need both increase and decrease)");
                 continue; // No swap pattern
             }
 
@@ -555,6 +571,10 @@ impl DexParser {
             if decreases.len() == 1 && increases.len() == 1 {
                 let (token_in, amount_in_signed) = decreases[0];
                 let (token_out, amount_out) = increases[0];
+
+                eprintln!("[DEBUG]     Creating simple swap: {} {} -> {} {}",
+                    amount_in_signed.unsigned_abs(), &token_in[..8],
+                    amount_out, &token_out[..8]);
 
                 let dex = DexProtocol::from_program_id(program);
 
@@ -607,6 +627,10 @@ impl DexParser {
                 if let (Some((token_in, amount_in_net)), Some((token_out, amount_out_net))) =
                     (max_decrease, max_increase)
                 {
+                    eprintln!("[DEBUG]     Creating multi-hop swap: {} {} -> {} {}",
+                        amount_in_net.unsigned_abs(), &token_in[..8],
+                        amount_out_net, &token_out[..8]);
+
                     let dex = DexProtocol::from_program_id(program);
 
                     detected_swaps.push(ParsedSwap {
