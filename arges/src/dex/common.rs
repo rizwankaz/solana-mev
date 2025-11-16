@@ -63,6 +63,7 @@ pub enum DexProtocol {
     Meteora,
     Lifinity,
     Saber,
+    PumpFun,
     Unknown,
 }
 
@@ -79,6 +80,7 @@ impl DexProtocol {
             DexProtocol::Meteora => Some("LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo"),
             DexProtocol::Lifinity => Some("EewxydAPCCVuNEyrVN68PuSYdQ7wKn27V9Gjeoi8dy3S"),
             DexProtocol::Saber => Some("SSwpkEEcbUqx4vtoEByFjSkhKdCT862DNVb52nZg1UZ"),
+            DexProtocol::PumpFun => Some("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"),
             DexProtocol::Unknown => None,
         }
     }
@@ -95,6 +97,7 @@ impl DexProtocol {
             DexProtocol::Meteora => "Meteora",
             DexProtocol::Lifinity => "Lifinity",
             DexProtocol::Saber => "Saber",
+            DexProtocol::PumpFun => "Pump.fun",
             DexProtocol::Unknown => "Unknown",
         }
     }
@@ -111,6 +114,7 @@ impl DexProtocol {
             "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo" => DexProtocol::Meteora,
             "EewxydAPCCVuNEyrVN68PuSYdQ7wKn27V9Gjeoi8dy3S" => DexProtocol::Lifinity,
             "SSwpkEEcbUqx4vtoEByFjSkhKdCT862DNVb52nZg1UZ" => DexProtocol::Saber,
+            "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P" => DexProtocol::PumpFun,
             _ => DexProtocol::Unknown,
         }
     }

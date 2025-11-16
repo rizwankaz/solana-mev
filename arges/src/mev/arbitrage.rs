@@ -7,6 +7,10 @@ use crate::dex::ParsedSwap;
 use crate::types::FetchedBlock;
 use anyhow::Result;
 use std::collections::{HashMap, HashSet};
+use tracing::warn;
+
+/// Wrapped SOL (WSOL) token address
+pub const WSOL_ADDRESS: &str = "So11111111111111111111111111111111111111112";
 
 /// Arbitrage detector
 pub struct ArbitrageDetector {
@@ -206,7 +210,18 @@ impl ArbitrageDetector {
                     && swap1.token_out == swap2.token_in
                 {
                     // This could be cross-DEX arbitrage
-                    let profit = (swap2.amount_out as i64) - (swap1.amount_in as i64);
+                    // Validate we're comparing the same token (should be guaranteed by above check)
+                    if swap1.token_in != swap2.token_out {
+                        continue;
+                    }
+
+                    // Only calculate SOL profit for WSOL pairs
+                    let profit = if swap1.token_in == WSOL_ADDRESS {
+                        (swap2.amount_out as i64) - (swap1.amount_in as i64)
+                    } else {
+                        // For non-WSOL tokens, we can't calculate lamport profit without price data
+                        continue;
+                    };
 
                     if profit >= self.min_profit_lamports {
                         let metadata = ArbitrageMetadata {
@@ -268,7 +283,17 @@ impl ArbitrageDetector {
             let last_token = &tx_swaps[tx_swaps.len() - 1].token_out;
 
             if first_token == last_token {
-                // Potential arbitrage - check profitability
+                // Only track WSOL arbitrage for accurate SOL profit calculation
+                // Other tokens would need price oracle data
+                if first_token != WSOL_ADDRESS {
+                    warn!(
+                        "Skipping non-WSOL arbitrage cycle for token {} - need price oracle for accurate profit",
+                        first_token
+                    );
+                    continue;
+                }
+
+                // Calculate profit - amounts are in lamports for WSOL
                 let input = tx_swaps[0].amount_in;
                 let output = tx_swaps[tx_swaps.len() - 1].amount_out;
                 let profit = (output as i64) - (input as i64);
@@ -311,16 +336,37 @@ impl ArbitrageDetector {
             return (0, 0);
         }
 
+        let first_token = &cycle[0].token_in;
+        let last_token = &cycle[cycle.len() - 1].token_out;
+
+        // CRITICAL: Only calculate profit if the cycle truly starts and ends with same token
+        if first_token != last_token {
+            warn!(
+                "Arbitrage cycle token mismatch: start={}, end={}. Cannot calculate profit.",
+                first_token, last_token
+            );
+            return (0, 0);
+        }
+
         let input = cycle[0].amount_in as i64;
         let output = cycle[cycle.len() - 1].amount_out as i64;
-        let gross_profit = output - input;
 
-        // Estimate fees (simplified - would need actual fee calculation)
-        let estimated_fees: i64 = cycle.len() as i64 * 5000; // 5000 lamports per tx
-
-        let net_profit = gross_profit - estimated_fees;
-
-        (gross_profit, net_profit)
+        // Only calculate profit for WSOL cycles (where amounts are in lamports)
+        // For other tokens, we'd need decimal information and price data
+        if first_token == WSOL_ADDRESS {
+            let gross_profit = output - input;
+            let estimated_fees: i64 = cycle.len() as i64 * 5000; // 5000 lamports per tx
+            let net_profit = gross_profit - estimated_fees;
+            (gross_profit, net_profit)
+        } else {
+            // For non-WSOL tokens, we can't reliably calculate lamport-denominated profit
+            // without knowing token decimals and prices
+            warn!(
+                "Cannot calculate SOL profit for non-WSOL arbitrage cycle (token: {}). Need price oracle.",
+                first_token
+            );
+            (0, 0)
+        }
     }
 
     /// Extract token path from swaps
