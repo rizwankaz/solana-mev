@@ -110,7 +110,15 @@ impl DexParser {
 
         // If we found transfers, try to match them into swaps
         if transfers.is_empty() {
+            eprintln!("[DEBUG] No token transfers found in inner instructions");
             return Ok(None);
+        }
+
+        eprintln!("[DEBUG] Found {} token transfers in inner instructions", transfers.len());
+        for (i, t) in transfers.iter().enumerate() {
+            eprintln!("[DEBUG]   Transfer {}: {} {} (auth: {:?}, src: {}, dst: {})",
+                i, t.amount, t.mint.as_ref().unwrap_or(&"None".to_string()),
+                t.authority, &t.source[..8], &t.destination[..8]);
         }
 
         // Group transfers by source/destination to find swap patterns
@@ -209,6 +217,10 @@ impl DexParser {
             }
         }
 
+        eprintln!("[DEBUG] Signer: {}", signer);
+        eprintln!("[DEBUG] Outgoing transfers: {}", outgoing.len());
+        eprintln!("[DEBUG] Incoming transfers: {}", incoming.len());
+
         // If we have both outgoing and incoming transfers, create a swap
         if !outgoing.is_empty() && !incoming.is_empty() {
             // Take the largest outgoing and incoming as the swap
@@ -217,6 +229,10 @@ impl DexParser {
 
                 if let (Some(token_in_mint), Some(token_out_mint)) =
                     (&token_in_transfer.mint, &token_out_transfer.mint) {
+
+                    eprintln!("[DEBUG] Creating swap: {} {} -> {} {}",
+                        token_out_transfer.amount, token_out_mint,
+                        token_in_transfer.amount, token_in_mint);
 
                     swaps.push(ParsedSwap {
                         dex: DexProtocol::Unknown,  // Can't determine DEX from transfers alone
@@ -237,6 +253,8 @@ impl DexParser {
                     });
                 }
             }
+        } else {
+            eprintln!("[DEBUG] Cannot create swap: outgoing={}, incoming={}", outgoing.len(), incoming.len());
         }
 
         Ok(swaps)

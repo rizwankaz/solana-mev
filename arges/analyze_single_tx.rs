@@ -32,6 +32,35 @@ async fn main() -> anyhow::Result<()> {
         println!("\n✓ Found transaction at index {}", idx);
         println!("Signature: {}", tx.signature);
 
+        // Check inner instructions first
+        if let Some(meta) = &tx.meta {
+            if let solana_transaction_status::option_serializer::OptionSerializer::Some(inner_ixs) = &meta.inner_instructions {
+                println!("\n📋 Inner Instructions: {} groups", inner_ixs.len());
+                for (i, inner_group) in inner_ixs.iter().enumerate() {
+                    println!("  Group {}: {} instructions", i, inner_group.instructions.len());
+                    for (j, ix) in inner_group.instructions.iter().enumerate() {
+                        match ix {
+                            solana_transaction_status::UiInstruction::Parsed(ui_parsed) => {
+                                match ui_parsed {
+                                    solana_transaction_status::UiParsedInstruction::Parsed(parsed) => {
+                                        println!("    Instruction {}: {} (program: {})", j, parsed.parsed.get("type").and_then(|v| v.as_str()).unwrap_or("unknown"), parsed.program);
+                                    }
+                                    solana_transaction_status::UiParsedInstruction::PartiallyDecoded(partial) => {
+                                        println!("    Instruction {}: PartiallyDecoded (program: {})", j, partial.program_id);
+                                    }
+                                }
+                            }
+                            solana_transaction_status::UiInstruction::Compiled(_) => {
+                                println!("    Instruction {}: Compiled", j);
+                            }
+                        }
+                    }
+                }
+            } else {
+                println!("\n📋 No inner instructions found");
+            }
+        }
+
         // Parse swaps from this transaction
         let swaps = DexParser::parse_transaction(tx, idx)?;
         println!("\n📊 Detected {} swap(s):", swaps.len());
