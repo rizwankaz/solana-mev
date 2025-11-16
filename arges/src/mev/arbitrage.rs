@@ -288,6 +288,17 @@ impl ArbitrageDetector {
                 continue;
             }
 
+            // CRITICAL: Validate all swaps belong to the same user
+            // Arbitrage requires a single entity to complete the cycle
+            let first_user = &tx_swaps[0].user;
+            let all_same_user = tx_swaps.iter().all(|s| &s.user == first_user);
+
+            if !all_same_user {
+                // Different users making swaps in same transaction != arbitrage
+                // This is just regular trading activity or a routing protocol
+                continue;
+            }
+
             // Check if swaps form a cycle
             let first_token = &tx_swaps[0].token_in;
             let last_token = &tx_swaps[tx_swaps.len() - 1].token_out;
