@@ -32,6 +32,10 @@ path = "src/main.rs"
 name = "analyze-tx"
 path = "analyze_single_tx.rs"
 
+[[bin]]
+name = "analyze-blocks"
+path = "analyze_multiple_blocks.rs"
+
 [profile.release]
 opt-level = 3
 lto = true
