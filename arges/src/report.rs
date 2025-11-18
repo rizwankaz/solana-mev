@@ -1,4 +1,4 @@
-use crate::mev::{MevSummary, ProgramRegistry};
+use crate::mev::{MevSummary, ProgramRegistry, MevEvent};
 use crate::types::FetchedBlock;
 
 /// Format a comprehensive block report including MEV analysis
@@ -160,6 +160,93 @@ fn truncate_mint(mint: &str) -> String {
     } else {
         mint.to_string()
     }
+}
+
+/// Format MEV-only report for manual validation
+pub fn format_mev_validation_report(block: &FetchedBlock) -> String {
+    let mut report = String::new();
+    let mut mev_events: Vec<(usize, MevEvent)> = Vec::new();
+
+    // Collect all MEV events with their transaction indices
+    for (idx, tx) in block.transactions.iter().enumerate() {
+        if let Some(event) = tx.analyze_mev() {
+            mev_events.push((idx, event));
+        }
+    }
+
+    // Header
+    report.push_str("╔═══════════════════════════════════════════════════════════════╗\n");
+    report.push_str("║                    MEV VALIDATION REPORT                      ║\n");
+    report.push_str("╚═══════════════════════════════════════════════════════════════╝\n\n");
+
+    report.push_str(&format!("Slot Number:         {}\n", block.slot));
+    report.push_str(&format!("Block Hash:          {}\n", block.blockhash));
+    if let Some(timestamp) = block.timestamp() {
+        report.push_str(&format!("Timestamp:           {}\n", timestamp.format("%Y-%m-%d %H:%M:%S UTC")));
+    }
+    report.push_str(&format!("Total Transactions:  {}\n", block.transactions.len()));
+    report.push_str(&format!("MEV Transactions:    {}\n\n", mev_events.len()));
+
+    if mev_events.is_empty() {
+        report.push_str("No MEV transactions detected in this block.\n");
+        return report;
+    }
+
+    report.push_str("─────────────────── MEV TRANSACTIONS ──────────────────────────\n\n");
+
+    // List each MEV transaction
+    for (idx, (tx_idx, event)) in mev_events.iter().enumerate() {
+        let status = if event.success { "✓" } else { "✗" };
+        let category = match event.category {
+            crate::mev::MevCategory::Arbitrage => "ARBITRAGE",
+            crate::mev::MevCategory::Liquidation => "LIQUIDATION",
+            crate::mev::MevCategory::Mint => "MINT",
+            crate::mev::MevCategory::Spam => "SPAM",
+        };
+
+        report.push_str(&format!("[{}] {} {} (tx #{})\n", idx + 1, status, category, tx_idx));
+        report.push_str(&format!("Signature: {}\n", event.signature));
+
+        // Programs
+        if !event.programs_involved.is_empty() {
+            report.push_str("Programs: ");
+            let program_names: Vec<String> = event.programs_involved
+                .iter()
+                .map(|p| ProgramRegistry::program_name(p))
+                .collect();
+            report.push_str(&program_names.join(", "));
+            report.push_str("\n");
+        }
+
+        // Token changes
+        if !event.token_changes.is_empty() {
+            report.push_str("Token Changes:\n");
+            for token_change in &event.token_changes {
+                let mint_short = truncate_mint(&token_change.mint);
+                let sign = if token_change.ui_amount_change >= 0.0 { "+" } else { "" };
+                report.push_str(&format!("  • {}: {}{:.6}\n",
+                    mint_short,
+                    sign,
+                    token_change.ui_amount_change));
+            }
+        }
+
+        // SOL change
+        if event.sol_change_lamports != 0 {
+            let sol_change_str = if event.sol_change_lamports >= 0 {
+                format!("+{}", lamports_to_sol(event.sol_change_lamports as u64))
+            } else {
+                format!("-{}", lamports_to_sol((-event.sol_change_lamports) as u64))
+            };
+            report.push_str(&format!("SOL Change: {} SOL\n", sol_change_str));
+        }
+
+        report.push_str("\n");
+    }
+
+    report.push_str("═══════════════════════════════════════════════════════════════\n");
+
+    report
 }
 
 /// Format a compact summary for streaming blocks
