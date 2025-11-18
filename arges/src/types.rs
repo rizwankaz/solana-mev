@@ -184,10 +184,31 @@ impl FetchedTransaction {
         (meta.pre_balances.clone(), meta.post_balances.clone())
     }
 
+    /// Get pre and post token balances
+    fn get_token_balances(&self) -> (Vec<solana_transaction_status::UiTransactionTokenBalance>, Vec<solana_transaction_status::UiTransactionTokenBalance>) {
+        let meta = match &self.meta {
+            Some(m) => m,
+            None => return (Vec::new(), Vec::new()),
+        };
+
+        let pre_token_balances = match &meta.pre_token_balances {
+            solana_transaction_status::option_serializer::OptionSerializer::Some(balances) => balances.clone(),
+            _ => Vec::new(),
+        };
+
+        let post_token_balances = match &meta.post_token_balances {
+            solana_transaction_status::option_serializer::OptionSerializer::Some(balances) => balances.clone(),
+            _ => Vec::new(),
+        };
+
+        (pre_token_balances, post_token_balances)
+    }
+
     /// Analyze this transaction for MEV patterns
     pub fn analyze_mev(&self) -> Option<MevEvent> {
         let instructions = self.get_instructions();
         let (pre_balances, post_balances) = self.get_balances();
+        let (pre_token_balances, post_token_balances) = self.get_token_balances();
         let success = self.is_success();
 
         MevAnalyzer::analyze_transaction(
@@ -196,6 +217,8 @@ impl FetchedTransaction {
             success,
             &pre_balances,
             &post_balances,
+            &pre_token_balances,
+            &post_token_balances,
         )
     }
 }

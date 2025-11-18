@@ -12,7 +12,7 @@ pub fn format_block_report(block: &FetchedBlock) -> String {
     report.push_str("\n");
 
     // Basic block info
-    report.push_str(&format!("Block Number:        {}\n", block.slot));
+    report.push_str(&format!("Slot Number:         {}\n", block.slot));
     report.push_str(&format!("Block Hash:          {}\n", &block.blockhash));
     report.push_str(&format!("Parent Slot:         {}\n", block.parent_slot));
 
@@ -69,25 +69,67 @@ fn format_mev_summary(mev: &MevSummary) -> String {
 
     // MEV totals
     output.push_str(&format!("Total MEV Events:    {}\n", mev.total_mev_count()));
-    output.push_str(&format!("Total MEV Value:     {} SOL\n", lamports_to_sol(mev.total_value())));
     output.push_str(&format!("Spam/Failed MEV:     {}\n", mev.spam_count));
+
+    // SOL change (usually negative due to fees)
+    let sol_change_str = if mev.total_sol_change >= 0 {
+        format!("+{}", lamports_to_sol(mev.total_sol_change as u64))
+    } else {
+        format!("-{}", lamports_to_sol((-mev.total_sol_change) as u64))
+    };
+    output.push_str(&format!("Net SOL Change:      {} SOL\n", sol_change_str));
     output.push_str("\n");
 
     // Breakdown by category
     if mev.arbitrage_count > 0 {
-        output.push_str(&format!("  🔄 Arbitrage:      {} transactions, {} SOL\n",
-            mev.arbitrage_count,
-            lamports_to_sol(mev.arbitrage_value)));
+        output.push_str(&format!("  🔄 Arbitrage:      {} transactions\n", mev.arbitrage_count));
+        if !mev.arbitrage_token_profits.is_empty() {
+            // Show top 3 profitable tokens
+            let mut profits: Vec<_> = mev.arbitrage_token_profits.iter().collect();
+            profits.sort_by(|a, b| b.1.partial_cmp(a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+            for (mint, profit) in profits.iter().take(3) {
+                let mint_short = truncate_mint(mint);
+                output.push_str(&format!("     • {}: {:+.6}\n", mint_short, profit));
+            }
+            if profits.len() > 3 {
+                output.push_str(&format!("     ... and {} more tokens\n", profits.len() - 3));
+            }
+        }
     }
 
     if mev.liquidation_count > 0 {
-        output.push_str(&format!("  💧 Liquidations:   {} transactions, {} SOL\n",
-            mev.liquidation_count,
-            lamports_to_sol(mev.liquidation_value)));
+        output.push_str(&format!("  💧 Liquidations:   {} transactions\n", mev.liquidation_count));
+        if !mev.liquidation_token_profits.is_empty() {
+            // Show top 3 profitable tokens
+            let mut profits: Vec<_> = mev.liquidation_token_profits.iter().collect();
+            profits.sort_by(|a, b| b.1.partial_cmp(a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+            for (mint, profit) in profits.iter().take(3) {
+                let mint_short = truncate_mint(mint);
+                output.push_str(&format!("     • {}: {:+.6}\n", mint_short, profit));
+            }
+            if profits.len() > 3 {
+                output.push_str(&format!("     ... and {} more tokens\n", profits.len() - 3));
+            }
+        }
     }
 
     if mev.mint_count > 0 {
         output.push_str(&format!("  🪙 Mints:          {} transactions\n", mev.mint_count));
+        if !mev.minted_tokens.is_empty() {
+            // Show top 3 minted tokens by volume
+            let mut mints: Vec<_> = mev.minted_tokens.iter().collect();
+            mints.sort_by(|a, b| b.1.partial_cmp(a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+            for (mint, amount) in mints.iter().take(3) {
+                let mint_short = truncate_mint(mint);
+                output.push_str(&format!("     • {}: {:.6}\n", mint_short, amount));
+            }
+            if mints.len() > 3 {
+                output.push_str(&format!("     ... and {} more mints\n", mints.len() - 3));
+            }
+        }
     }
 
     // Programs used
@@ -109,6 +151,15 @@ fn format_mev_summary(mev: &MevSummary) -> String {
     }
 
     output
+}
+
+/// Truncate mint address for display
+fn truncate_mint(mint: &str) -> String {
+    if mint.len() > 12 {
+        format!("{}...{}", &mint[..6], &mint[mint.len()-4..])
+    } else {
+        mint.to_string()
+    }
 }
 
 /// Format a compact summary for streaming blocks

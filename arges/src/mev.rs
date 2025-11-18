@@ -1,5 +1,13 @@
 use std::collections::HashMap;
-use solana_transaction_status::{UiInstruction, UiParsedInstruction};
+use solana_transaction_status::{UiInstruction, UiParsedInstruction, UiTransactionTokenBalance};
+
+/// Token balance change for a specific mint
+#[derive(Debug, Clone)]
+pub struct TokenChange {
+    pub mint: String,
+    pub ui_amount_change: f64,
+    pub decimals: u8,
+}
 
 /// MEV event categories
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -31,7 +39,8 @@ pub struct MevEvent {
     pub category: MevCategory,
     pub signature: String,
     pub programs_involved: Vec<String>,
-    pub value_lamports: Option<u64>,
+    pub token_changes: Vec<TokenChange>,
+    pub sol_change_lamports: i64,
     pub success: bool,
 }
 
@@ -40,22 +49,27 @@ pub struct MevEvent {
 pub struct MevSummary {
     /// Count of arbitrage transactions
     pub arbitrage_count: usize,
-    /// Total value captured by arbitrage (if detectable)
-    pub arbitrage_value: u64,
+    /// Token profits from arbitrage (mint -> total profit)
+    pub arbitrage_token_profits: HashMap<String, f64>,
 
     /// Count of liquidation transactions
     pub liquidation_count: usize,
-    /// Total value from liquidations
-    pub liquidation_value: u64,
+    /// Token profits from liquidations (mint -> total profit)
+    pub liquidation_token_profits: HashMap<String, f64>,
 
     /// Count of mint transactions
     pub mint_count: usize,
+    /// New tokens minted (mint -> total amount)
+    pub minted_tokens: HashMap<String, f64>,
 
     /// Count of spam/failed MEV attempts
     pub spam_count: usize,
 
     /// Programs used, with frequency count
     pub programs_used: HashMap<String, usize>,
+
+    /// Total SOL change across all MEV (can be negative due to fees)
+    pub total_sol_change: i64,
 }
 
 impl MevSummary {
@@ -65,14 +79,20 @@ impl MevSummary {
 
     /// Add an MEV event to the summary
     pub fn add_event(&mut self, event: &MevEvent) {
-        // Update counts based on category
+        // Update counts and profits based on category
         match event.category {
             MevCategory::Arbitrage => {
                 if event.success {
                     self.arbitrage_count += 1;
-                    if let Some(value) = event.value_lamports {
-                        self.arbitrage_value += value;
+                    // Track token profits
+                    for token_change in &event.token_changes {
+                        if token_change.ui_amount_change > 0.0 {
+                            *self.arbitrage_token_profits
+                                .entry(token_change.mint.clone())
+                                .or_insert(0.0) += token_change.ui_amount_change;
+                        }
                     }
+                    self.total_sol_change += event.sol_change_lamports;
                 } else {
                     self.spam_count += 1;
                 }
@@ -80,9 +100,15 @@ impl MevSummary {
             MevCategory::Liquidation => {
                 if event.success {
                     self.liquidation_count += 1;
-                    if let Some(value) = event.value_lamports {
-                        self.liquidation_value += value;
+                    // Track token profits from liquidations
+                    for token_change in &event.token_changes {
+                        if token_change.ui_amount_change > 0.0 {
+                            *self.liquidation_token_profits
+                                .entry(token_change.mint.clone())
+                                .or_insert(0.0) += token_change.ui_amount_change;
+                        }
                     }
+                    self.total_sol_change += event.sol_change_lamports;
                 } else {
                     self.spam_count += 1;
                 }
@@ -90,6 +116,14 @@ impl MevSummary {
             MevCategory::Mint => {
                 if event.success {
                     self.mint_count += 1;
+                    // Track new tokens minted
+                    for token_change in &event.token_changes {
+                        if token_change.ui_amount_change > 0.0 {
+                            *self.minted_tokens
+                                .entry(token_change.mint.clone())
+                                .or_insert(0.0) += token_change.ui_amount_change;
+                        }
+                    }
                 } else {
                     self.spam_count += 1;
                 }
@@ -110,9 +144,22 @@ impl MevSummary {
         self.arbitrage_count + self.liquidation_count + self.mint_count
     }
 
-    /// Total value captured (arbitrage + liquidations)
-    pub fn total_value(&self) -> u64 {
-        self.arbitrage_value + self.liquidation_value
+    /// Get top token profits across all MEV categories
+    pub fn top_token_profits(&self, limit: usize) -> Vec<(String, f64)> {
+        let mut all_profits: HashMap<String, f64> = HashMap::new();
+
+        // Combine all token profits
+        for (mint, profit) in &self.arbitrage_token_profits {
+            *all_profits.entry(mint.clone()).or_insert(0.0) += profit;
+        }
+        for (mint, profit) in &self.liquidation_token_profits {
+            *all_profits.entry(mint.clone()).or_insert(0.0) += profit;
+        }
+
+        // Sort by profit descending
+        let mut profits: Vec<_> = all_profits.into_iter().collect();
+        profits.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        profits.into_iter().take(limit).collect()
     }
 }
 
@@ -218,6 +265,8 @@ impl MevAnalyzer {
         success: bool,
         pre_balances: &[u64],
         post_balances: &[u64],
+        pre_token_balances: &[UiTransactionTokenBalance],
+        post_token_balances: &[UiTransactionTokenBalance],
     ) -> Option<MevEvent> {
         let program_ids = Self::extract_program_ids(instructions);
 
@@ -229,14 +278,18 @@ impl MevAnalyzer {
         // Detect category based on program interactions
         let category = Self::detect_category(&program_ids, instructions);
 
-        // Calculate value (SOL balance changes)
-        let value_lamports = Self::calculate_value(pre_balances, post_balances);
+        // Calculate token changes
+        let token_changes = Self::calculate_token_changes(pre_token_balances, post_token_balances);
+
+        // Calculate SOL balance change (signed)
+        let sol_change_lamports = Self::calculate_sol_change(pre_balances, post_balances);
 
         Some(MevEvent {
             category,
             signature: signature.to_string(),
             programs_involved: program_ids,
-            value_lamports,
+            token_changes,
+            sol_change_lamports,
             success,
         })
     }
@@ -311,20 +364,67 @@ impl MevAnalyzer {
         MevCategory::Spam
     }
 
-    /// Calculate value from balance changes
-    fn calculate_value(pre_balances: &[u64], post_balances: &[u64]) -> Option<u64> {
+    /// Calculate token balance changes from pre/post token balances
+    fn calculate_token_changes(
+        pre_token_balances: &[UiTransactionTokenBalance],
+        post_token_balances: &[UiTransactionTokenBalance],
+    ) -> Vec<TokenChange> {
+        let mut changes = Vec::new();
+        let mut token_map: HashMap<(u8, String), (Option<f64>, Option<f64>, u8)> = HashMap::new();
+
+        // Collect pre-balances
+        for pre_balance in pre_token_balances {
+            let key = (pre_balance.account_index, pre_balance.mint.clone());
+            let entry = token_map.entry(key).or_insert((None, None, pre_balance.ui_token_amount.decimals));
+            entry.0 = pre_balance.ui_token_amount.ui_amount;
+            entry.2 = pre_balance.ui_token_amount.decimals;
+        }
+
+        // Collect post-balances
+        for post_balance in post_token_balances {
+            let key = (post_balance.account_index, post_balance.mint.clone());
+            let entry = token_map.entry(key).or_insert((None, None, post_balance.ui_token_amount.decimals));
+            entry.1 = post_balance.ui_token_amount.ui_amount;
+            entry.2 = post_balance.ui_token_amount.decimals;
+        }
+
+        // Calculate changes for each mint across all accounts
+        let mut mint_totals: HashMap<String, (f64, u8)> = HashMap::new();
+
+        for ((_, mint), (pre_opt, post_opt, decimals)) in token_map {
+            let pre = pre_opt.unwrap_or(0.0);
+            let post = post_opt.unwrap_or(0.0);
+            let change = post - pre;
+
+            let entry = mint_totals.entry(mint).or_insert((0.0, decimals));
+            entry.0 += change;
+        }
+
+        // Convert to TokenChange structs
+        for (mint, (total_change, decimals)) in mint_totals {
+            // Only include non-zero changes
+            if total_change.abs() > 0.0000001 {
+                changes.push(TokenChange {
+                    mint,
+                    ui_amount_change: total_change,
+                    decimals,
+                });
+            }
+        }
+
+        changes
+    }
+
+    /// Calculate SOL balance change (signed, in lamports)
+    fn calculate_sol_change(pre_balances: &[u64], post_balances: &[u64]) -> i64 {
         if pre_balances.is_empty() || post_balances.is_empty() {
-            return None;
+            return 0;
         }
 
-        // Calculate net balance change for the fee payer (first account)
-        let pre = pre_balances.first()?;
-        let post = post_balances.first()?;
+        // Sum all account balance changes
+        let total_pre: i64 = pre_balances.iter().map(|&b| b as i64).sum();
+        let total_post: i64 = post_balances.iter().map(|&b| b as i64).sum();
 
-        if post > pre {
-            Some(post - pre)
-        } else {
-            None
-        }
+        total_post - total_pre
     }
 }
