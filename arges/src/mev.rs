@@ -287,11 +287,18 @@ pub struct MevAnalyzer;
 impl MevAnalyzer {
     /// Analyze a transaction and detect MEV patterns
     ///
-    /// Heuristics:
-    /// - Arbitrage: Multiple DEX interactions in single tx
-    /// - Liquidation: Lending protocol interactions
-    /// - Mint: Token program calls with specific patterns
-    /// - Spam: Failed transactions with MEV patterns
+    /// Hybrid Classification Heuristics:
+    /// 1. Token Balance Changes (primary signal):
+    ///    - Swap pattern: Both positive & negative token changes
+    ///    - Mint pattern: Only positive token changes
+    /// 2. Known Program IDs (hints):
+    ///    - Known DEX programs → ARBITRAGE
+    ///    - Lending protocols → LIQUIDATION
+    ///    - Token/NFT programs → MINT (if no swap pattern)
+    /// 3. Unknown Programs:
+    ///    - With swap pattern → ARBITRAGE (catches new DEXs)
+    ///    - With mint pattern → MINT
+    ///    - Failed → SPAM
     pub fn analyze_transaction(
         signature: &str,
         instructions: &[UiInstruction],
@@ -303,16 +310,16 @@ impl MevAnalyzer {
     ) -> Option<MevEvent> {
         let program_ids = Self::extract_program_ids(instructions);
 
-        // Skip if no known MEV-related programs
+        // Skip if no programs at all
         if program_ids.is_empty() {
             return None;
         }
 
-        // Detect category based on program interactions
-        let category = Self::detect_category(&program_ids, instructions);
-
-        // Calculate token changes
+        // Calculate token changes first (needed for classification)
         let token_changes = Self::calculate_token_changes(pre_token_balances, post_token_balances);
+
+        // Detect category based on program interactions AND token changes
+        let category = Self::detect_category(&program_ids, &token_changes);
 
         // Calculate SOL balance change (signed)
         let sol_change_lamports = Self::calculate_sol_change(pre_balances, post_balances);
@@ -328,6 +335,9 @@ impl MevAnalyzer {
     }
 
     /// Extract program IDs from instructions
+    ///
+    /// Returns ALL programs involved, not just known ones.
+    /// This allows us to detect new/unknown DEX programs and protocols.
     fn extract_program_ids(instructions: &[UiInstruction]) -> Vec<String> {
         let mut programs = Vec::new();
 
@@ -347,14 +357,10 @@ impl MevAnalyzer {
             };
 
             if let Some(program_str) = program_id {
-                // Only include known MEV-related programs
-                if ProgramRegistry::is_dex(&program_str)
-                    || ProgramRegistry::is_lending(&program_str)
-                    || ProgramRegistry::is_mint_program(&program_str)
-                {
-                    if !programs.contains(&program_str) {
-                        programs.push(program_str);
-                    }
+                // Include ALL programs, not just known ones
+                // This lets us detect swaps on new/unknown DEX programs
+                if !programs.contains(&program_str) {
+                    programs.push(program_str);
                 }
             }
         }
@@ -362,11 +368,23 @@ impl MevAnalyzer {
         programs
     }
 
-    /// Detect MEV category based on program interactions
-    fn detect_category(program_ids: &[String], _instructions: &[UiInstruction]) -> MevCategory {
+    /// Detect MEV category based on program interactions AND token balance changes
+    ///
+    /// Uses hybrid approach:
+    /// 1. Token changes indicate swap-like behavior (multiple tokens changing)
+    /// 2. Known programs provide hints (DEX, lending, etc.)
+    /// 3. Unknown programs with swap patterns are classified as ARBITRAGE
+    fn detect_category(program_ids: &[String], token_changes: &[TokenChange]) -> MevCategory {
         let dex_count = program_ids.iter().filter(|p| ProgramRegistry::is_dex(p)).count();
         let lending_count = program_ids.iter().filter(|p| ProgramRegistry::is_lending(p)).count();
         let mint_count = program_ids.iter().filter(|p| ProgramRegistry::is_mint_program(p)).count();
+
+        // Check token change patterns
+        let has_token_swap = token_changes.len() >= 2 ||
+            (token_changes.len() == 1 && token_changes[0].ui_amount_change.abs() > 0.0);
+
+        let has_only_positive_changes = !token_changes.is_empty() &&
+            token_changes.iter().all(|tc| tc.ui_amount_change > 0.0);
 
         // Arbitrage: Multiple DEX interactions (cross-DEX trades)
         if dex_count >= 2 {
@@ -383,15 +401,22 @@ impl MevAnalyzer {
             return MevCategory::Liquidation;
         }
 
-        // Single DEX interaction (arbitrage or swap)
-        // Priority: DEX over Token Program because Token Program is involved in all token swaps
+        // Known DEX interaction -> ARBITRAGE
         if dex_count > 0 {
             return MevCategory::Arbitrage;
         }
 
-        // Mints: ONLY Token/NFT programs (no DEX or lending)
-        // Must check this after DEX to avoid misclassifying swaps as mints
-        if mint_count > 0 && dex_count == 0 && lending_count == 0 {
+        // Unknown program with swap-like token changes -> likely a DEX swap -> ARBITRAGE
+        // This catches new/unknown DEX programs like Meteora Dynamic Bonding Curve
+        if has_token_swap && !has_only_positive_changes {
+            // Has token swaps (both positive and negative changes) but no known DEX
+            // Likely an unknown DEX program
+            return MevCategory::Arbitrage;
+        }
+
+        // Mints: Token/NFT programs with only positive token changes
+        // OR token programs without swap-like behavior
+        if mint_count > 0 || has_only_positive_changes {
             return MevCategory::Mint;
         }
 
