@@ -1,4 +1,4 @@
-use crate::mev::{MevSummary, ProgramRegistry, MevEvent};
+use crate::mev::{MevSummary, ProgramRegistry, MevEvent, MultiTxMevEvent, MevAnalyzer};
 use crate::types::FetchedBlock;
 use serde::Serialize;
 
@@ -203,6 +203,8 @@ pub fn format_mev_validation_report(block: &FetchedBlock) -> String {
             crate::mev::MevCategory::Liquidation => "LIQUIDATION",
             crate::mev::MevCategory::Mint => "MINT",
             crate::mev::MevCategory::Spam => "SPAM",
+            crate::mev::MevCategory::Sandwich => "SANDWICH",
+            crate::mev::MevCategory::JitLiquidity => "JIT_LIQUIDITY",
         };
 
         report.push_str(&format!("[{}] {} {} (tx #{})\n", idx + 1, status, category, tx_idx));
@@ -309,6 +311,8 @@ pub struct MevValidationJson {
     pub timestamp: Option<String>,
     pub total_transactions: usize,
     pub mev_transactions: Vec<MevTransactionJson>,
+    pub sandwich_attacks: Vec<MultiTxMevJson>,
+    pub jit_attacks: Vec<MultiTxMevJson>,
 }
 
 /// JSON structure for individual MEV transaction
@@ -331,9 +335,25 @@ pub struct TokenChangeJson {
     pub decimals: u8,
 }
 
+/// JSON structure for multi-transaction MEV events (sandwich, JIT)
+#[derive(Serialize)]
+pub struct MultiTxMevJson {
+    pub category: String,
+    pub frontrun_signature: String,
+    pub frontrun_tx_index: usize,
+    pub victim_signature: String,
+    pub victim_tx_index: usize,
+    pub backrun_signature: String,
+    pub backrun_tx_index: usize,
+    pub profit_tokens: Vec<TokenChangeJson>,
+    pub total_sol_profit_lamports: i64,
+    pub programs: Vec<String>,
+}
+
 /// Format MEV validation report as JSON
 pub fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, serde_json::Error> {
     let mut mev_transactions = Vec::new();
+    let mut tx_with_mev = Vec::new();
 
     // Collect all MEV events with their transaction indices
     for (idx, tx) in block.transactions.iter().enumerate() {
@@ -355,6 +375,45 @@ pub fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, serde_
                     .collect(),
                 sol_change_lamports: event.sol_change_lamports,
             });
+
+            tx_with_mev.push((idx, tx, Some(event)));
+        } else {
+            tx_with_mev.push((idx, tx, None));
+        }
+    }
+
+    // Detect multi-transaction MEV events (sandwich, JIT)
+    let multi_tx_events = MevAnalyzer::detect_multi_tx_mev(&tx_with_mev);
+
+    let mut sandwich_attacks = Vec::new();
+    let mut jit_attacks = Vec::new();
+
+    for event in multi_tx_events {
+        let json_event = MultiTxMevJson {
+            category: format!("{:?}", event.category).to_uppercase(),
+            frontrun_signature: event.frontrun_signature,
+            frontrun_tx_index: event.frontrun_tx_index,
+            victim_signature: event.victim_signature,
+            victim_tx_index: event.victim_tx_index,
+            backrun_signature: event.backrun_signature,
+            backrun_tx_index: event.backrun_tx_index,
+            profit_tokens: event.profit_token_changes.iter()
+                .map(|tc| TokenChangeJson {
+                    mint: tc.mint.clone(),
+                    amount: tc.ui_amount_change,
+                    decimals: tc.decimals,
+                })
+                .collect(),
+            total_sol_profit_lamports: event.total_sol_profit_lamports,
+            programs: event.programs_involved.iter()
+                .map(|p| ProgramRegistry::program_name(p))
+                .collect(),
+        };
+
+        match event.category {
+            crate::mev::MevCategory::Sandwich => sandwich_attacks.push(json_event),
+            crate::mev::MevCategory::JitLiquidity => jit_attacks.push(json_event),
+            _ => {}
         }
     }
 
@@ -366,6 +425,8 @@ pub fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, serde_
         timestamp,
         total_transactions: block.transactions.len(),
         mev_transactions,
+        sandwich_attacks,
+        jit_attacks,
     };
 
     serde_json::to_string_pretty(&report)

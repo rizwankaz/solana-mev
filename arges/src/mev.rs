@@ -20,6 +20,10 @@ pub enum MevCategory {
     Liquidation,
     /// Token or NFT mints
     Mint,
+    /// Sandwich attack (frontrun + backrun)
+    Sandwich,
+    /// JIT (Just-In-Time) liquidity attack
+    JitLiquidity,
     /// Failed MEV attempts (spam)
     Spam,
 }
@@ -30,6 +34,8 @@ impl MevCategory {
             MevCategory::Arbitrage => "arbitrage",
             MevCategory::Liquidation => "liquidation",
             MevCategory::Mint => "mint",
+            MevCategory::Sandwich => "sandwich",
+            MevCategory::JitLiquidity => "jit_liquidity",
             MevCategory::Spam => "spam",
         }
     }
@@ -44,6 +50,27 @@ pub struct MevEvent {
     pub token_changes: Vec<TokenChange>,
     pub sol_change_lamports: i64,
     pub success: bool,
+}
+
+/// Multi-transaction MEV event (sandwich, JIT)
+#[derive(Debug, Clone, Serialize)]
+pub struct MultiTxMevEvent {
+    pub category: MevCategory,
+    /// Frontrun/setup transaction
+    pub frontrun_signature: String,
+    pub frontrun_tx_index: usize,
+    /// Victim/target transaction
+    pub victim_signature: String,
+    pub victim_tx_index: usize,
+    /// Backrun/exit transaction
+    pub backrun_signature: String,
+    pub backrun_tx_index: usize,
+    /// Extracted profit (in tokens)
+    pub profit_token_changes: Vec<TokenChange>,
+    /// Total SOL profit
+    pub total_sol_profit_lamports: i64,
+    /// Programs involved across all transactions
+    pub programs_involved: Vec<String>,
 }
 
 /// Aggregated MEV statistics for a block
@@ -131,6 +158,12 @@ impl MevSummary {
                 }
             }
             MevCategory::Spam => {
+                self.spam_count += 1;
+            }
+            // Sandwich and JIT are tracked separately in multi-tx MEV events
+            MevCategory::Sandwich | MevCategory::JitLiquidity => {
+                // These won't be in individual transactions, but in multi-tx events
+                // If they appear here, count as spam
                 self.spam_count += 1;
             }
         }
@@ -486,5 +519,276 @@ impl MevAnalyzer {
         let total_post: i64 = post_balances.iter().map(|&b| b as i64).sum();
 
         total_post - total_pre
+    }
+
+    /// Detect sandwich and JIT attacks across transactions in a block
+    ///
+    /// Returns a list of multi-transaction MEV events (sandwich, JIT)
+    pub fn detect_multi_tx_mev(
+        transactions: &[(usize, &crate::types::FetchedTransaction, Option<MevEvent>)]
+    ) -> Vec<MultiTxMevEvent> {
+        let mut multi_tx_events = Vec::new();
+
+        // Detect sandwich attacks
+        multi_tx_events.extend(Self::detect_sandwiches(transactions));
+
+        // Detect JIT liquidity attacks
+        multi_tx_events.extend(Self::detect_jit_attacks(transactions));
+
+        multi_tx_events
+    }
+
+    /// Detect sandwich attacks: Frontrun → Victim → Backrun
+    ///
+    /// Pattern:
+    /// - Transaction i: Buy token X (increases price)
+    /// - Transaction i+1 or i+2: Victim swap (pays higher price)
+    /// - Transaction i+2 or i+3: Sell token X (takes profit)
+    ///
+    /// Heuristics:
+    /// - Same token pair in frontrun and backrun
+    /// - Opposite directions (buy then sell)
+    /// - Net positive profit for the attacker
+    /// - Victim transaction in between
+    fn detect_sandwiches(
+        transactions: &[(usize, &crate::types::FetchedTransaction, Option<MevEvent>)]
+    ) -> Vec<MultiTxMevEvent> {
+        let mut sandwiches = Vec::new();
+
+        // Look for patterns within a small window (typically 1-3 txs apart)
+        for i in 0..transactions.len().saturating_sub(2) {
+            for j in (i + 1)..=std::cmp::min(i + 3, transactions.len().saturating_sub(1)) {
+                for k in (j + 1)..=std::cmp::min(j + 2, transactions.len()) {
+                    if k >= transactions.len() {
+                        continue;
+                    }
+
+                    let (idx_i, tx_i, mev_i) = &transactions[i];
+                    let (idx_j, tx_j, mev_j) = &transactions[j];
+                    let (idx_k, tx_k, mev_k) = &transactions[k];
+
+                    // All must be successful
+                    if !tx_i.is_success() || !tx_j.is_success() || !tx_k.is_success() {
+                        continue;
+                    }
+
+                    // Need MEV events for i and k
+                    let Some(mev_front) = mev_i else { continue };
+                    let Some(mev_back) = mev_k else { continue };
+
+                    // Check if this looks like a sandwich
+                    if Self::is_sandwich_pattern(mev_front, mev_j, mev_back) {
+                        // Calculate total profit
+                        let mut all_token_changes = mev_front.token_changes.clone();
+                        all_token_changes.extend(mev_back.token_changes.clone());
+
+                        // Aggregate by mint
+                        let mut profit_map: HashMap<String, (f64, u8)> = HashMap::new();
+                        for tc in &all_token_changes {
+                            let entry = profit_map.entry(tc.mint.clone()).or_insert((0.0, tc.decimals));
+                            entry.0 += tc.ui_amount_change;
+                        }
+
+                        let profit_token_changes: Vec<TokenChange> = profit_map
+                            .into_iter()
+                            .filter(|(_, (change, _))| change.abs() > 0.0000001)
+                            .map(|(mint, (change, decimals))| TokenChange {
+                                mint,
+                                ui_amount_change: change,
+                                decimals,
+                            })
+                            .collect();
+
+                        let total_sol_profit = mev_front.sol_change_lamports + mev_back.sol_change_lamports;
+
+                        // Collect all programs
+                        let mut programs = mev_front.programs_involved.clone();
+                        programs.extend(mev_back.programs_involved.clone());
+                        programs.sort();
+                        programs.dedup();
+
+                        sandwiches.push(MultiTxMevEvent {
+                            category: MevCategory::Sandwich,
+                            frontrun_signature: mev_front.signature.clone(),
+                            frontrun_tx_index: *idx_i,
+                            victim_signature: tx_j.signature.clone(),
+                            victim_tx_index: *idx_j,
+                            backrun_signature: mev_back.signature.clone(),
+                            backrun_tx_index: *idx_k,
+                            profit_token_changes,
+                            total_sol_profit_lamports: total_sol_profit,
+                            programs_involved: programs,
+                        });
+
+                        // Found a sandwich, skip ahead
+                        break;
+                    }
+                }
+            }
+        }
+
+        sandwiches
+    }
+
+    /// Check if three transactions form a sandwich pattern
+    fn is_sandwich_pattern(
+        frontrun: &MevEvent,
+        victim: &Option<MevEvent>,
+        backrun: &MevEvent,
+    ) -> bool {
+        // Both frontrun and backrun should be ARBITRAGE (swaps)
+        if frontrun.category != MevCategory::Arbitrage || backrun.category != MevCategory::Arbitrage {
+            return false;
+        }
+
+        // Check if they trade the same token pair in opposite directions
+        let front_tokens: Vec<&str> = frontrun.token_changes.iter().map(|tc| tc.mint.as_str()).collect();
+        let back_tokens: Vec<&str> = backrun.token_changes.iter().map(|tc| tc.mint.as_str()).collect();
+
+        // Must have overlapping tokens
+        let has_common_tokens = front_tokens.iter().any(|t| back_tokens.contains(t));
+        if !has_common_tokens {
+            return false;
+        }
+
+        // Check for opposite directions (buy then sell)
+        // If a token increases in frontrun and decreases in backrun (or vice versa), it's likely a sandwich
+        for tc_front in &frontrun.token_changes {
+            for tc_back in &backrun.token_changes {
+                if tc_front.mint == tc_back.mint {
+                    // Opposite signs indicate buying then selling (or vice versa)
+                    if (tc_front.ui_amount_change > 0.0 && tc_back.ui_amount_change < 0.0) ||
+                       (tc_front.ui_amount_change < 0.0 && tc_back.ui_amount_change > 0.0) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
+    /// Detect JIT liquidity attacks: Add LP → Large Swap → Remove LP
+    ///
+    /// Pattern:
+    /// - Transaction i: Add liquidity to pool
+    /// - Transaction i+1: Large swap occurs (generating fees)
+    /// - Transaction i+2: Remove liquidity
+    ///
+    /// This is harder to detect without parsing specific DEX instructions,
+    /// but we can use heuristics based on token changes.
+    fn detect_jit_attacks(
+        transactions: &[(usize, &crate::types::FetchedTransaction, Option<MevEvent>)]
+    ) -> Vec<MultiTxMevEvent> {
+        let mut jit_attacks = Vec::new();
+
+        // Look for patterns within a small window
+        for i in 0..transactions.len().saturating_sub(2) {
+            let j = i + 1;
+            let k = i + 2;
+
+            if k >= transactions.len() {
+                continue;
+            }
+
+            let (idx_i, tx_i, mev_i) = &transactions[i];
+            let (idx_j, tx_j, mev_j) = &transactions[j];
+            let (idx_k, tx_k, mev_k) = &transactions[k];
+
+            // All must be successful
+            if !tx_i.is_success() || !tx_j.is_success() || !tx_k.is_success() {
+                continue;
+            }
+
+            // Need MEV events
+            let Some(mev_add) = mev_i else { continue };
+            let Some(mev_target) = mev_j else { continue };
+            let Some(mev_remove) = mev_k else { continue };
+
+            // Check if this looks like a JIT attack
+            // Heuristic: Both first and third transactions involve same token pair
+            // and target transaction is a large swap
+            if Self::is_jit_pattern(mev_add, mev_target, mev_remove) {
+                let mut all_token_changes = mev_add.token_changes.clone();
+                all_token_changes.extend(mev_remove.token_changes.clone());
+
+                let mut profit_map: HashMap<String, (f64, u8)> = HashMap::new();
+                for tc in &all_token_changes {
+                    let entry = profit_map.entry(tc.mint.clone()).or_insert((0.0, tc.decimals));
+                    entry.0 += tc.ui_amount_change;
+                }
+
+                let profit_token_changes: Vec<TokenChange> = profit_map
+                    .into_iter()
+                    .filter(|(_, (change, _))| change.abs() > 0.0000001)
+                    .map(|(mint, (change, decimals))| TokenChange {
+                        mint,
+                        ui_amount_change: change,
+                        decimals,
+                    })
+                    .collect();
+
+                let total_sol_profit = mev_add.sol_change_lamports + mev_remove.sol_change_lamports;
+
+                let mut programs = mev_add.programs_involved.clone();
+                programs.extend(mev_remove.programs_involved.clone());
+                programs.sort();
+                programs.dedup();
+
+                jit_attacks.push(MultiTxMevEvent {
+                    category: MevCategory::JitLiquidity,
+                    frontrun_signature: mev_add.signature.clone(),
+                    frontrun_tx_index: *idx_i,
+                    victim_signature: mev_target.signature.clone(),
+                    victim_tx_index: *idx_j,
+                    backrun_signature: mev_remove.signature.clone(),
+                    backrun_tx_index: *idx_k,
+                    profit_token_changes,
+                    total_sol_profit_lamports: total_sol_profit,
+                    programs_involved: programs,
+                });
+            }
+        }
+
+        jit_attacks
+    }
+
+    /// Check if three transactions form a JIT liquidity pattern
+    fn is_jit_pattern(
+        add_lp: &MevEvent,
+        target: &MevEvent,
+        remove_lp: &MevEvent,
+    ) -> bool {
+        // Target should be an arbitrage/swap
+        if target.category != MevCategory::Arbitrage {
+            return false;
+        }
+
+        // Add and remove should involve same tokens (LP tokens typically)
+        let add_tokens: Vec<&str> = add_lp.token_changes.iter().map(|tc| tc.mint.as_str()).collect();
+        let remove_tokens: Vec<&str> = remove_lp.token_changes.iter().map(|tc| tc.mint.as_str()).collect();
+
+        // Must have overlapping tokens
+        let has_common_tokens = add_tokens.iter().any(|t| remove_tokens.contains(t));
+        if !has_common_tokens {
+            return false;
+        }
+
+        // Check if add and remove are opposite (net zero or small profit)
+        for tc_add in &add_lp.token_changes {
+            for tc_remove in &remove_lp.token_changes {
+                if tc_add.mint == tc_remove.mint {
+                    // Should be roughly opposite amounts (LP in, LP out)
+                    let total = tc_add.ui_amount_change + tc_remove.ui_amount_change;
+                    // Net change should be small (within 10% of either amount)
+                    let threshold = tc_add.ui_amount_change.abs() * 0.1;
+                    if total.abs() <= threshold {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        false
     }
 }
