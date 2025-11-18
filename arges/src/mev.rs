@@ -1,0 +1,330 @@
+use std::collections::HashMap;
+use solana_transaction_status::{UiInstruction, UiParsedInstruction};
+
+/// MEV event categories
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum MevCategory {
+    /// Cross-DEX arbitrage opportunities
+    Arbitrage,
+    /// Liquidations on lending protocols
+    Liquidation,
+    /// Token or NFT mints
+    Mint,
+    /// Failed MEV attempts (spam)
+    Spam,
+}
+
+impl MevCategory {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            MevCategory::Arbitrage => "arbitrage",
+            MevCategory::Liquidation => "liquidation",
+            MevCategory::Mint => "mint",
+            MevCategory::Spam => "spam",
+        }
+    }
+}
+
+/// Individual MEV event detected in a transaction
+#[derive(Debug, Clone)]
+pub struct MevEvent {
+    pub category: MevCategory,
+    pub signature: String,
+    pub programs_involved: Vec<String>,
+    pub value_lamports: Option<u64>,
+    pub success: bool,
+}
+
+/// Aggregated MEV statistics for a block
+#[derive(Debug, Clone, Default)]
+pub struct MevSummary {
+    /// Count of arbitrage transactions
+    pub arbitrage_count: usize,
+    /// Total value captured by arbitrage (if detectable)
+    pub arbitrage_value: u64,
+
+    /// Count of liquidation transactions
+    pub liquidation_count: usize,
+    /// Total value from liquidations
+    pub liquidation_value: u64,
+
+    /// Count of mint transactions
+    pub mint_count: usize,
+
+    /// Count of spam/failed MEV attempts
+    pub spam_count: usize,
+
+    /// Programs used, with frequency count
+    pub programs_used: HashMap<String, usize>,
+}
+
+impl MevSummary {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Add an MEV event to the summary
+    pub fn add_event(&mut self, event: &MevEvent) {
+        // Update counts based on category
+        match event.category {
+            MevCategory::Arbitrage => {
+                if event.success {
+                    self.arbitrage_count += 1;
+                    if let Some(value) = event.value_lamports {
+                        self.arbitrage_value += value;
+                    }
+                } else {
+                    self.spam_count += 1;
+                }
+            }
+            MevCategory::Liquidation => {
+                if event.success {
+                    self.liquidation_count += 1;
+                    if let Some(value) = event.value_lamports {
+                        self.liquidation_value += value;
+                    }
+                } else {
+                    self.spam_count += 1;
+                }
+            }
+            MevCategory::Mint => {
+                if event.success {
+                    self.mint_count += 1;
+                } else {
+                    self.spam_count += 1;
+                }
+            }
+            MevCategory::Spam => {
+                self.spam_count += 1;
+            }
+        }
+
+        // Track program usage
+        for program in &event.programs_involved {
+            *self.programs_used.entry(program.clone()).or_insert(0) += 1;
+        }
+    }
+
+    /// Total MEV transactions (excluding spam)
+    pub fn total_mev_count(&self) -> usize {
+        self.arbitrage_count + self.liquidation_count + self.mint_count
+    }
+
+    /// Total value captured (arbitrage + liquidations)
+    pub fn total_value(&self) -> u64 {
+        self.arbitrage_value + self.liquidation_value
+    }
+}
+
+/// Known program IDs for MEV detection
+pub struct ProgramRegistry;
+
+impl ProgramRegistry {
+    // DEX Programs (for arbitrage detection)
+    pub const JUPITER_V6: &'static str = "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4";
+    pub const JUPITER_LIMIT_ORDER: &'static str = "jupoNjAxXgZ4rjzxzPMP4oxduvQsQtZzyknqvzYNrNu";
+    pub const RAYDIUM_AMM_V4: &'static str = "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8";
+    pub const RAYDIUM_CPMM: &'static str = "CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C";
+    pub const ORCA_WHIRLPOOL: &'static str = "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc";
+    pub const PHOENIX: &'static str = "PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY";
+
+    // Lending/Liquidation Programs
+    pub const MARGINFI_V2: &'static str = "MFv2hWf31Z9kbCa1snEPYctwafyhdvnV7FZnsebVacA";
+    pub const SOLEND: &'static str = "So1endDq2YkqhipRh3WViPa8hdiSpxWy6z3Z6tMCpAo";
+    pub const KAMINO_LEND: &'static str = "KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD";
+    pub const MANGO_V4: &'static str = "4MangoMjqJ2firMokCjjGgoK8d4MXcrgL7XJaL3w6fVg";
+
+    // Token/NFT Programs
+    pub const TOKEN_PROGRAM: &'static str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+    pub const TOKEN_2022_PROGRAM: &'static str = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
+    pub const METAPLEX_TOKEN_METADATA: &'static str = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s";
+    pub const METAPLEX_CORE: &'static str = "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d";
+
+    /// Check if a program is a DEX
+    pub fn is_dex(program_id: &str) -> bool {
+        matches!(
+            program_id,
+            Self::JUPITER_V6
+                | Self::JUPITER_LIMIT_ORDER
+                | Self::RAYDIUM_AMM_V4
+                | Self::RAYDIUM_CPMM
+                | Self::ORCA_WHIRLPOOL
+                | Self::PHOENIX
+        )
+    }
+
+    /// Check if a program is a lending protocol
+    pub fn is_lending(program_id: &str) -> bool {
+        matches!(
+            program_id,
+            Self::MARGINFI_V2 | Self::SOLEND | Self::KAMINO_LEND | Self::MANGO_V4
+        )
+    }
+
+    /// Check if a program is related to token/NFT creation
+    pub fn is_mint_program(program_id: &str) -> bool {
+        matches!(
+            program_id,
+            Self::TOKEN_PROGRAM
+                | Self::TOKEN_2022_PROGRAM
+                | Self::METAPLEX_TOKEN_METADATA
+                | Self::METAPLEX_CORE
+        )
+    }
+
+    /// Get a human-readable name for a known program
+    pub fn program_name(program_id: &str) -> String {
+        match program_id {
+            Self::JUPITER_V6 => "Jupiter V6".to_string(),
+            Self::JUPITER_LIMIT_ORDER => "Jupiter Limit Order".to_string(),
+            Self::RAYDIUM_AMM_V4 => "Raydium AMM V4".to_string(),
+            Self::RAYDIUM_CPMM => "Raydium CPMM".to_string(),
+            Self::ORCA_WHIRLPOOL => "Orca Whirlpool".to_string(),
+            Self::PHOENIX => "Phoenix".to_string(),
+            Self::MARGINFI_V2 => "MarginFi V2".to_string(),
+            Self::SOLEND => "Solend".to_string(),
+            Self::KAMINO_LEND => "Kamino Lend".to_string(),
+            Self::MANGO_V4 => "Mango V4".to_string(),
+            Self::TOKEN_PROGRAM => "Token Program".to_string(),
+            Self::TOKEN_2022_PROGRAM => "Token-2022".to_string(),
+            Self::METAPLEX_TOKEN_METADATA => "Metaplex Metadata".to_string(),
+            Self::METAPLEX_CORE => "Metaplex Core".to_string(),
+            _ => {
+                // Truncate unknown programs for readability
+                if program_id.len() > 10 {
+                    format!("{}...{}", &program_id[..6], &program_id[program_id.len()-4..])
+                } else {
+                    program_id.to_string()
+                }
+            }
+        }
+    }
+}
+
+/// MEV analyzer for detecting MEV patterns in transactions
+pub struct MevAnalyzer;
+
+impl MevAnalyzer {
+    /// Analyze a transaction and detect MEV patterns
+    ///
+    /// Heuristics:
+    /// - Arbitrage: Multiple DEX interactions in single tx
+    /// - Liquidation: Lending protocol interactions
+    /// - Mint: Token program calls with specific patterns
+    /// - Spam: Failed transactions with MEV patterns
+    pub fn analyze_transaction(
+        signature: &str,
+        instructions: &[UiInstruction],
+        success: bool,
+        pre_balances: &[u64],
+        post_balances: &[u64],
+    ) -> Option<MevEvent> {
+        let program_ids = Self::extract_program_ids(instructions);
+
+        // Skip if no known MEV-related programs
+        if program_ids.is_empty() {
+            return None;
+        }
+
+        // Detect category based on program interactions
+        let category = Self::detect_category(&program_ids, instructions);
+
+        // Calculate value (SOL balance changes)
+        let value_lamports = Self::calculate_value(pre_balances, post_balances);
+
+        Some(MevEvent {
+            category,
+            signature: signature.to_string(),
+            programs_involved: program_ids,
+            value_lamports,
+            success,
+        })
+    }
+
+    /// Extract program IDs from instructions
+    fn extract_program_ids(instructions: &[UiInstruction]) -> Vec<String> {
+        let mut programs = Vec::new();
+
+        for ix in instructions {
+            let program_id = match ix {
+                UiInstruction::Parsed(parsed) => {
+                    match parsed {
+                        UiParsedInstruction::Parsed(parsed_ix) => Some(parsed_ix.program_id.clone()),
+                        UiParsedInstruction::PartiallyDecoded(partial) => Some(partial.program_id.clone()),
+                    }
+                }
+                UiInstruction::Compiled(_) => {
+                    // For compiled instructions, we would need the account keys
+                    // from the transaction message to resolve program IDs
+                    None
+                }
+            };
+
+            if let Some(program_str) = program_id {
+                // Only include known MEV-related programs
+                if ProgramRegistry::is_dex(&program_str)
+                    || ProgramRegistry::is_lending(&program_str)
+                    || ProgramRegistry::is_mint_program(&program_str)
+                {
+                    if !programs.contains(&program_str) {
+                        programs.push(program_str);
+                    }
+                }
+            }
+        }
+
+        programs
+    }
+
+    /// Detect MEV category based on program interactions
+    fn detect_category(program_ids: &[String], _instructions: &[UiInstruction]) -> MevCategory {
+        let dex_count = program_ids.iter().filter(|p| ProgramRegistry::is_dex(p)).count();
+        let lending_count = program_ids.iter().filter(|p| ProgramRegistry::is_lending(p)).count();
+        let mint_count = program_ids.iter().filter(|p| ProgramRegistry::is_mint_program(p)).count();
+
+        // Arbitrage: Multiple DEX interactions (cross-DEX trades)
+        if dex_count >= 2 {
+            return MevCategory::Arbitrage;
+        }
+
+        // Liquidation: Lending protocol + DEX (liquidator selling collateral)
+        if lending_count > 0 && dex_count > 0 {
+            return MevCategory::Liquidation;
+        }
+
+        // Pure lending interactions (could be liquidations)
+        if lending_count > 0 {
+            return MevCategory::Liquidation;
+        }
+
+        // Mints: Token/NFT creation
+        if mint_count > 0 {
+            return MevCategory::Mint;
+        }
+
+        // Single DEX interaction (could be arbitrage setup)
+        if dex_count > 0 {
+            return MevCategory::Arbitrage;
+        }
+
+        // Default to spam if we can't classify
+        MevCategory::Spam
+    }
+
+    /// Calculate value from balance changes
+    fn calculate_value(pre_balances: &[u64], post_balances: &[u64]) -> Option<u64> {
+        if pre_balances.is_empty() || post_balances.is_empty() {
+            return None;
+        }
+
+        // Calculate net balance change for the fee payer (first account)
+        let pre = pre_balances.first()?;
+        let post = post_balances.first()?;
+
+        if post > pre {
+            Some(post - pre)
+        } else {
+            None
+        }
+    }
+}

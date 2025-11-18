@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use solana_transaction_status::{
     EncodedTransaction, UiTransactionStatusMeta,
 };
+use crate::mev::{MevAnalyzer, MevEvent, MevSummary};
 
 /// block fetcher config
 #[derive(Debug, Clone)]
@@ -54,7 +55,7 @@ impl FetchedBlock {
             chrono::DateTime::from_timestamp(ts, 0)
         })
     }
-    
+
     /// count successful txs
     pub fn successful_tx_count(&self) -> usize {
         self.transactions
@@ -62,7 +63,15 @@ impl FetchedBlock {
             .filter(|tx| tx.is_success())
             .count()
     }
-    
+
+    /// count failed txs
+    pub fn failed_tx_count(&self) -> usize {
+        self.transactions
+            .iter()
+            .filter(|tx| !tx.is_success())
+            .count()
+    }
+
     /// total cus consumed
     pub fn total_compute_units(&self) -> u64 {
         self.transactions
@@ -70,13 +79,26 @@ impl FetchedBlock {
             .filter_map(|tx| tx.compute_units_consumed())
             .sum()
     }
-    
+
     /// Total fees paid
     pub fn total_fees(&self) -> u64 {
         self.transactions
             .iter()
             .filter_map(|tx| tx.fee())
             .sum()
+    }
+
+    /// Analyze MEV in the block
+    pub fn analyze_mev(&self) -> MevSummary {
+        let mut summary = MevSummary::new();
+
+        for tx in &self.transactions {
+            if let Some(event) = tx.analyze_mev() {
+                summary.add_event(&event);
+            }
+        }
+
+        summary
     }
 }
 
@@ -97,7 +119,7 @@ impl FetchedTransaction {
             .map(|m| m.err.is_none())
             .unwrap_or(false)
     }
-    
+
     /// Get compute units consumed
     pub fn compute_units_consumed(&self) -> Option<u64> {
         self.meta.as_ref().and_then(|m| {
@@ -109,12 +131,12 @@ impl FetchedTransaction {
             }
         })
     }
-    
+
     /// Get transaction fee
     pub fn fee(&self) -> Option<u64> {
         self.meta.as_ref().map(|m| m.fee)
     }
-    
+
     /// Get signer (first account in transaction)
     pub fn signer(&self) -> Option<String> {
         match &self.transaction {
@@ -130,6 +152,51 @@ impl FetchedTransaction {
             },
             _ => None,
         }
+    }
+
+    /// Extract instructions from transaction
+    fn get_instructions(&self) -> Vec<solana_transaction_status::UiInstruction> {
+        match &self.transaction {
+            EncodedTransaction::Json(tx) => {
+                match &tx.message {
+                    solana_transaction_status::UiMessage::Parsed(parsed) => {
+                        parsed.instructions.clone()
+                    },
+                    solana_transaction_status::UiMessage::Raw(raw) => {
+                        // Convert UiCompiledInstruction to UiInstruction
+                        raw.instructions.iter()
+                            .map(|compiled| solana_transaction_status::UiInstruction::Compiled(compiled.clone()))
+                            .collect()
+                    },
+                }
+            },
+            _ => Vec::new(),
+        }
+    }
+
+    /// Get pre and post balances
+    fn get_balances(&self) -> (Vec<u64>, Vec<u64>) {
+        let meta = match &self.meta {
+            Some(m) => m,
+            None => return (Vec::new(), Vec::new()),
+        };
+
+        (meta.pre_balances.clone(), meta.post_balances.clone())
+    }
+
+    /// Analyze this transaction for MEV patterns
+    pub fn analyze_mev(&self) -> Option<MevEvent> {
+        let instructions = self.get_instructions();
+        let (pre_balances, post_balances) = self.get_balances();
+        let success = self.is_success();
+
+        MevAnalyzer::analyze_transaction(
+            &self.signature,
+            &instructions,
+            success,
+            &pre_balances,
+            &post_balances,
+        )
     }
 }
 
