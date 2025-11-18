@@ -1,5 +1,6 @@
 use crate::mev::{MevSummary, ProgramRegistry, MevEvent};
 use crate::types::FetchedBlock;
+use serde::Serialize;
 
 /// Format a comprehensive block report including MEV analysis
 pub fn format_block_report(block: &FetchedBlock) -> String {
@@ -298,6 +299,76 @@ fn format_compute_units(cu: u64) -> String {
     }
 
     result.chars().rev().collect()
+}
+
+/// JSON structure for MEV validation report
+#[derive(Serialize)]
+pub struct MevValidationJson {
+    pub slot: u64,
+    pub blockhash: String,
+    pub timestamp: Option<String>,
+    pub total_transactions: usize,
+    pub mev_transactions: Vec<MevTransactionJson>,
+}
+
+/// JSON structure for individual MEV transaction
+#[derive(Serialize)]
+pub struct MevTransactionJson {
+    pub tx_index: usize,
+    pub signature: String,
+    pub category: String,
+    pub success: bool,
+    pub programs: Vec<String>,
+    pub token_changes: Vec<TokenChangeJson>,
+    pub sol_change_lamports: i64,
+}
+
+/// JSON structure for token changes
+#[derive(Serialize)]
+pub struct TokenChangeJson {
+    pub mint: String,
+    pub amount: f64,
+    pub decimals: u8,
+}
+
+/// Format MEV validation report as JSON
+pub fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, serde_json::Error> {
+    let mut mev_transactions = Vec::new();
+
+    // Collect all MEV events with their transaction indices
+    for (idx, tx) in block.transactions.iter().enumerate() {
+        if let Some(event) = tx.analyze_mev() {
+            mev_transactions.push(MevTransactionJson {
+                tx_index: idx,
+                signature: event.signature.clone(),
+                category: format!("{:?}", event.category).to_uppercase(),
+                success: event.success,
+                programs: event.programs_involved.iter()
+                    .map(|p| ProgramRegistry::program_name(p))
+                    .collect(),
+                token_changes: event.token_changes.iter()
+                    .map(|tc| TokenChangeJson {
+                        mint: tc.mint.clone(),
+                        amount: tc.ui_amount_change,
+                        decimals: tc.decimals,
+                    })
+                    .collect(),
+                sol_change_lamports: event.sol_change_lamports,
+            });
+        }
+    }
+
+    let timestamp = block.timestamp().map(|t| t.format("%Y-%m-%d %H:%M:%S UTC").to_string());
+
+    let report = MevValidationJson {
+        slot: block.slot,
+        blockhash: block.blockhash.clone(),
+        timestamp,
+        total_transactions: block.transactions.len(),
+        mev_transactions,
+    };
+
+    serde_json::to_string_pretty(&report)
 }
 
 #[cfg(test)]

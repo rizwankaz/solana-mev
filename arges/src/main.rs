@@ -5,7 +5,7 @@ mod stream;
 mod types;
 
 use fetcher::BlockFetcher;
-use report::format_mev_validation_report;
+use report::format_mev_validation_json;
 use types::FetcherConfig;
 use std::sync::Arc;
 use tracing::{info, error};
@@ -40,8 +40,10 @@ async fn main() -> anyhow::Result<()> {
 
     match fetcher.fetch_block(recent_slot).await {
         Ok(block) => {
-            let report = format_mev_validation_report(&block);
-            println!("{}", report);
+            match format_mev_validation_json(&block) {
+                Ok(json) => println!("{}", json),
+                Err(e) => error!("failed to serialize JSON: {:?}", e),
+            }
         },
         Err(e) => error!("failed to fetch block: {:?}", e),
     }

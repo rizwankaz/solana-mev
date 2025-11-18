@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 use solana_transaction_status::{UiInstruction, UiParsedInstruction, UiTransactionTokenBalance};
+use serde::Serialize;
 
 /// Token balance change for a specific mint
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct TokenChange {
     pub mint: String,
     pub ui_amount_change: f64,
@@ -10,7 +11,8 @@ pub struct TokenChange {
 }
 
 /// MEV event categories
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum MevCategory {
     /// Cross-DEX arbitrage opportunities
     Arbitrage,
@@ -34,7 +36,7 @@ impl MevCategory {
 }
 
 /// Individual MEV event detected in a transaction
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct MevEvent {
     pub category: MevCategory,
     pub signature: String,
@@ -184,6 +186,7 @@ impl ProgramRegistry {
     pub const SABER: &'static str = "SSwpkEEcbUqx4vtoEByFjSkhKdCT862DNVb52nZg1UZ";
     pub const MARINADE_FINANCE: &'static str = "MarBmsSgKXdrN1egZf5sqe1TMai9K1rChYNDJgjq7aD";
     pub const SANCTUM: &'static str = "5ocnV1qiCgaQR8Jb8xWnVbApfaygJ8tNoZfgPwsgx9kx";
+    pub const PUMP_FUN: &'static str = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"; // Popular token swap AMM
 
     // Lending/Liquidation Programs
     pub const MARGINFI_V2: &'static str = "MFv2hWf31Z9kbCa1snEPYctwafyhdvnV7FZnsebVacA"; // Anchor
@@ -196,7 +199,6 @@ impl ProgramRegistry {
     pub const TOKEN_2022_PROGRAM: &'static str = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
     pub const METAPLEX_TOKEN_METADATA: &'static str = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s";
     pub const METAPLEX_CORE: &'static str = "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d";
-    pub const PUMP_FUN: &'static str = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
 
     /// Check if a program is a DEX
     pub fn is_dex(program_id: &str) -> bool {
@@ -217,6 +219,7 @@ impl ProgramRegistry {
                 | Self::SABER
                 | Self::MARINADE_FINANCE
                 | Self::SANCTUM
+                | Self::PUMP_FUN
         )
     }
 
@@ -236,7 +239,6 @@ impl ProgramRegistry {
                 | Self::TOKEN_2022_PROGRAM
                 | Self::METAPLEX_TOKEN_METADATA
                 | Self::METAPLEX_CORE
-                | Self::PUMP_FUN
         )
     }
 
@@ -266,7 +268,7 @@ impl ProgramRegistry {
             Self::TOKEN_2022_PROGRAM => "Token-2022".to_string(),
             Self::METAPLEX_TOKEN_METADATA => "Metaplex Metadata".to_string(),
             Self::METAPLEX_CORE => "Metaplex Core".to_string(),
-            Self::PUMP_FUN => "Pump.fun".to_string(),
+            Self::PUMP_FUN => "Pump.fun AMM".to_string(),
             _ => {
                 // Truncate unknown programs for readability
                 if program_id.len() > 10 {
