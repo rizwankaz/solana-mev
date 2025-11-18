@@ -154,24 +154,41 @@ impl FetchedTransaction {
         }
     }
 
-    /// Extract instructions from transaction
+    /// Extract all instructions from transaction (including inner instructions from CPIs)
     fn get_instructions(&self) -> Vec<solana_transaction_status::UiInstruction> {
+        let mut all_instructions = Vec::new();
+
+        // Get top-level instructions
         match &self.transaction {
             EncodedTransaction::Json(tx) => {
                 match &tx.message {
                     solana_transaction_status::UiMessage::Parsed(parsed) => {
-                        parsed.instructions.clone()
+                        all_instructions.extend(parsed.instructions.clone());
                     },
                     solana_transaction_status::UiMessage::Raw(raw) => {
                         // Convert UiCompiledInstruction to UiInstruction
-                        raw.instructions.iter()
-                            .map(|compiled| solana_transaction_status::UiInstruction::Compiled(compiled.clone()))
-                            .collect()
+                        all_instructions.extend(
+                            raw.instructions.iter()
+                                .map(|compiled| solana_transaction_status::UiInstruction::Compiled(compiled.clone()))
+                        );
                     },
                 }
             },
-            _ => Vec::new(),
+            _ => {}
         }
+
+        // Get inner instructions (CPI calls - this is where DEX logic happens)
+        if let Some(meta) = &self.meta {
+            use solana_transaction_status::option_serializer::OptionSerializer;
+
+            if let OptionSerializer::Some(inner_instructions) = &meta.inner_instructions {
+                for inner_ix_set in inner_instructions {
+                    all_instructions.extend(inner_ix_set.instructions.clone());
+                }
+            }
+        }
+
+        all_instructions
     }
 
     /// Get pre and post balances

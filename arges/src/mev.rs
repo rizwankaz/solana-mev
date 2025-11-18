@@ -172,20 +172,31 @@ impl ProgramRegistry {
     pub const JUPITER_LIMIT_ORDER: &'static str = "jupoNjAxXgZ4rjzxzPMP4oxduvQsQtZzyknqvzYNrNu";
     pub const RAYDIUM_AMM_V4: &'static str = "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8";
     pub const RAYDIUM_CPMM: &'static str = "CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C";
+    pub const RAYDIUM_CLMM: &'static str = "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK";
     pub const ORCA_WHIRLPOOL: &'static str = "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc";
     pub const PHOENIX: &'static str = "PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY";
+    pub const METEORA_DAMM_V2: &'static str = "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG";
+    pub const METEORA_DLMM: &'static str = "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo";
+    pub const LIFINITY_V2: &'static str = "EewxydAPCCVuNEyrVN68PuSYdQ7wKn27V9Gjeoi8dy3S";
+    // Anchor-based DEXs
+    pub const OPENBOOK_V2: &'static str = "opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb"; // Anchor
+    pub const DRIFT_PROTOCOL: &'static str = "dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH"; // Anchor
+    pub const SABER: &'static str = "SSwpkEEcbUqx4vtoEByFjSkhKdCT862DNVb52nZg1UZ";
+    pub const MARINADE_FINANCE: &'static str = "MarBmsSgKXdrN1egZf5sqe1TMai9K1rChYNDJgjq7aD";
+    pub const SANCTUM: &'static str = "5ocnV1qiCgaQR8Jb8xWnVbApfaygJ8tNoZfgPwsgx9kx";
 
     // Lending/Liquidation Programs
-    pub const MARGINFI_V2: &'static str = "MFv2hWf31Z9kbCa1snEPYctwafyhdvnV7FZnsebVacA";
+    pub const MARGINFI_V2: &'static str = "MFv2hWf31Z9kbCa1snEPYctwafyhdvnV7FZnsebVacA"; // Anchor
     pub const SOLEND: &'static str = "So1endDq2YkqhipRh3WViPa8hdiSpxWy6z3Z6tMCpAo";
-    pub const KAMINO_LEND: &'static str = "KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD";
-    pub const MANGO_V4: &'static str = "4MangoMjqJ2firMokCjjGgoK8d4MXcrgL7XJaL3w6fVg";
+    pub const KAMINO_LEND: &'static str = "KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD"; // Anchor
+    pub const MANGO_V4: &'static str = "4MangoMjqJ2firMokCjjGgoK8d4MXcrgL7XJaL3w6fVg"; // Anchor
 
     // Token/NFT Programs
     pub const TOKEN_PROGRAM: &'static str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
     pub const TOKEN_2022_PROGRAM: &'static str = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
     pub const METAPLEX_TOKEN_METADATA: &'static str = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s";
     pub const METAPLEX_CORE: &'static str = "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d";
+    pub const PUMP_FUN: &'static str = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
 
     /// Check if a program is a DEX
     pub fn is_dex(program_id: &str) -> bool {
@@ -195,8 +206,17 @@ impl ProgramRegistry {
                 | Self::JUPITER_LIMIT_ORDER
                 | Self::RAYDIUM_AMM_V4
                 | Self::RAYDIUM_CPMM
+                | Self::RAYDIUM_CLMM
                 | Self::ORCA_WHIRLPOOL
                 | Self::PHOENIX
+                | Self::METEORA_DAMM_V2
+                | Self::METEORA_DLMM
+                | Self::LIFINITY_V2
+                | Self::OPENBOOK_V2
+                | Self::DRIFT_PROTOCOL
+                | Self::SABER
+                | Self::MARINADE_FINANCE
+                | Self::SANCTUM
         )
     }
 
@@ -216,6 +236,7 @@ impl ProgramRegistry {
                 | Self::TOKEN_2022_PROGRAM
                 | Self::METAPLEX_TOKEN_METADATA
                 | Self::METAPLEX_CORE
+                | Self::PUMP_FUN
         )
     }
 
@@ -226,8 +247,17 @@ impl ProgramRegistry {
             Self::JUPITER_LIMIT_ORDER => "Jupiter Limit Order".to_string(),
             Self::RAYDIUM_AMM_V4 => "Raydium AMM V4".to_string(),
             Self::RAYDIUM_CPMM => "Raydium CPMM".to_string(),
+            Self::RAYDIUM_CLMM => "Raydium CLMM".to_string(),
             Self::ORCA_WHIRLPOOL => "Orca Whirlpool".to_string(),
             Self::PHOENIX => "Phoenix".to_string(),
+            Self::METEORA_DAMM_V2 => "Meteora DAMM V2".to_string(),
+            Self::METEORA_DLMM => "Meteora DLMM".to_string(),
+            Self::LIFINITY_V2 => "Lifinity V2".to_string(),
+            Self::OPENBOOK_V2 => "OpenBook V2".to_string(),
+            Self::DRIFT_PROTOCOL => "Drift Protocol".to_string(),
+            Self::SABER => "Saber".to_string(),
+            Self::MARINADE_FINANCE => "Marinade Finance".to_string(),
+            Self::SANCTUM => "Sanctum".to_string(),
             Self::MARGINFI_V2 => "MarginFi V2".to_string(),
             Self::SOLEND => "Solend".to_string(),
             Self::KAMINO_LEND => "Kamino Lend".to_string(),
@@ -236,6 +266,7 @@ impl ProgramRegistry {
             Self::TOKEN_2022_PROGRAM => "Token-2022".to_string(),
             Self::METAPLEX_TOKEN_METADATA => "Metaplex Metadata".to_string(),
             Self::METAPLEX_CORE => "Metaplex Core".to_string(),
+            Self::PUMP_FUN => "Pump.fun".to_string(),
             _ => {
                 // Truncate unknown programs for readability
                 if program_id.len() > 10 {
@@ -350,14 +381,16 @@ impl MevAnalyzer {
             return MevCategory::Liquidation;
         }
 
-        // Mints: Token/NFT creation
-        if mint_count > 0 {
-            return MevCategory::Mint;
-        }
-
-        // Single DEX interaction (could be arbitrage setup)
+        // Single DEX interaction (arbitrage or swap)
+        // Priority: DEX over Token Program because Token Program is involved in all token swaps
         if dex_count > 0 {
             return MevCategory::Arbitrage;
+        }
+
+        // Mints: ONLY Token/NFT programs (no DEX or lending)
+        // Must check this after DEX to avoid misclassifying swaps as mints
+        if mint_count > 0 && dex_count == 0 && lending_count == 0 {
+            return MevCategory::Mint;
         }
 
         // Default to spam if we can't classify
