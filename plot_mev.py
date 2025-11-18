@@ -13,7 +13,7 @@ from datetime import datetime
 import argparse
 import sys
 
-def plot_mev_data(csv_file='mev_per_slot_24h.csv', output_dir='.'):
+def plot_mev_data(csv_file='arges/mev_per_slot_24h.csv', output_dir='.'):
     """Plot MEV data from CSV file."""
 
     # Read CSV
@@ -126,7 +126,7 @@ def main():
     )
     parser.add_argument(
         '--input',
-        default='mev_per_slot_24h.csv',
+        default='arges/mev_per_slot_24h.csv',
         help='Input CSV file (default: mev_per_slot_24h.csv)'
     )
     parser.add_argument(
