@@ -240,11 +240,15 @@ impl FetchedTransaction {
 
     /// Analyze this transaction for MEV patterns
     pub fn analyze_mev(&self) -> Option<MevEvent> {
+        // Skip failed transactions entirely - they don't represent successful MEV activity
+        if !self.is_success() {
+            return None;
+        }
+
         let instructions = self.get_instructions();
         let account_keys = self.get_account_keys();
         let (pre_balances, post_balances) = self.get_balances();
         let (pre_token_balances, post_token_balances) = self.get_token_balances();
-        let success = self.is_success();
         let signer = self.signer();
 
         MevAnalyzer::analyze_transaction(
@@ -252,7 +256,7 @@ impl FetchedTransaction {
             signer,
             &instructions,
             &account_keys,
-            success,
+            true, // always true now since we filter failed transactions above
             &pre_balances,
             &post_balances,
             &pre_token_balances,
