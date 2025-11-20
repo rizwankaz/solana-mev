@@ -404,21 +404,15 @@ impl MevAnalyzer {
     /// Detect MEV category based on program interactions AND token balance changes
     ///
     /// Returns None for regular (non-MEV) transactions like single-DEX swaps.
-    /// Only flags actual MEV:
+    /// Only flags actual MEV per sandwiched.me methodology:
     /// - Atomic Arbitrage: Multiple DEX interactions in single transaction (dex_count >= 2)
     /// - Liquidations: Lending protocol interactions
-    /// - Mints: Token/NFT creation
-    /// - Spam: Failed MEV attempts
     ///
     /// Note: Sandwich and JIT attacks are detected separately via multi-tx analysis
-    fn detect_category(program_ids: &[String], token_changes: &[TokenChange]) -> Option<MevCategory> {
+    /// Note: Token mints are NOT tracked as MEV (they're regular token creation, not value extraction)
+    fn detect_category(program_ids: &[String], _token_changes: &[TokenChange]) -> Option<MevCategory> {
         let dex_count = program_ids.iter().filter(|p| ProgramRegistry::is_dex(p)).count();
         let lending_count = program_ids.iter().filter(|p| ProgramRegistry::is_lending(p)).count();
-        let mint_count = program_ids.iter().filter(|p| ProgramRegistry::is_mint_program(p)).count();
-
-        // Check token change patterns
-        let has_only_positive_changes = !token_changes.is_empty() &&
-            token_changes.iter().all(|tc| tc.ui_amount_change > 0.0);
 
         // ATOMIC ARBITRAGE: Multiple DEX interactions in single transaction (buy low, sell high)
         // This is the dominant MEV type on Solana (50-74% of transactions per sandwiched.me)
@@ -432,12 +426,7 @@ impl MevAnalyzer {
             return Some(MevCategory::Liquidation);
         }
 
-        // MINT: Token/NFT creation with only positive balance changes
-        if mint_count > 0 || has_only_positive_changes {
-            return Some(MevCategory::Mint);
-        }
-
-        // Everything else is NOT MEV (regular user swaps, transfers, etc.)
+        // Everything else is NOT MEV (regular user swaps, transfers, token mints, etc.)
         // Single DEX swaps (dex_count == 1) are normal user activity, not MEV
         None
     }
