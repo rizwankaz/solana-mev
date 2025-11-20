@@ -329,6 +329,23 @@ pub struct MevTransactionJson {
     pub sol_change_lamports: i64,
     pub fee: Option<u64>,
     pub compute_units_consumed: Option<u64>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub swaps: Vec<SwapJson>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub swap_count: Option<usize>,
+}
+
+/// JSON structure for individual swap
+#[derive(Serialize)]
+pub struct SwapJson {
+    pub from_token: String,
+    pub from_amount: f64,
+    pub to_token: String,
+    pub to_amount: f64,
+    pub dex_program: String,
+    pub dex_name: String,
+    pub from_decimals: u8,
+    pub to_decimals: u8,
 }
 
 /// JSON structure for token changes
@@ -362,6 +379,25 @@ pub fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, serde_
     // Collect all MEV events with their transaction indices
     for (idx, tx) in block.transactions.iter().enumerate() {
         if let Some(event) = tx.analyze_mev() {
+            let swaps_json: Vec<SwapJson> = event.swaps.iter()
+                .map(|swap| SwapJson {
+                    from_token: swap.from_token.clone(),
+                    from_amount: swap.from_amount,
+                    to_token: swap.to_token.clone(),
+                    to_amount: swap.to_amount,
+                    dex_program: swap.dex_program.clone(),
+                    dex_name: ProgramRegistry::program_name(&swap.dex_program),
+                    from_decimals: swap.from_decimals,
+                    to_decimals: swap.to_decimals,
+                })
+                .collect();
+
+            let swap_count = if event.swap_count > 0 {
+                Some(event.swap_count)
+            } else {
+                None
+            };
+
             mev_transactions.push(MevTransactionJson {
                 signature: event.signature.clone(),
                 signer: event.signer.clone(),
@@ -381,6 +417,8 @@ pub fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, serde_
                 sol_change_lamports: event.sol_change_lamports,
                 fee: tx.fee(),
                 compute_units_consumed: tx.compute_units_consumed(),
+                swaps: swaps_json,
+                swap_count,
             });
 
             tx_with_mev.push((idx, tx, Some(event)));
