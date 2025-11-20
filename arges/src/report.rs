@@ -327,6 +327,8 @@ pub struct MevTransactionJson {
     pub program_addresses: Vec<String>,
     pub token_changes: Vec<TokenChangeJson>,
     pub sol_change_lamports: i64,
+    pub fee: Option<u64>,
+    pub compute_units_consumed: Option<u64>,
 }
 
 /// JSON structure for token changes
@@ -378,6 +380,8 @@ pub fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, serde_
                     })
                     .collect(),
                 sol_change_lamports: event.sol_change_lamports,
+                fee: tx.fee(),
+                compute_units_consumed: tx.compute_units_consumed(),
             });
 
             tx_with_mev.push((idx, tx, Some(event)));
