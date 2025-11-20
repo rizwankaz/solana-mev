@@ -9,6 +9,17 @@ use report::format_mev_validation_json;
 use types::FetcherConfig;
 use std::sync::Arc;
 use tracing::{info, error};
+use clap::Parser;
+
+/// Solana MEV block analyzer
+#[derive(Parser, Debug)]
+#[command(name = "arges")]
+#[command(about = "Analyze Solana blocks for MEV activity", long_about = None)]
+struct Args {
+    /// Specific slot number to analyze (defaults to current_slot - 10)
+    #[arg(value_name = "SLOT")]
+    slot: Option<u64>,
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -16,6 +27,8 @@ async fn main() -> anyhow::Result<()> {
         .with_writer(std::io::stderr)
         .with_env_filter("arges=info,warn")
         .init();
+
+    let args = Args::parse();
 
     info!("block fetcher go brrr");
 
@@ -31,22 +44,29 @@ async fn main() -> anyhow::Result<()> {
 
     let fetcher = Arc::new(BlockFetcher::new(config));
 
-    // current slot
-    let current_slot = fetcher.get_current_slot().await?;
-    info!("current slot: {}\n", current_slot);
+    // Determine which slot to fetch
+    let target_slot = match args.slot {
+        Some(slot) => {
+            info!("fetching user-specified slot: {}", slot);
+            slot
+        }
+        None => {
+            let current_slot = fetcher.get_current_slot().await?;
+            let slot = current_slot.saturating_sub(10);
+            info!("fetching recent slot: {} (current: {})", slot, current_slot);
+            slot
+        }
+    };
 
     // fetch block with MEV validation report
-    info!("fetching block for MEV validation\n");
-    let recent_slot = current_slot.saturating_sub(10);
-
-    match fetcher.fetch_block(recent_slot).await {
+    match fetcher.fetch_block(target_slot).await {
         Ok(block) => {
             match format_mev_validation_json(&block) {
                 Ok(json) => println!("{}", json),
                 Err(e) => error!("failed to serialize JSON: {:?}", e),
             }
         },
-        Err(e) => error!("failed to fetch block: {:?}", e),
+        Err(e) => error!("failed to fetch block {}: {:?}", target_slot, e),
     }
 
     Ok(())
