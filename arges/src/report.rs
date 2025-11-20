@@ -310,6 +310,7 @@ pub struct MevValidationJson {
     pub blockhash: String,
     pub timestamp: Option<String>,
     pub total_transactions: usize,
+    pub mev_count: usize,
     pub mev_transactions: Vec<MevTransactionJson>,
     pub sandwich_attacks: Vec<MultiTxMevJson>,
     pub jit_attacks: Vec<MultiTxMevJson>,
@@ -318,7 +319,6 @@ pub struct MevValidationJson {
 /// JSON structure for individual MEV transaction
 #[derive(Serialize)]
 pub struct MevTransactionJson {
-    pub tx_index: usize,
     pub signature: String,
     pub signer: Option<String>,
     pub category: String,
@@ -334,7 +334,7 @@ pub struct MevTransactionJson {
 /// JSON structure for token changes
 #[derive(Serialize)]
 pub struct TokenChangeJson {
-    pub mint: String,
+    pub token_address: String,
     pub amount: f64,
     pub decimals: u8,
 }
@@ -363,7 +363,6 @@ pub fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, serde_
     for (idx, tx) in block.transactions.iter().enumerate() {
         if let Some(event) = tx.analyze_mev() {
             mev_transactions.push(MevTransactionJson {
-                tx_index: idx,
                 signature: event.signature.clone(),
                 signer: event.signer.clone(),
                 category: format!("{:?}", event.category).to_uppercase(),
@@ -374,7 +373,7 @@ pub fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, serde_
                 program_addresses: event.programs_involved.clone(),
                 token_changes: event.token_changes.iter()
                     .map(|tc| TokenChangeJson {
-                        mint: tc.mint.clone(),
+                        token_address: tc.mint.clone(),
                         amount: tc.ui_amount_change,
                         decimals: tc.decimals,
                     })
@@ -407,7 +406,7 @@ pub fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, serde_
             backrun_tx_index: event.backrun_tx_index,
             profit_tokens: event.profit_token_changes.iter()
                 .map(|tc| TokenChangeJson {
-                    mint: tc.mint.clone(),
+                    token_address: tc.mint.clone(),
                     amount: tc.ui_amount_change,
                     decimals: tc.decimals,
                 })
@@ -427,11 +426,14 @@ pub fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, serde_
 
     let timestamp = block.timestamp().map(|t| t.format("%Y-%m-%d %H:%M:%S UTC").to_string());
 
+    let mev_count = mev_transactions.len();
+
     let report = MevValidationJson {
         slot: block.slot,
         blockhash: block.blockhash.clone(),
         timestamp,
         total_transactions: block.transactions.len(),
+        mev_count,
         mev_transactions,
         sandwich_attacks,
         jit_attacks,

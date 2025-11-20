@@ -234,6 +234,14 @@ impl ProgramRegistry {
     pub const METAPLEX_TOKEN_METADATA: &'static str = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s";
     pub const METAPLEX_CORE: &'static str = "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d";
 
+    /// Check if a program is an aggregator (routes through multiple DEXs for best price)
+    pub fn is_aggregator(program_id: &str) -> bool {
+        matches!(
+            program_id,
+            Self::JUPITER_V6 | Self::JUPITER_LIMIT_ORDER
+        )
+    }
+
     /// Check if a program is a DEX
     pub fn is_dex(program_id: &str) -> bool {
         matches!(
@@ -410,19 +418,40 @@ impl MevAnalyzer {
     ///
     /// Returns None for regular (non-MEV) transactions like single-DEX swaps.
     /// Only flags actual MEV per sandwiched.me methodology:
-    /// - Atomic Arbitrage: Multiple DEX interactions in single transaction (dex_count >= 2)
+    /// - Atomic Arbitrage: Multiple DEX interactions in single transaction (buy low, sell high)
     /// - Liquidations: Lending protocol interactions
+    ///
+    /// Aggregator vs Arbitrage distinction:
+    /// - Jupiter/aggregators route through DEXs for best price (NOT arbitrage)
+    /// - Actual arbitrage requires 2+ non-aggregator DEXs
     ///
     /// Note: Sandwich and JIT attacks are detected separately via multi-tx analysis
     /// Note: Token mints are NOT tracked as MEV (they're regular token creation, not value extraction)
     fn detect_category(program_ids: &[String], _token_changes: &[TokenChange]) -> Option<MevCategory> {
         let dex_count = program_ids.iter().filter(|p| ProgramRegistry::is_dex(p)).count();
         let lending_count = program_ids.iter().filter(|p| ProgramRegistry::is_lending(p)).count();
+        let aggregator_count = program_ids.iter().filter(|p| ProgramRegistry::is_aggregator(p)).count();
 
         // ATOMIC ARBITRAGE: Multiple DEX interactions in single transaction (buy low, sell high)
         // This is the dominant MEV type on Solana (50-74% of transactions per sandwiched.me)
+        //
+        // Important: Distinguish aggregator routing from actual arbitrage
+        // - Aggregators (Jupiter V6, etc.) route through DEXs to get best price
+        // - This is NOT arbitrage, just smart routing
+        // - Only flag as arbitrage if there are 2+ non-aggregator DEXs
         if dex_count >= 2 {
-            return Some(MevCategory::Arbitrage);
+            // Count non-aggregator DEXs
+            let non_aggregator_dex_count = dex_count - aggregator_count;
+
+            // Only flag as arbitrage if there are 2+ non-aggregator DEXs
+            // Examples:
+            // - Jupiter + Pump.fun = 1 aggregator + 1 DEX = NOT arbitrage (just routing)
+            // - Titan + Jupiter = 1 DEX + 1 aggregator = NOT arbitrage (routing or swap)
+            // - Titan + Orca = 2 DEXs = ARBITRAGE
+            // - Jupiter + Titan + Orca = 1 aggregator + 2 DEXs = ARBITRAGE
+            if non_aggregator_dex_count >= 2 {
+                return Some(MevCategory::Arbitrage);
+            }
         }
 
         // LIQUIDATION: Lending protocol interactions
@@ -433,6 +462,7 @@ impl MevAnalyzer {
 
         // Everything else is NOT MEV (regular user swaps, transfers, token mints, etc.)
         // Single DEX swaps (dex_count == 1) are normal user activity, not MEV
+        // Aggregator routing (aggregator + 1 DEX) is also normal user activity
         None
     }
 
