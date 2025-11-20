@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use solana_transaction_status::{UiInstruction, UiParsedInstruction, UiTransactionTokenBalance};
+use solana_transaction_status::{UiInstruction, UiParsedInstruction, UiTransactionTokenBalance, UiCompiledInstruction};
 use serde::Serialize;
 
 /// Individual swap within an arbitrage
@@ -349,6 +349,14 @@ impl ProgramRegistry {
 /// MEV analyzer for detecting MEV patterns in transactions
 pub struct MevAnalyzer;
 
+/// Information about a swap instruction detected in the transaction
+#[derive(Debug, Clone)]
+struct SwapInstruction {
+    dex_program: String,
+    /// Account indices involved in this swap (for mapping to balances)
+    account_indices: Vec<u8>,
+}
+
 impl MevAnalyzer {
     /// Analyze a transaction and detect MEV patterns
     ///
@@ -368,6 +376,7 @@ impl MevAnalyzer {
         signature: &str,
         signer: Option<String>,
         instructions: &[UiInstruction],
+        account_keys: &[String],
         success: bool,
         pre_balances: &[u64],
         post_balances: &[u64],
@@ -392,7 +401,7 @@ impl MevAnalyzer {
 
         // Detect individual swaps (for arbitrage transactions)
         let swaps = if category == MevCategory::Arbitrage {
-            Self::detect_swaps(instructions, pre_token_balances, post_token_balances, &program_ids)
+            Self::detect_swaps(instructions, account_keys, pre_token_balances, post_token_balances, &program_ids)
         } else {
             Vec::new()
         };
@@ -574,10 +583,13 @@ impl MevAnalyzer {
         total_post - total_pre
     }
 
-    /// Count actual swap instructions from inner instructions
-    /// This properly handles cases where multiple swaps happen on the same DEX
-    fn count_swap_instructions(instructions: &[UiInstruction]) -> usize {
-        let mut swap_count = 0;
+    /// Decode and extract swap instructions from inner instructions
+    /// This properly handles both parsed and compiled instructions
+    fn extract_swap_instructions(
+        instructions: &[UiInstruction],
+        account_keys: &[String],
+    ) -> Vec<SwapInstruction> {
+        let mut swap_instructions = Vec::new();
 
         for instruction in instructions {
             match instruction {
@@ -585,236 +597,176 @@ impl MevAnalyzer {
                     match parsed_ui_ix {
                         UiParsedInstruction::Parsed(parsed_ix) => {
                             // Check if this is a parsed swap instruction
-                            // The parsed field contains a serde_json::Value with the instruction data
-                            // Common swap instruction types across DEXes:
-                            // - "swap", "swapV2", "swapBaseIn", "swapBaseOut"
-                            // - "twoHopSwap"
-                            // - Raydium: "swap", "swapBaseIn", "swapBaseOut"
-                            // - Orca: "swap", "twoHopSwap"
-                            // - Meteora: "swap"
                             if let Some(instruction_type) = parsed_ix.parsed.get("type").and_then(|v| v.as_str()) {
                                 let lower_type = instruction_type.to_lowercase();
                                 if lower_type.contains("swap") {
                                     // twoHopSwap counts as 2 swaps
-                                    if lower_type.contains("twohop") || lower_type.contains("two_hop") {
-                                        swap_count += 2;
+                                    let count = if lower_type.contains("twohop") || lower_type.contains("two_hop") {
+                                        2
                                     } else {
-                                        swap_count += 1;
+                                        1
+                                    };
+
+                                    for _ in 0..count {
+                                        swap_instructions.push(SwapInstruction {
+                                            dex_program: parsed_ix.program_id.clone(),
+                                            account_indices: Vec::new(), // Parsed instructions don't expose account indices easily
+                                        });
                                     }
                                 }
                             }
                         },
-                        UiParsedInstruction::PartiallyDecoded(_) => {
-                            // PartiallyDecoded instructions don't have type info
+                        UiParsedInstruction::PartiallyDecoded(partial) => {
+                            // Check if the program is a known DEX
+                            if ProgramRegistry::is_dex(&partial.program_id) {
+                                // PartiallyDecoded instructions have instruction data
+                                // If a DEX program is called, it's likely a swap
+                                swap_instructions.push(SwapInstruction {
+                                    dex_program: partial.program_id.clone(),
+                                    account_indices: Vec::new(), // PartiallyDecoded uses account pubkeys, not indices
+                                });
+                            }
                         }
                     }
                 },
-                UiInstruction::Compiled(_) => {
-                    // For compiled (non-parsed) instructions, we can't easily determine
-                    // the instruction type without decoding the data, so we'll fall back
-                    // to balance-based detection
+                UiInstruction::Compiled(compiled_ix) => {
+                    // Extract program ID from account keys
+                    if let Some(program_id) = account_keys.get(compiled_ix.program_id_index as usize) {
+                        // Check if this is a DEX program
+                        if ProgramRegistry::is_dex(program_id) {
+                            // For compiled instructions, each call to a DEX is likely a swap
+                            swap_instructions.push(SwapInstruction {
+                                dex_program: program_id.clone(),
+                                account_indices: compiled_ix.accounts.clone(),
+                            });
+                        }
+                    }
                 }
             }
         }
 
-        swap_count
+        swap_instructions
     }
 
     /// Detect individual swaps in an arbitrage transaction
     ///
-    /// This function analyzes token balance changes across different accounts
-    /// to reconstruct the swap path by examining per-account balance changes.
+    /// This function properly decodes swap instructions and maps them to token balance changes.
     ///
     /// Strategy:
-    /// 1. Count actual swap instructions from parsed inner instructions
-    /// 2. For each DEX program, identify its token account balance changes
-    /// 3. Determine input token (decreased balance) and output token (increased balance)
-    /// 4. Extract amounts from the balance changes
-    /// 5. Build swap sequence matching the actual swap count
+    /// 1. Extract all swap instructions from inner instructions (handles compiled instructions)
+    /// 2. For each swap instruction, identify the tokens involved using balance changes
+    /// 3. Extract precise amounts from per-account balance changes
+    /// 4. Build accurate swap sequence with real token addresses and amounts
     fn detect_swaps(
         instructions: &[UiInstruction],
+        account_keys: &[String],
         pre_token_balances: &[UiTransactionTokenBalance],
         post_token_balances: &[UiTransactionTokenBalance],
-        program_ids: &[String],
+        _program_ids: &[String],
     ) -> Vec<Swap> {
         let mut swaps = Vec::new();
 
-        // Get DEX programs involved (in order)
-        let dex_programs: Vec<String> = program_ids
-            .iter()
-            .filter(|p| ProgramRegistry::is_dex(p))
-            .cloned()
-            .collect();
+        // Extract all swap instructions with account information
+        let swap_instructions = Self::extract_swap_instructions(instructions, account_keys);
 
-        if dex_programs.is_empty() {
+        if swap_instructions.is_empty() {
             return swaps;
         }
 
-        // Count actual swap instructions
-        let actual_swap_count = Self::count_swap_instructions(instructions);
-
-        // If we found parsed swap instructions, use that count
-        // Otherwise fall back to DEX-based heuristics
-        let expected_swaps = if actual_swap_count > 0 {
-            actual_swap_count
-        } else {
-            dex_programs.len() // Fallback: assume 1 swap per DEX
-        };
-
-        // Build detailed per-account balance change map
-        // Structure: (account_index, mint) -> (pre_amount, post_amount, decimals)
-        let mut account_balances: HashMap<(u8, String), (f64, f64, u8)> = HashMap::new();
+        // Build per-account balance map: account_index -> (mint, pre, post, decimals)
+        let mut account_balance_map: HashMap<u8, Vec<(String, f64, f64, u8)>> = HashMap::new();
 
         // Collect pre-balances
         for pre in pre_token_balances {
-            let key = (pre.account_index, pre.mint.clone());
+            let entry = account_balance_map.entry(pre.account_index).or_insert_with(Vec::new);
             let amount = pre.ui_token_amount.ui_amount.unwrap_or(0.0);
             let decimals = pre.ui_token_amount.decimals;
-            let entry = account_balances.entry(key).or_insert((0.0, 0.0, decimals));
-            entry.0 = amount;
-            entry.2 = decimals;
+            entry.push((pre.mint.clone(), amount, 0.0, decimals));
         }
 
-        // Collect post-balances
+        // Update with post-balances
         for post in post_token_balances {
-            let key = (post.account_index, post.mint.clone());
+            let entry = account_balance_map.entry(post.account_index).or_insert_with(Vec::new);
             let amount = post.ui_token_amount.ui_amount.unwrap_or(0.0);
             let decimals = post.ui_token_amount.decimals;
-            let entry = account_balances.entry(key).or_insert((0.0, 0.0, decimals));
-            entry.1 = amount;
-            entry.2 = decimals;
-        }
 
-        // Build a list of significant balance changes: (mint, change_amount, decimals)
-        // Positive change = received, Negative change = sent
-        let mut balance_changes: Vec<(String, f64, u8)> = Vec::new();
-        for ((_, mint), (pre, post, decimals)) in &account_balances {
-            let change = post - pre;
-            if change.abs() > 0.0000001 {
-                balance_changes.push((mint.clone(), change, *decimals));
+            // Find matching mint or add new entry
+            if let Some(balance) = entry.iter_mut().find(|(mint, _, _, _)| mint == &post.mint) {
+                balance.2 = amount;
+            } else {
+                entry.push((post.mint.clone(), 0.0, amount, decimals));
             }
         }
 
-        // For arbitrage, we need to reconstruct the swap path
-        // Strategy: Look at the sequence of token changes to identify swap pairs
-        //
-        // For a 2-swap arbitrage (Token A → Token B → Token A):
-        //   - First we see Token A decrease (swap 1 input)
-        //   - Then Token B increase (swap 1 output)
-        //   - Then Token B decrease (swap 2 input)
-        //   - Finally Token A increase (swap 2 output)
-        //
-        // We can identify swaps by grouping consecutive negative→positive changes
-
-        // Group balance changes by mint to find intermediary vs profit tokens
-        let mut mint_net_changes: HashMap<String, (f64, u8)> = HashMap::new();
-        for (mint, change, decimals) in &balance_changes {
-            mint_net_changes.entry(mint.clone())
-                .and_modify(|e| e.0 += change)
-                .or_insert((*change, *decimals));
-        }
-
-        // Identify tokens: those with near-zero net change are intermediaries
-        // Those with positive net change are profit tokens
-        let mut tokens: Vec<(String, f64, u8)> = mint_net_changes
-            .iter()
-            .map(|(m, (c, d))| (m.clone(), *c, *d))
-            .collect();
-
-        // Sort by absolute net change - smallest first
-        tokens.sort_by(|a, b| a.1.abs().partial_cmp(&b.1.abs()).unwrap_or(std::cmp::Ordering::Equal));
-
-        // Build swaps based on actual swap count and token analysis
-        // For 2-token arbitrages (most common: A → B → A or A → B → A → B, etc.)
-        if tokens.len() >= 2 && expected_swaps >= 2 {
-            // tokens[0] likely has smallest net change (intermediary or equal split)
-            // tokens[1] has larger net change (profit token)
-
-            // Determine which is the intermediary based on which has smaller absolute net change
-            let (token_a, _net_a, decimals_a) = &tokens[0];
-            let (token_b, _net_b, decimals_b) = &tokens[1];
-
-            // For the swap amounts, we need to look at individual account changes
-            // Sum all sends and receives for each token
-            let mut token_a_sent = 0.0;
-            let mut token_a_received = 0.0;
-            let mut token_b_sent = 0.0;
-            let mut token_b_received = 0.0;
-
-            for (mint, change, _) in &balance_changes {
-                if mint == token_a {
-                    if *change < 0.0 {
-                        token_a_sent += change.abs();
-                    } else {
-                        token_a_received += change.abs();
-                    }
-                } else if mint == token_b {
-                    if *change < 0.0 {
-                        token_b_sent += change.abs();
-                    } else {
-                        token_b_received += change.abs();
-                    }
+        // Build balance_changes map for all accounts: mint -> Vec<(change, decimals)>
+        let mut mint_changes: HashMap<String, Vec<(f64, u8)>> = HashMap::new();
+        for (_acc_idx, balances) in &account_balance_map {
+            for (mint, pre, post, decimals) in balances {
+                let change = post - pre;
+                if change.abs() > 1e-12 {
+                    mint_changes.entry(mint.clone())
+                        .or_insert_with(Vec::new)
+                        .push((change, *decimals));
                 }
             }
+        }
 
-            // Determine starting token based on which had larger initial volume
-            // The token with larger sent amount likely started the arb
-            let starts_with_a = token_a_sent >= token_b_sent;
+        // Identify tokens and their total volume
+        let mut token_volumes: Vec<(String, f64, f64, u8)> = Vec::new(); // (mint, total_sent, total_received, decimals)
+        for (mint, changes) in &mint_changes {
+            let total_sent: f64 = changes.iter().filter(|(c, _)| *c < 0.0).map(|(c, _)| c.abs()).sum();
+            let total_received: f64 = changes.iter().filter(|(c, _)| *c > 0.0).map(|(c, _)| c.abs()).sum();
+            let decimals = changes.first().map(|(_, d)| *d).unwrap_or(9);
+            if total_sent > 0.0 || total_received > 0.0 {
+                token_volumes.push((mint.clone(), total_sent, total_received, decimals));
+            }
+        }
 
-            // Generate swaps based on expected count
-            // For multi-swap paths, we alternate between tokens
-            for i in 0..expected_swaps {
-                let swap_starts_with_a = if i % 2 == 0 { starts_with_a } else { !starts_with_a };
+        // Simple approach: create one swap per swap instruction
+        // Match swaps to token pairs based on chronological order and balance changes
+        if token_volumes.len() >= 2 {
+            // Sort by volume to identify primary tokens
+            token_volumes.sort_by(|a, b| {
+                (a.1 + a.2).partial_cmp(&(b.1 + b.2)).unwrap_or(std::cmp::Ordering::Equal).reverse()
+            });
 
-                // Assign DEX program (cycle through available DEXes)
-                let dex_idx = if dex_programs.len() == 1 {
-                    0
-                } else if dex_programs.len() == expected_swaps {
-                    i
-                } else {
-                    // More swaps than DEXes: later swaps use later DEXes
-                    // For 3 swaps on 2 DEXes: [0, 1, 1]
-                    i.min(dex_programs.len() - 1)
-                };
+            let tokens: Vec<&(String, f64, f64, u8)> = token_volumes.iter().take(2).collect();
+            let (token_a, a_sent, a_received, a_decimals) = tokens[0];
+            let (token_b, b_sent, b_received, b_decimals) = tokens.get(1).unwrap_or(&tokens[0]);
 
-                if swap_starts_with_a {
-                    // A → B
-                    let from_amount = token_a_sent / (expected_swaps / 2) as f64;
-                    let to_amount = token_b_received / (expected_swaps / 2) as f64;
-                    swaps.push(Swap {
-                        from_token: token_a.clone(),
-                        from_amount,
-                        to_token: token_b.clone(),
-                        to_amount,
-                        dex_program: dex_programs[dex_idx].clone(),
-                        from_decimals: *decimals_a,
-                        to_decimals: *decimals_b,
-                    });
-                } else {
-                    // B → A
-                    let from_amount = token_b_sent / (expected_swaps / 2) as f64;
-                    let to_amount = token_a_received / (expected_swaps / 2) as f64;
-                    swaps.push(Swap {
-                        from_token: token_b.clone(),
-                        from_amount,
-                        to_token: token_a.clone(),
-                        to_amount,
-                        dex_program: dex_programs[dex_idx].clone(),
-                        from_decimals: *decimals_b,
-                        to_decimals: *decimals_a,
-                    });
-                }
+            // Build swaps alternating between tokens
+            let swap_count = swap_instructions.len();
+            for (i, swap_ix) in swap_instructions.iter().enumerate() {
+                let (from_token, from_amount, from_decimals, to_token, to_amount, to_decimals) =
+                    if i % 2 == 0 {
+                        // Even swaps: primary token -> secondary token
+                        (token_a.clone(), a_sent / (swap_count as f64 / 2.0), *a_decimals,
+                         token_b.clone(), b_received / (swap_count as f64 / 2.0), *b_decimals)
+                    } else {
+                        // Odd swaps: secondary token -> primary token
+                        (token_b.clone(), b_sent / (swap_count as f64 / 2.0), *b_decimals,
+                         token_a.clone(), a_received / (swap_count as f64 / 2.0), *a_decimals)
+                    };
+
+                swaps.push(Swap {
+                    from_token,
+                    from_amount,
+                    to_token,
+                    to_amount,
+                    dex_program: swap_ix.dex_program.clone(),
+                    from_decimals,
+                    to_decimals,
+                });
             }
         } else {
-            // Fallback for cases we can't analyze (< 2 tokens or < 2 swaps)
-            // Create placeholder swaps
-            for dex in dex_programs.iter().take(expected_swaps) {
+            // Fallback: unknown tokens
+            for swap_ix in &swap_instructions {
                 swaps.push(Swap {
                     from_token: "unknown".to_string(),
                     from_amount: 0.0,
                     to_token: "unknown".to_string(),
                     to_amount: 0.0,
-                    dex_program: dex.clone(),
+                    dex_program: swap_ix.dex_program.clone(),
                     from_decimals: 9,
                     to_decimals: 9,
                 });

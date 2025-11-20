@@ -191,6 +191,23 @@ impl FetchedTransaction {
         all_instructions
     }
 
+    /// Extract account keys from transaction message
+    fn get_account_keys(&self) -> Vec<String> {
+        match &self.transaction {
+            EncodedTransaction::Json(tx) => {
+                match &tx.message {
+                    solana_transaction_status::UiMessage::Parsed(parsed) => {
+                        parsed.account_keys.iter().map(|key| key.pubkey.clone()).collect()
+                    },
+                    solana_transaction_status::UiMessage::Raw(raw) => {
+                        raw.account_keys.clone()
+                    },
+                }
+            },
+            _ => Vec::new(),
+        }
+    }
+
     /// Get pre and post balances
     fn get_balances(&self) -> (Vec<u64>, Vec<u64>) {
         let meta = match &self.meta {
@@ -224,6 +241,7 @@ impl FetchedTransaction {
     /// Analyze this transaction for MEV patterns
     pub fn analyze_mev(&self) -> Option<MevEvent> {
         let instructions = self.get_instructions();
+        let account_keys = self.get_account_keys();
         let (pre_balances, post_balances) = self.get_balances();
         let (pre_token_balances, post_token_balances) = self.get_token_balances();
         let success = self.is_success();
@@ -233,6 +251,7 @@ impl FetchedTransaction {
             &self.signature,
             signer,
             &instructions,
+            &account_keys,
             success,
             &pre_balances,
             &post_balances,
