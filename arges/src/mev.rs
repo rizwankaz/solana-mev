@@ -525,12 +525,11 @@ impl MevAnalyzer {
             entry.2 = post_balance.ui_token_amount.decimals;
         }
 
-        // Track token changes from user perspective (what they sent/received)
-        // For each mint, we track the FIRST account with significant change
-        // This captures the user's account, not pool accounts
-        let mut mint_totals: HashMap<String, (f64, u8, u8)> = HashMap::new(); // (change, decimals, account_idx)
+        // Calculate net token changes by summing across ALL accounts for each mint
+        // This gives us the true net position change for the signer
+        let mut mint_totals: HashMap<String, (f64, u8)> = HashMap::new(); // (total_change, decimals)
 
-        for ((account_idx, mint), (pre_opt, post_opt, decimals)) in token_map {
+        for ((_account_idx, mint), (pre_opt, post_opt, decimals)) in token_map {
             let pre = pre_opt.unwrap_or(0.0);
             let post = post_opt.unwrap_or(0.0);
             let change = post - pre;
@@ -540,22 +539,18 @@ impl MevAnalyzer {
                 continue;
             }
 
-            // For each mint, keep the change from the EARLIEST account index
-            // User accounts (including their token accounts) come before pool accounts
+            // Sum all changes for this mint across all accounts
             mint_totals.entry(mint.clone())
                 .and_modify(|e| {
-                    // Keep the change from the earlier account index
-                    if account_idx < e.2 {
-                        e.0 = change;
-                        e.1 = decimals;
-                        e.2 = account_idx;
-                    }
+                    e.0 += change;
+                    // Keep the decimals (should be same for all accounts of this mint)
+                    e.1 = decimals;
                 })
-                .or_insert((change, decimals, account_idx));
+                .or_insert((change, decimals));
         }
 
         // Convert to TokenChange structs
-        for (mint, (total_change, decimals, _account_idx)) in mint_totals {
+        for (mint, (total_change, decimals)) in mint_totals {
             // Only include non-zero changes
             if total_change.abs() > 0.0000001 {
                 changes.push(TokenChange {
