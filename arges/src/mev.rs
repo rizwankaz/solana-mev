@@ -352,7 +352,7 @@ impl MevAnalyzer {
         let token_changes = Self::calculate_token_changes(pre_token_balances, post_token_balances);
 
         // Detect category based on program interactions AND token changes
-        let category = Self::detect_category(&program_ids, &token_changes);
+        let category = Self::detect_category(&program_ids, &token_changes)?;
 
         // Calculate SOL balance change (signed)
         let sol_change_lamports = Self::calculate_sol_change(pre_balances, post_balances);
@@ -403,58 +403,43 @@ impl MevAnalyzer {
 
     /// Detect MEV category based on program interactions AND token balance changes
     ///
-    /// Uses hybrid approach:
-    /// 1. Token changes indicate swap-like behavior (multiple tokens changing)
-    /// 2. Known programs provide hints (DEX, lending, etc.)
-    /// 3. Unknown programs with swap patterns are classified as ARBITRAGE
-    fn detect_category(program_ids: &[String], token_changes: &[TokenChange]) -> MevCategory {
+    /// Returns None for regular (non-MEV) transactions like single-DEX swaps.
+    /// Only flags actual MEV:
+    /// - Atomic Arbitrage: Multiple DEX interactions in single transaction (dex_count >= 2)
+    /// - Liquidations: Lending protocol interactions
+    /// - Mints: Token/NFT creation
+    /// - Spam: Failed MEV attempts
+    ///
+    /// Note: Sandwich and JIT attacks are detected separately via multi-tx analysis
+    fn detect_category(program_ids: &[String], token_changes: &[TokenChange]) -> Option<MevCategory> {
         let dex_count = program_ids.iter().filter(|p| ProgramRegistry::is_dex(p)).count();
         let lending_count = program_ids.iter().filter(|p| ProgramRegistry::is_lending(p)).count();
         let mint_count = program_ids.iter().filter(|p| ProgramRegistry::is_mint_program(p)).count();
 
         // Check token change patterns
-        let has_token_swap = token_changes.len() >= 2 ||
-            (token_changes.len() == 1 && token_changes[0].ui_amount_change.abs() > 0.0);
-
         let has_only_positive_changes = !token_changes.is_empty() &&
             token_changes.iter().all(|tc| tc.ui_amount_change > 0.0);
 
-        // Arbitrage: Multiple DEX interactions (cross-DEX trades)
+        // ATOMIC ARBITRAGE: Multiple DEX interactions in single transaction (buy low, sell high)
+        // This is the dominant MEV type on Solana (50-74% of transactions per sandwiched.me)
         if dex_count >= 2 {
-            return MevCategory::Arbitrage;
+            return Some(MevCategory::Arbitrage);
         }
 
-        // Liquidation: Lending protocol + DEX (liquidator selling collateral)
-        if lending_count > 0 && dex_count > 0 {
-            return MevCategory::Liquidation;
-        }
-
-        // Pure lending interactions (could be liquidations)
+        // LIQUIDATION: Lending protocol interactions
+        // These can be with or without DEX (selling collateral)
         if lending_count > 0 {
-            return MevCategory::Liquidation;
+            return Some(MevCategory::Liquidation);
         }
 
-        // Known DEX interaction -> ARBITRAGE
-        if dex_count > 0 {
-            return MevCategory::Arbitrage;
-        }
-
-        // Unknown program with swap-like token changes -> likely a DEX swap -> ARBITRAGE
-        // This catches new/unknown DEX programs like Meteora Dynamic Bonding Curve
-        if has_token_swap && !has_only_positive_changes {
-            // Has token swaps (both positive and negative changes) but no known DEX
-            // Likely an unknown DEX program
-            return MevCategory::Arbitrage;
-        }
-
-        // Mints: Token/NFT programs with only positive token changes
-        // OR token programs without swap-like behavior
+        // MINT: Token/NFT creation with only positive balance changes
         if mint_count > 0 || has_only_positive_changes {
-            return MevCategory::Mint;
+            return Some(MevCategory::Mint);
         }
 
-        // Default to spam if we can't classify
-        MevCategory::Spam
+        // Everything else is NOT MEV (regular user swaps, transfers, etc.)
+        // Single DEX swaps (dex_count == 1) are normal user activity, not MEV
+        None
     }
 
     /// Calculate token balance changes from pre/post token balances
