@@ -457,16 +457,22 @@ impl MevAnalyzer {
             entry.2 = post_balance.ui_token_amount.decimals;
         }
 
-        // Calculate changes for each mint across all accounts
+        // Track token changes for SIGNER accounts only (not DEX pools)
+        // The fee payer (signer) is typically account index 0
+        // We track indices 0-2 to capture the signer and their token accounts
         let mut mint_totals: HashMap<String, (f64, u8)> = HashMap::new();
 
-        for ((_, mint), (pre_opt, post_opt, decimals)) in token_map {
-            let pre = pre_opt.unwrap_or(0.0);
-            let post = post_opt.unwrap_or(0.0);
-            let change = post - pre;
+        for ((account_idx, mint), (pre_opt, post_opt, decimals)) in token_map {
+            // Only track the first few accounts (signer's accounts), not DEX pool accounts
+            // This prevents arbitrage token changes from canceling out when aggregated with pool changes
+            if account_idx <= 2 {
+                let pre = pre_opt.unwrap_or(0.0);
+                let post = post_opt.unwrap_or(0.0);
+                let change = post - pre;
 
-            let entry = mint_totals.entry(mint).or_insert((0.0, decimals));
-            entry.0 += change;
+                let entry = mint_totals.entry(mint).or_insert((0.0, decimals));
+                entry.0 += change;
+            }
         }
 
         // Convert to TokenChange structs
