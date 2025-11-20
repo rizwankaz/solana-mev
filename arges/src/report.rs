@@ -320,9 +320,11 @@ pub struct MevValidationJson {
 pub struct MevTransactionJson {
     pub tx_index: usize,
     pub signature: String,
+    pub signer: Option<String>,
     pub category: String,
     pub success: bool,
     pub programs: Vec<String>,
+    pub program_addresses: Vec<String>,
     pub token_changes: Vec<TokenChangeJson>,
     pub sol_change_lamports: i64,
 }
@@ -361,11 +363,13 @@ pub fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, serde_
             mev_transactions.push(MevTransactionJson {
                 tx_index: idx,
                 signature: event.signature.clone(),
+                signer: event.signer.clone(),
                 category: format!("{:?}", event.category).to_uppercase(),
                 success: event.success,
                 programs: event.programs_involved.iter()
                     .map(|p| ProgramRegistry::program_name(p))
                     .collect(),
+                program_addresses: event.programs_involved.clone(),
                 token_changes: event.token_changes.iter()
                     .map(|tc| TokenChangeJson {
                         mint: tc.mint.clone(),

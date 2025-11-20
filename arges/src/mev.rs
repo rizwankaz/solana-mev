@@ -46,6 +46,7 @@ impl MevCategory {
 pub struct MevEvent {
     pub category: MevCategory,
     pub signature: String,
+    pub signer: Option<String>,
     pub programs_involved: Vec<String>,
     pub token_changes: Vec<TokenChange>,
     pub sol_change_lamports: i64,
@@ -334,6 +335,7 @@ impl MevAnalyzer {
     ///    - Failed → SPAM
     pub fn analyze_transaction(
         signature: &str,
+        signer: Option<String>,
         instructions: &[UiInstruction],
         success: bool,
         pre_balances: &[u64],
@@ -362,6 +364,7 @@ impl MevAnalyzer {
         Some(MevEvent {
             category,
             signature: signature.to_string(),
+            signer,
             programs_involved: program_ids,
             token_changes,
             sol_change_lamports,

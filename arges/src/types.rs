@@ -227,9 +227,11 @@ impl FetchedTransaction {
         let (pre_balances, post_balances) = self.get_balances();
         let (pre_token_balances, post_token_balances) = self.get_token_balances();
         let success = self.is_success();
+        let signer = self.signer();
 
         MevAnalyzer::analyze_transaction(
             &self.signature,
+            signer,
             &instructions,
             success,
             &pre_balances,
