@@ -436,22 +436,24 @@ impl MevAnalyzer {
         // This is the dominant MEV type on Solana (50-74% of transactions per sandwiched.me)
         //
         // Important: Distinguish aggregator routing from actual arbitrage
-        // - Aggregators (Jupiter V6, etc.) route through DEXs to get best price
-        // - This is NOT arbitrage, just smart routing
-        // - Only flag as arbitrage if there are 2+ non-aggregator DEXs
+        // - Aggregators (Jupiter V6, etc.) route through multiple DEXs to get best price
+        // - This is NOT arbitrage, just smart routing on behalf of the user
+        // - Only flag as arbitrage if 2+ DEXs are present AND no aggregator
         if dex_count >= 2 {
-            // Count non-aggregator DEXs
-            let non_aggregator_dex_count = dex_count - aggregator_count;
-
-            // Only flag as arbitrage if there are 2+ non-aggregator DEXs
-            // Examples:
-            // - Jupiter + Pump.fun = 1 aggregator + 1 DEX = NOT arbitrage (just routing)
-            // - Titan + Jupiter = 1 DEX + 1 aggregator = NOT arbitrage (routing or swap)
-            // - Titan + Orca = 2 DEXs = ARBITRAGE
-            // - Jupiter + Titan + Orca = 1 aggregator + 2 DEXs = ARBITRAGE
-            if non_aggregator_dex_count >= 2 {
-                return Some(MevCategory::Arbitrage);
+            // If an aggregator is present, it's routing (NOT arbitrage)
+            // The user called the aggregator, which routes through multiple DEXs
+            // Examples of routing (NOT arbitrage):
+            // - Jupiter + Pump.fun = aggregator routing
+            // - Jupiter + Drift + Meteora + Orca = aggregator routing (multi-hop swap)
+            if aggregator_count > 0 {
+                return None; // This is normal aggregator routing, not MEV
             }
+
+            // Only flag as arbitrage if 2+ DEXs with NO aggregator
+            // Examples of actual arbitrage:
+            // - Titan + Orca = 2 DEXs, no aggregator = ARBITRAGE
+            // - Raydium + Meteora + Phoenix = 3 DEXs, no aggregator = ARBITRAGE
+            return Some(MevCategory::Arbitrage);
         }
 
         // LIQUIDATION: Lending protocol interactions
