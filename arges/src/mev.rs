@@ -341,12 +341,6 @@ impl MevAnalyzer {
         pre_token_balances: &[UiTransactionTokenBalance],
         post_token_balances: &[UiTransactionTokenBalance],
     ) -> Option<MevEvent> {
-        // Only track SUCCESSFUL transactions
-        // Failed transactions with multiple DEXs are just failed arbitrage attempts (spam), not MEV
-        if !success {
-            return None;
-        }
-
         let program_ids = Self::extract_program_ids(instructions);
 
         // Skip if no programs at all
@@ -363,6 +357,8 @@ impl MevAnalyzer {
         // Calculate SOL balance change (signed)
         let sol_change_lamports = Self::calculate_sol_change(pre_balances, post_balances);
 
+        // Track both successful AND failed MEV events
+        // Failed attempts still consume compute units and block space
         Some(MevEvent {
             category,
             signature: signature.to_string(),
