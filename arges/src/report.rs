@@ -323,7 +323,6 @@ pub struct MevTransactionJson {
     pub signer: Option<String>,
     pub category: String,
     pub success: bool,
-    pub programs: Vec<String>,
     pub program_addresses: Vec<String>,
     pub token_changes: Vec<TokenChangeJson>,
     pub fee: Option<u64>,
@@ -367,7 +366,6 @@ pub struct MultiTxMevJson {
     pub backrun_tx_index: usize,
     pub profit_tokens: Vec<TokenChangeJson>,
     pub total_sol_profit_lamports: i64,
-    pub programs: Vec<String>,
 }
 
 /// Format MEV validation report as JSON
@@ -402,9 +400,6 @@ pub fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, serde_
                 signer: event.signer.clone(),
                 category: format!("{:?}", event.category).to_uppercase(),
                 success: event.success,
-                programs: event.programs_involved.iter()
-                    .map(|p| ProgramRegistry::program_name(p))
-                    .collect(),
                 program_addresses: event.programs_involved.clone(),
                 token_changes: event.token_changes.iter()
                     .map(|tc| TokenChangeJson {
@@ -448,9 +443,6 @@ pub fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, serde_
                 })
                 .collect(),
             total_sol_profit_lamports: event.total_sol_profit_lamports,
-            programs: event.programs_involved.iter()
-                .map(|p| ProgramRegistry::program_name(p))
-                .collect(),
         };
 
         match event.category {

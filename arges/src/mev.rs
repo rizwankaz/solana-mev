@@ -534,12 +534,8 @@ impl MevAnalyzer {
             let post = post_opt.unwrap_or(0.0);
             let change = post - pre;
 
-            // Skip zero changes
-            if change.abs() < 0.0000001 {
-                continue;
-            }
-
             // Sum all changes for this mint across all accounts
+            // Don't skip small individual changes - they might sum to something significant
             mint_totals.entry(mint.clone())
                 .and_modify(|e| {
                     e.0 += change;
@@ -551,8 +547,9 @@ impl MevAnalyzer {
 
         // Convert to TokenChange structs
         for (mint, (total_change, decimals)) in mint_totals {
-            // Only include non-zero changes
-            if total_change.abs() > 0.0000001 {
+            // Only include non-zero changes (very small threshold to catch tiny arbitrage profits)
+            // Use 1e-12 threshold instead of 1e-7 to capture tiny profits
+            if total_change.abs() > 1e-12 {
                 changes.push(TokenChange {
                     mint,
                     ui_amount_change: total_change,
@@ -577,18 +574,65 @@ impl MevAnalyzer {
         total_post - total_pre
     }
 
+    /// Count actual swap instructions from inner instructions
+    /// This properly handles cases where multiple swaps happen on the same DEX
+    fn count_swap_instructions(instructions: &[UiInstruction]) -> usize {
+        let mut swap_count = 0;
+
+        for instruction in instructions {
+            match instruction {
+                UiInstruction::Parsed(parsed_ui_ix) => {
+                    match parsed_ui_ix {
+                        UiParsedInstruction::Parsed(parsed_ix) => {
+                            // Check if this is a parsed swap instruction
+                            // The parsed field contains a serde_json::Value with the instruction data
+                            // Common swap instruction types across DEXes:
+                            // - "swap", "swapV2", "swapBaseIn", "swapBaseOut"
+                            // - "twoHopSwap"
+                            // - Raydium: "swap", "swapBaseIn", "swapBaseOut"
+                            // - Orca: "swap", "twoHopSwap"
+                            // - Meteora: "swap"
+                            if let Some(instruction_type) = parsed_ix.parsed.get("type").and_then(|v| v.as_str()) {
+                                let lower_type = instruction_type.to_lowercase();
+                                if lower_type.contains("swap") {
+                                    // twoHopSwap counts as 2 swaps
+                                    if lower_type.contains("twohop") || lower_type.contains("two_hop") {
+                                        swap_count += 2;
+                                    } else {
+                                        swap_count += 1;
+                                    }
+                                }
+                            }
+                        },
+                        UiParsedInstruction::PartiallyDecoded(_) => {
+                            // PartiallyDecoded instructions don't have type info
+                        }
+                    }
+                },
+                UiInstruction::Compiled(_) => {
+                    // For compiled (non-parsed) instructions, we can't easily determine
+                    // the instruction type without decoding the data, so we'll fall back
+                    // to balance-based detection
+                }
+            }
+        }
+
+        swap_count
+    }
+
     /// Detect individual swaps in an arbitrage transaction
     ///
     /// This function analyzes token balance changes across different accounts
     /// to reconstruct the swap path by examining per-account balance changes.
     ///
     /// Strategy:
-    /// 1. For each DEX program, identify its token account balance changes
-    /// 2. Determine input token (decreased balance) and output token (increased balance)
-    /// 3. Extract amounts from the balance changes
-    /// 4. Build swap sequence matching the DEX program order
+    /// 1. Count actual swap instructions from parsed inner instructions
+    /// 2. For each DEX program, identify its token account balance changes
+    /// 3. Determine input token (decreased balance) and output token (increased balance)
+    /// 4. Extract amounts from the balance changes
+    /// 5. Build swap sequence matching the actual swap count
     fn detect_swaps(
-        _instructions: &[UiInstruction],
+        instructions: &[UiInstruction],
         pre_token_balances: &[UiTransactionTokenBalance],
         post_token_balances: &[UiTransactionTokenBalance],
         program_ids: &[String],
@@ -605,6 +649,17 @@ impl MevAnalyzer {
         if dex_programs.is_empty() {
             return swaps;
         }
+
+        // Count actual swap instructions
+        let actual_swap_count = Self::count_swap_instructions(instructions);
+
+        // If we found parsed swap instructions, use that count
+        // Otherwise fall back to DEX-based heuristics
+        let expected_swaps = if actual_swap_count > 0 {
+            actual_swap_count
+        } else {
+            dex_programs.len() // Fallback: assume 1 swap per DEX
+        };
 
         // Build detailed per-account balance change map
         // Structure: (account_index, mint) -> (pre_amount, post_amount, decimals)
@@ -669,133 +724,91 @@ impl MevAnalyzer {
         // Sort by absolute net change - smallest first
         tokens.sort_by(|a, b| a.1.abs().partial_cmp(&b.1.abs()).unwrap_or(std::cmp::Ordering::Equal));
 
-        // Build swaps based on DEX count
-        if dex_programs.len() == 2 && tokens.len() >= 2 {
-            // 2-swap arbitrage: A → B → A
-            // tokens[0] likely has smallest net change (could be intermediary or profit with slippage)
-            // tokens[1] has larger net change
+        // Build swaps based on actual swap count and token analysis
+        // For 2-token arbitrages (most common: A → B → A or A → B → A → B, etc.)
+        if tokens.len() >= 2 && expected_swaps >= 2 {
+            // tokens[0] likely has smallest net change (intermediary or equal split)
+            // tokens[1] has larger net change (profit token)
 
             // Determine which is the intermediary based on which has smaller absolute net change
-            let (intermediary_token, _intermediary_net, intermediary_decimals) = &tokens[0];
-            let (profit_token, _profit_net, profit_decimals) = &tokens[1];
+            let (token_a, _net_a, decimals_a) = &tokens[0];
+            let (token_b, _net_b, decimals_b) = &tokens[1];
 
             // For the swap amounts, we need to look at individual account changes
-            // Find the largest decreases and increases for each token
-            let mut intermediary_sent = 0.0;
-            let mut intermediary_received = 0.0;
-            let mut profit_sent = 0.0;
-            let mut profit_received = 0.0;
+            // Sum all sends and receives for each token
+            let mut token_a_sent = 0.0;
+            let mut token_a_received = 0.0;
+            let mut token_b_sent = 0.0;
+            let mut token_b_received = 0.0;
 
             for (mint, change, _) in &balance_changes {
-                if mint == intermediary_token {
+                if mint == token_a {
                     if *change < 0.0 {
-                        intermediary_sent += change.abs();
+                        token_a_sent += change.abs();
                     } else {
-                        intermediary_received += change.abs();
+                        token_a_received += change.abs();
                     }
-                } else if mint == profit_token {
+                } else if mint == token_b {
                     if *change < 0.0 {
-                        profit_sent += change.abs();
+                        token_b_sent += change.abs();
                     } else {
-                        profit_received += change.abs();
+                        token_b_received += change.abs();
                     }
                 }
             }
 
-            // Determine swap direction based on which token had larger throughput
-            // If intermediary had larger volume, path is: profit → intermediary → profit
-            // If profit had larger volume, path is: intermediary → profit → intermediary
+            // Determine starting token based on which had larger initial volume
+            // The token with larger sent amount likely started the arb
+            let starts_with_a = token_a_sent >= token_b_sent;
 
-            let intermediary_volume = intermediary_sent.max(intermediary_received);
-            let profit_volume = profit_sent.max(profit_received);
+            // Generate swaps based on expected count
+            // For multi-swap paths, we alternate between tokens
+            for i in 0..expected_swaps {
+                let swap_starts_with_a = if i % 2 == 0 { starts_with_a } else { !starts_with_a };
 
-            if profit_volume >= intermediary_volume {
-                // Path: profit_token → intermediary_token → profit_token
-                swaps.push(Swap {
-                    from_token: profit_token.clone(),
-                    from_amount: profit_sent,
-                    to_token: intermediary_token.clone(),
-                    to_amount: intermediary_received,
-                    dex_program: dex_programs[0].clone(),
-                    from_decimals: *profit_decimals,
-                    to_decimals: *intermediary_decimals,
-                });
+                // Assign DEX program (cycle through available DEXes)
+                let dex_idx = if dex_programs.len() == 1 {
+                    0
+                } else if dex_programs.len() == expected_swaps {
+                    i
+                } else {
+                    // More swaps than DEXes: later swaps use later DEXes
+                    // For 3 swaps on 2 DEXes: [0, 1, 1]
+                    i.min(dex_programs.len() - 1)
+                };
 
-                swaps.push(Swap {
-                    from_token: intermediary_token.clone(),
-                    from_amount: intermediary_sent,
-                    to_token: profit_token.clone(),
-                    to_amount: profit_received,
-                    dex_program: dex_programs[1].clone(),
-                    from_decimals: *intermediary_decimals,
-                    to_decimals: *profit_decimals,
-                });
-            } else {
-                // Path: intermediary_token → profit_token → intermediary_token
-                swaps.push(Swap {
-                    from_token: intermediary_token.clone(),
-                    from_amount: intermediary_sent,
-                    to_token: profit_token.clone(),
-                    to_amount: profit_received,
-                    dex_program: dex_programs[0].clone(),
-                    from_decimals: *intermediary_decimals,
-                    to_decimals: *profit_decimals,
-                });
-
-                swaps.push(Swap {
-                    from_token: profit_token.clone(),
-                    from_amount: profit_sent,
-                    to_token: intermediary_token.clone(),
-                    to_amount: intermediary_received,
-                    dex_program: dex_programs[1].clone(),
-                    from_decimals: *profit_decimals,
-                    to_decimals: *intermediary_decimals,
-                });
-            }
-        } else if dex_programs.len() == 3 && tokens.len() >= 2 {
-            // 3-swap arbitrage: try to reconstruct path
-            // Look for the token with smallest net change (likely intermediary in middle)
-            // and largest net change (profit token - start/end of cycle)
-
-            // For 3-token cycle: A → B → C → A
-            // We'll see: A decreases, B increases, B decreases, C increases, C decreases, A increases
-
-            // Simplified: just create swaps with available token info
-            if tokens.len() >= 3 {
-                let mut token_iter = tokens.iter().cycle();
-
-                for dex in &dex_programs {
-                    if let Some((from_token, _, from_decimals)) = token_iter.next() {
-                        if let Some((to_token, _, to_decimals)) = token_iter.next() {
-                            swaps.push(Swap {
-                                from_token: from_token.clone(),
-                                from_amount: 0.0, // Would need more complex analysis
-                                to_token: to_token.clone(),
-                                to_amount: 0.0,
-                                dex_program: dex.clone(),
-                                from_decimals: *from_decimals,
-                                to_decimals: *to_decimals,
-                            });
-                        }
-                    }
-                }
-            } else {
-                // Fallback for 3 DEX but only 2 tokens
-                for dex in &dex_programs {
+                if swap_starts_with_a {
+                    // A → B
+                    let from_amount = token_a_sent / (expected_swaps / 2) as f64;
+                    let to_amount = token_b_received / (expected_swaps / 2) as f64;
                     swaps.push(Swap {
-                        from_token: "unknown".to_string(),
-                        from_amount: 0.0,
-                        to_token: "unknown".to_string(),
-                        to_amount: 0.0,
-                        dex_program: dex.clone(),
-                        from_decimals: 9,
-                        to_decimals: 9,
+                        from_token: token_a.clone(),
+                        from_amount,
+                        to_token: token_b.clone(),
+                        to_amount,
+                        dex_program: dex_programs[dex_idx].clone(),
+                        from_decimals: *decimals_a,
+                        to_decimals: *decimals_b,
+                    });
+                } else {
+                    // B → A
+                    let from_amount = token_b_sent / (expected_swaps / 2) as f64;
+                    let to_amount = token_a_received / (expected_swaps / 2) as f64;
+                    swaps.push(Swap {
+                        from_token: token_b.clone(),
+                        from_amount,
+                        to_token: token_a.clone(),
+                        to_amount,
+                        dex_program: dex_programs[dex_idx].clone(),
+                        from_decimals: *decimals_b,
+                        to_decimals: *decimals_a,
                     });
                 }
             }
-        } else if dex_programs.len() > 3 {
-            // 4+ swap arbitrage - use placeholders
-            for dex in &dex_programs {
+        } else {
+            // Fallback for cases we can't analyze (< 2 tokens or < 2 swaps)
+            // Create placeholder swaps
+            for dex in dex_programs.iter().take(expected_swaps) {
                 swaps.push(Swap {
                     from_token: "unknown".to_string(),
                     from_amount: 0.0,
