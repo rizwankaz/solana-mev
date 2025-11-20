@@ -326,7 +326,6 @@ pub struct MevTransactionJson {
     pub programs: Vec<String>,
     pub program_addresses: Vec<String>,
     pub token_changes: Vec<TokenChangeJson>,
-    pub sol_change_lamports: i64,
     pub fee: Option<u64>,
     pub compute_units_consumed: Option<u64>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -414,7 +413,6 @@ pub fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, serde_
                         decimals: tc.decimals,
                     })
                     .collect(),
-                sol_change_lamports: event.sol_change_lamports,
                 fee: tx.fee(),
                 compute_units_consumed: tx.compute_units_consumed(),
                 swaps: swaps_json,
