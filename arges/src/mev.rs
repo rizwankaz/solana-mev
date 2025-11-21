@@ -558,10 +558,29 @@ impl MevAnalyzer {
     ///
     /// Note: Sandwich and JIT attacks are detected separately via multi-tx analysis
     /// Note: Token mints are NOT tracked as MEV (they're regular token creation, not value extraction)
-    fn detect_category(program_ids: &[String], _token_changes: &[TokenChange]) -> Option<MevCategory> {
+    fn detect_category(program_ids: &[String], token_changes: &[TokenChange]) -> Option<MevCategory> {
         let dex_count = program_ids.iter().filter(|p| ProgramRegistry::is_dex(p)).count();
         let lending_count = program_ids.iter().filter(|p| ProgramRegistry::is_lending(p)).count();
         let aggregator_count = program_ids.iter().filter(|p| ProgramRegistry::is_aggregator(p)).count();
+
+        // Log unknown programs that might be DEXes
+        // Look for programs we don't recognize when token swaps are happening
+        if !token_changes.is_empty() && dex_count < 2 {
+            for program_id in program_ids {
+                if !ProgramRegistry::is_dex(program_id)
+                    && !ProgramRegistry::is_lending(program_id)
+                    && !ProgramRegistry::is_aggregator(program_id)
+                    && program_id != ProgramRegistry::TOKEN_PROGRAM
+                    && program_id != ProgramRegistry::TOKEN_2022_PROGRAM
+                    && program_id != "11111111111111111111111111111111" // System program
+                    && program_id != "ComputeBudget111111111111111111111111111111"
+                    && program_id != "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL" // Associated Token Program
+                    && !program_id.starts_with("MemoSq") // Memo programs
+                {
+                    tracing::debug!("Unknown program in transaction with token changes: {}", program_id);
+                }
+            }
+        }
 
         // ATOMIC ARBITRAGE: Multiple DEX interactions in single transaction (buy low, sell high)
         // This is the dominant MEV type on Solana (50-74% of transactions per sandwiched.me)
