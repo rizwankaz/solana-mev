@@ -56,11 +56,19 @@ impl PriceOracle {
         }
     }
 
-    /// Fetch current prices for multiple tokens
-    pub async fn fetch_prices(&self, mints: &[String]) -> Result<HashMap<String, f64>> {
+    /// Fetch prices for multiple tokens at a specific timestamp
+    ///
+    /// If `publish_time` is provided, fetches historical prices from that Unix timestamp.
+    /// If `publish_time` is None, fetches the latest current prices.
+    pub async fn fetch_prices(&self, mints: &[String], publish_time: Option<i64>) -> Result<HashMap<String, f64>> {
         let mut prices = HashMap::new();
 
-        tracing::info!("attempting to fetch prices for {} tokens", mints.len());
+        if let Some(ts) = publish_time {
+            tracing::info!("attempting to fetch historical prices for {} tokens at timestamp {}", mints.len(), ts);
+        } else {
+            tracing::info!("attempting to fetch current prices for {} tokens", mints.len());
+        }
+
         for mint in mints {
             tracing::debug!("Mint: {}", mint);
         }
@@ -89,7 +97,13 @@ impl PriceOracle {
 
         // Build query parameters
         let ids_param = feed_ids.join("&ids[]=");
-        let url = format!("{}/v2/updates/price/latest?ids[]={}", self.base_url, ids_param);
+
+        // Use historical endpoint if timestamp provided, otherwise use latest
+        let url = if let Some(ts) = publish_time {
+            format!("{}/v2/updates/price/{}?ids[]={}", self.base_url, ts, ids_param)
+        } else {
+            format!("{}/v2/updates/price/latest?ids[]={}", self.base_url, ids_param)
+        };
 
         tracing::info!("fetching {} Pyth price feeds...", feed_ids.len());
         tracing::debug!("pyth url: {}", url);
@@ -166,9 +180,12 @@ impl PriceOracle {
         Ok(prices)
     }
 
-    /// Get price for a single token
-    pub async fn get_price(&self, mint: &str) -> Result<Option<f64>> {
-        let prices = self.fetch_prices(&[mint.to_string()]).await?;
+    /// Get price for a single token at a specific timestamp
+    ///
+    /// If `publish_time` is provided, fetches historical price from that Unix timestamp.
+    /// If `publish_time` is None, fetches the latest current price.
+    pub async fn get_price(&self, mint: &str, publish_time: Option<i64>) -> Result<Option<f64>> {
+        let prices = self.fetch_prices(&[mint.to_string()], publish_time).await?;
         Ok(prices.get(mint).copied())
     }
 
@@ -186,7 +203,7 @@ mod tests {
     async fn test_fetch_sol_price() {
         let oracle = PriceOracle::new();
         let result = oracle
-            .get_price("So11111111111111111111111111111111111111112")
+            .get_price("So11111111111111111111111111111111111111112", None)
             .await;
         assert!(result.is_ok());
         if let Ok(Some(price)) = result {
@@ -202,7 +219,7 @@ mod tests {
             "So11111111111111111111111111111111111111112".to_string(), // SOL
             "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v".to_string(), // USDC
         ];
-        let result = oracle.fetch_prices(&mints).await;
+        let result = oracle.fetch_prices(&mints, None).await;
         assert!(result.is_ok());
         if let Ok(prices) = result {
             println!("Prices: {:?}", prices);

@@ -458,9 +458,16 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
     }
 
     let mints_vec: Vec<String> = all_mints.into_iter().collect();
-    let prices = match oracle.fetch_prices(&mints_vec).await {
+
+    // Use historical prices from the block timestamp for accurate profitability analysis
+    let prices = match oracle.fetch_prices(&mints_vec, block.block_time).await {
         Ok(p) => {
-            tracing::info!("successfully fetched {} token prices from Pyth", p.len());
+            if block.block_time.is_some() {
+                tracing::info!("successfully fetched {} historical token prices from Pyth for block timestamp {}",
+                    p.len(), block.block_time.unwrap());
+            } else {
+                tracing::info!("successfully fetched {} current token prices from Pyth", p.len());
+            }
             p
         }
         Err(e) => {
