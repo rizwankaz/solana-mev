@@ -749,6 +749,10 @@ impl MevAnalyzer {
     /// Decode and extract swap instructions from inner instructions
     /// This properly handles both parsed and compiled instructions
     /// Treats any call to a known DEX program as a swap
+    ///
+    /// IMPORTANT: Skips aggregators (Jupiter, etc.) because they don't execute swaps themselves,
+    /// they just orchestrate calls to underlying DEXes. We want to extract swaps from the
+    /// actual DEX programs that execute the trades.
     fn extract_swap_instructions(
         instructions: &[UiInstruction],
         account_keys: &[String],
@@ -760,6 +764,10 @@ impl MevAnalyzer {
                 UiInstruction::Parsed(parsed_ui_ix) => {
                     match parsed_ui_ix {
                         UiParsedInstruction::Parsed(parsed_ix) => {
+                            // Skip aggregators - they orchestrate but don't execute swaps
+                            if ProgramRegistry::is_aggregator(&parsed_ix.program_id) {
+                                continue;
+                            }
                             // If the program is a known DEX, treat it as a swap
                             if ProgramRegistry::is_dex(&parsed_ix.program_id) {
                                 swap_instructions.push(SwapInstruction {
@@ -770,6 +778,10 @@ impl MevAnalyzer {
                             }
                         },
                         UiParsedInstruction::PartiallyDecoded(partial) => {
+                            // Skip aggregators - they orchestrate but don't execute swaps
+                            if ProgramRegistry::is_aggregator(&partial.program_id) {
+                                continue;
+                            }
                             // If the program is a known DEX, treat it as a swap
                             if ProgramRegistry::is_dex(&partial.program_id) {
                                 swap_instructions.push(SwapInstruction {
@@ -784,6 +796,10 @@ impl MevAnalyzer {
                 UiInstruction::Compiled(compiled_ix) => {
                     // Extract program ID from account keys
                     if let Some(program_id) = account_keys.get(compiled_ix.program_id_index as usize) {
+                        // Skip aggregators - they orchestrate but don't execute swaps
+                        if ProgramRegistry::is_aggregator(program_id) {
+                            continue;
+                        }
                         // If this is a DEX program, treat it as a swap
                         if ProgramRegistry::is_dex(program_id) {
                             // Convert account indices to pubkeys
