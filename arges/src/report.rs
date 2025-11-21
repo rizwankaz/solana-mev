@@ -498,32 +498,39 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
         // Calculate profitability
         let profitability = calculate_profitability(&event, tx, &prices);
 
-        mev_transactions.push(MevTransactionJson {
-            signature: event.signature.clone(),
-            signer: event.signer.clone(),
-            category: format!("{:?}", event.category).to_uppercase(),
-            success: event.success,
-            program_addresses: event.programs_involved.clone(),
-            token_changes: event.token_changes.iter()
-                .map(|tc| TokenChangeJson {
-                    token_address: tc.mint.clone(),
-                    token_name: TokenRegistry::token_name(&tc.mint),
-                    amount: tc.ui_amount_change,
-                    decimals: tc.decimals,
-                })
-                .collect(),
-            fee: tx.fee(),
-            priority_fee: tx.priority_fee(),
-            compute_units_consumed: tx.compute_units_consumed(),
-            swaps: swaps_json,
-            swap_count,
-            profitability: profitability.map(|p| ProfitabilityJson {
-                profit_usd: p.profit_usd,
-                fees_usd: p.fees_usd,
-                net_profit_usd: p.net_profit_usd,
-                is_profitable: p.is_profitable,
-            }),
-        });
+        // Only include profitable trades (or trades where we couldn't determine profitability)
+        let should_include = profitability.as_ref()
+            .map(|p| p.is_profitable)
+            .unwrap_or(true); // Include if we couldn't calculate profitability
+
+        if should_include {
+            mev_transactions.push(MevTransactionJson {
+                signature: event.signature.clone(),
+                signer: event.signer.clone(),
+                category: format!("{:?}", event.category).to_uppercase(),
+                success: event.success,
+                program_addresses: event.programs_involved.clone(),
+                token_changes: event.token_changes.iter()
+                    .map(|tc| TokenChangeJson {
+                        token_address: tc.mint.clone(),
+                        token_name: TokenRegistry::token_name(&tc.mint),
+                        amount: tc.ui_amount_change,
+                        decimals: tc.decimals,
+                    })
+                    .collect(),
+                fee: tx.fee(),
+                priority_fee: tx.priority_fee(),
+                compute_units_consumed: tx.compute_units_consumed(),
+                swaps: swaps_json,
+                swap_count,
+                profitability: profitability.map(|p| ProfitabilityJson {
+                    profit_usd: p.profit_usd,
+                    fees_usd: p.fees_usd,
+                    net_profit_usd: p.net_profit_usd,
+                    is_profitable: p.is_profitable,
+                }),
+            });
+        }
     }
 
     // Detect multi-transaction MEV events (sandwich, JIT)
