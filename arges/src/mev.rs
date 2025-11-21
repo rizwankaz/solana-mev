@@ -463,7 +463,7 @@ impl MevAnalyzer {
 
         // Detect individual swaps (for arbitrage transactions)
         let swaps = if category == MevCategory::Arbitrage {
-            Self::detect_swaps(instructions, account_keys, pre_token_balances, post_token_balances, &program_ids)
+            Self::detect_swaps(pre_token_balances, post_token_balances, &program_ids)
         } else {
             Vec::new()
         };
@@ -738,34 +738,31 @@ impl MevAnalyzer {
 
     /// Detect individual swaps in an arbitrage transaction
     ///
-    /// This function properly decodes swap instructions and maps them to token balance changes.
+    /// This function maps pool balance changes to DEX programs.
     ///
     /// Strategy:
-    /// 1. Extract all swap instructions from inner instructions (handles compiled instructions)
+    /// 1. Use program_ids to get DEX programs in chronological order (includes inner instructions)
     /// 2. Group balance changes by pool owner (exclude signer)
     /// 3. For each pool: positive change = from_token (user sent), negative change = to_token (user received)
     /// 4. Match pools to DEX programs to build accurate swap sequence
     fn detect_swaps(
-        instructions: &[UiInstruction],
-        account_keys: &[String],
         pre_token_balances: &[UiTransactionTokenBalance],
         post_token_balances: &[UiTransactionTokenBalance],
-        _program_ids: &[String],
+        program_ids: &[String],
     ) -> Vec<Swap> {
         let mut swaps = Vec::new();
 
-        // Extract all swap instructions with account information
-        let swap_instructions = Self::extract_swap_instructions(instructions, account_keys);
+        // Use program_ids to get DEX programs in chronological order
+        // program_ids already includes all programs from both top-level and inner instructions
+        // Filter to just DEX programs to get the swap sequence
+        let dex_programs_in_order: Vec<String> = program_ids.iter()
+            .filter(|p| ProgramRegistry::is_dex(p))
+            .cloned()
+            .collect();
 
-        if swap_instructions.is_empty() {
+        if dex_programs_in_order.is_empty() {
             return swaps;
         }
-
-        // Keep all swap instructions in chronological order (don't deduplicate)
-        // Each swap instruction represents a separate swap, even if using the same DEX
-        let dex_programs_in_order: Vec<String> = swap_instructions.iter()
-            .map(|si| si.dex_program.clone())
-            .collect();
 
         // Build per-owner balance map: owner -> mint -> (pre, post, decimals)
         // This groups balance changes by pool/account owner
@@ -874,68 +871,6 @@ impl MevAnalyzer {
                     from_decimals,
                     to_decimals,
                 });
-            }
-        }
-
-        // If we didn't find swaps via pool matching, try the fallback approach
-        if swaps.is_empty() {
-            // Fallback: Try to extract tokens from instruction account indices
-            // This is useful for failed transactions that have no post-balance changes
-
-            // Build account_index -> (token_mint, decimals) mapping from pre_token_balances
-            let mut account_to_token: HashMap<u8, (String, u8)> = HashMap::new();
-            for pre in pre_token_balances {
-                account_to_token.insert(pre.account_index, (pre.mint.clone(), pre.ui_token_amount.decimals));
-            }
-
-            // Try to extract token information from swap instruction account indices
-            for swap_ix in &swap_instructions {
-                let mut tokens_in_swap: Vec<(String, u8)> = Vec::new();
-
-                // Collect all token accounts involved in this swap instruction
-                for &account_idx in &swap_ix.account_indices {
-                    if let Some((mint, decimals)) = account_to_token.get(&account_idx) {
-                        // Only add if not already in the list (avoid duplicates)
-                        if !tokens_in_swap.iter().any(|(m, _)| m == mint) {
-                            tokens_in_swap.push((mint.clone(), *decimals));
-                        }
-                    }
-                }
-
-                // If we found at least 2 distinct tokens, use them
-                if tokens_in_swap.len() >= 2 {
-                    swaps.push(Swap {
-                        from_token: tokens_in_swap[0].0.clone(),
-                        from_amount: 0.0, // No amount data available for failed transactions
-                        to_token: tokens_in_swap[1].0.clone(),
-                        to_amount: 0.0,
-                        dex_program: swap_ix.dex_program.clone(),
-                        from_decimals: tokens_in_swap[0].1,
-                        to_decimals: tokens_in_swap[1].1,
-                    });
-                } else if tokens_in_swap.len() == 1 {
-                    // Only found one token, but that's better than nothing
-                    swaps.push(Swap {
-                        from_token: tokens_in_swap[0].0.clone(),
-                        from_amount: 0.0,
-                        to_token: "unknown".to_string(),
-                        to_amount: 0.0,
-                        dex_program: swap_ix.dex_program.clone(),
-                        from_decimals: tokens_in_swap[0].1,
-                        to_decimals: 9,
-                    });
-                } else {
-                    // No tokens found in account indices, fall back to unknown
-                    swaps.push(Swap {
-                        from_token: "unknown".to_string(),
-                        from_amount: 0.0,
-                        to_token: "unknown".to_string(),
-                        to_amount: 0.0,
-                        dex_program: swap_ix.dex_program.clone(),
-                        from_decimals: 9,
-                        to_decimals: 9,
-                    });
-                }
             }
         }
 
