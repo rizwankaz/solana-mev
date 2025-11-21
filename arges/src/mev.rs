@@ -74,6 +74,22 @@ pub struct MevEvent {
     pub swaps: Vec<Swap>,
     /// Number of swaps detected
     pub swap_count: usize,
+    /// Profitability analysis (requires price oracle)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profitability: Option<Profitability>,
+}
+
+/// Profitability analysis for MEV event
+#[derive(Debug, Clone, Serialize)]
+pub struct Profitability {
+    /// Token profit in USD
+    pub profit_usd: f64,
+    /// Total fees (tx_fee + priority_fee) in USD
+    pub fees_usd: f64,
+    /// Net profit after fees in USD
+    pub net_profit_usd: f64,
+    /// Whether this MEV is profitable after fees
+    pub is_profitable: bool,
 }
 
 /// Multi-transaction MEV event (sandwich, JIT)
@@ -483,6 +499,7 @@ impl MevAnalyzer {
             success,
             swaps,
             swap_count,
+            profitability: None, // Calculated later with price oracle
         })
     }
 

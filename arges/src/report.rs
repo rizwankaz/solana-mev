@@ -332,6 +332,17 @@ pub struct MevTransactionJson {
     pub swaps: Vec<SwapJson>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub swap_count: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profitability: Option<ProfitabilityJson>,
+}
+
+/// JSON structure for profitability analysis
+#[derive(Serialize)]
+pub struct ProfitabilityJson {
+    pub profit_usd: f64,
+    pub fees_usd: f64,
+    pub net_profit_usd: f64,
+    pub is_profitable: bool,
 }
 
 /// JSON structure for individual swap
@@ -372,60 +383,140 @@ pub struct MultiTxMevJson {
     pub total_sol_profit_lamports: i64,
 }
 
-/// Format MEV validation report as JSON
-pub fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, serde_json::Error> {
+/// Calculate profitability for an MEV event
+fn calculate_profitability(
+    event: &MevEvent,
+    tx: &crate::types::FetchedTransaction,
+    prices: &std::collections::HashMap<String, f64>,
+) -> Option<crate::mev::Profitability> {
+    use crate::price_oracle::PriceOracle;
+
+    // Calculate token profit in USD
+    let mut profit_usd = 0.0;
+    let mut has_prices = false;
+
+    for token_change in &event.token_changes {
+        if let Some(&price) = prices.get(&token_change.mint) {
+            profit_usd += token_change.ui_amount_change * price;
+            has_prices = true;
+        }
+    }
+
+    // If we don't have any price data, return None
+    if !has_prices {
+        return None;
+    }
+
+    // Calculate total fees in USD (tx_fee + priority_fee)
+    let sol_price = prices.get("So11111111111111111111111111111111111111112").copied().unwrap_or(0.0);
+
+    let tx_fee_sol = tx.fee().map(PriceOracle::lamports_to_sol).unwrap_or(0.0);
+    let priority_fee_sol = tx.priority_fee().map(PriceOracle::lamports_to_sol).unwrap_or(0.0);
+    let total_fees_sol = tx_fee_sol + priority_fee_sol;
+    let fees_usd = total_fees_sol * sol_price;
+
+    // Calculate net profit
+    let net_profit_usd = profit_usd - fees_usd;
+    let is_profitable = net_profit_usd > 0.0;
+
+    Some(crate::mev::Profitability {
+        profit_usd,
+        fees_usd,
+        net_profit_usd,
+        is_profitable,
+    })
+}
+
+/// Format MEV validation report as JSON with profitability analysis
+pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, serde_json::Error> {
+    use crate::price_oracle::PriceOracle;
+    use std::collections::{HashMap, HashSet};
+
     let mut mev_transactions = Vec::new();
     let mut tx_with_mev = Vec::new();
+    let mut mev_events_with_tx = Vec::new();
 
     // Collect all MEV events with their transaction indices
     for (idx, tx) in block.transactions.iter().enumerate() {
         if let Some(event) = tx.analyze_mev() {
-            let swaps_json: Vec<SwapJson> = event.swaps.iter()
-                .map(|swap| SwapJson {
-                    from_token: swap.from_token.clone(),
-                    from_token_name: TokenRegistry::token_name(&swap.from_token),
-                    from_amount: swap.from_amount,
-                    to_token: swap.to_token.clone(),
-                    to_token_name: TokenRegistry::token_name(&swap.to_token),
-                    to_amount: swap.to_amount,
-                    dex_program: swap.dex_program.clone(),
-                    dex_name: ProgramRegistry::program_name(&swap.dex_program),
-                    from_decimals: swap.from_decimals,
-                    to_decimals: swap.to_decimals,
-                })
-                .collect();
-
-            let swap_count = if event.swap_count > 0 {
-                Some(event.swap_count)
-            } else {
-                None
-            };
-
-            mev_transactions.push(MevTransactionJson {
-                signature: event.signature.clone(),
-                signer: event.signer.clone(),
-                category: format!("{:?}", event.category).to_uppercase(),
-                success: event.success,
-                program_addresses: event.programs_involved.clone(),
-                token_changes: event.token_changes.iter()
-                    .map(|tc| TokenChangeJson {
-                        token_address: tc.mint.clone(),
-                        token_name: TokenRegistry::token_name(&tc.mint),
-                        amount: tc.ui_amount_change,
-                        decimals: tc.decimals,
-                    })
-                    .collect(),
-                fee: tx.fee(),
-                priority_fee: tx.priority_fee(),
-                compute_units_consumed: tx.compute_units_consumed(),
-                swaps: swaps_json,
-                swap_count,
-            });
-
+            mev_events_with_tx.push((event.clone(), tx));
             tx_with_mev.push((idx, tx, Some(event)));
         } else {
             tx_with_mev.push((idx, tx, None));
         }
+    }
+
+    // Fetch prices for all unique tokens in MEV events
+    let oracle = PriceOracle::new();
+    let mut all_mints: HashSet<String> = HashSet::new();
+
+    // Add SOL mint for fee calculations
+    all_mints.insert("So11111111111111111111111111111111111111112".to_string());
+
+    // Collect all token mints from token changes
+    for (event, _) in &mev_events_with_tx {
+        for token_change in &event.token_changes {
+            all_mints.insert(token_change.mint.clone());
+        }
+    }
+
+    let mints_vec: Vec<String> = all_mints.into_iter().collect();
+    let prices = oracle.fetch_prices(&mints_vec).await.unwrap_or_default();
+
+    tracing::info!("Fetched {} token prices from Pyth", prices.len());
+
+    // Build MEV transactions with profitability
+    for (event, tx) in mev_events_with_tx {
+        let swaps_json: Vec<SwapJson> = event.swaps.iter()
+            .map(|swap| SwapJson {
+                from_token: swap.from_token.clone(),
+                from_token_name: TokenRegistry::token_name(&swap.from_token),
+                from_amount: swap.from_amount,
+                to_token: swap.to_token.clone(),
+                to_token_name: TokenRegistry::token_name(&swap.to_token),
+                to_amount: swap.to_amount,
+                dex_program: swap.dex_program.clone(),
+                dex_name: ProgramRegistry::program_name(&swap.dex_program),
+                from_decimals: swap.from_decimals,
+                to_decimals: swap.to_decimals,
+            })
+            .collect();
+
+        let swap_count = if event.swap_count > 0 {
+            Some(event.swap_count)
+        } else {
+            None
+        };
+
+        // Calculate profitability
+        let profitability = calculate_profitability(&event, tx, &prices);
+
+        mev_transactions.push(MevTransactionJson {
+            signature: event.signature.clone(),
+            signer: event.signer.clone(),
+            category: format!("{:?}", event.category).to_uppercase(),
+            success: event.success,
+            program_addresses: event.programs_involved.clone(),
+            token_changes: event.token_changes.iter()
+                .map(|tc| TokenChangeJson {
+                    token_address: tc.mint.clone(),
+                    token_name: TokenRegistry::token_name(&tc.mint),
+                    amount: tc.ui_amount_change,
+                    decimals: tc.decimals,
+                })
+                .collect(),
+            fee: tx.fee(),
+            priority_fee: tx.priority_fee(),
+            compute_units_consumed: tx.compute_units_consumed(),
+            swaps: swaps_json,
+            swap_count,
+            profitability: profitability.map(|p| ProfitabilityJson {
+                profit_usd: p.profit_usd,
+                fees_usd: p.fees_usd,
+                net_profit_usd: p.net_profit_usd,
+                is_profitable: p.is_profitable,
+            }),
+        });
     }
 
     // Detect multi-transaction MEV events (sandwich, JIT)

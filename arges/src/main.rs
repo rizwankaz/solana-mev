@@ -1,5 +1,6 @@
 mod fetcher;
 mod mev;
+mod price_oracle;
 mod report;
 mod stream;
 mod types;
@@ -61,7 +62,7 @@ async fn main() -> anyhow::Result<()> {
     // fetch block with MEV validation report
     match fetcher.fetch_block(target_slot).await {
         Ok(block) => {
-            match format_mev_validation_json(&block) {
+            match format_mev_validation_json(&block).await {
                 Ok(json) => println!("{}", json),
                 Err(e) => error!("failed to serialize JSON: {:?}", e),
             }
