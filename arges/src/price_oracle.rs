@@ -117,19 +117,28 @@ impl PriceOracle {
         // Parse prices and map back to mint addresses
         tracing::info!("Parsing {} price feeds from Pyth response", pyth_response.parsed.len());
         for feed in pyth_response.parsed {
-            tracing::debug!("Pyth returned feed ID: {}", feed.id);
+            // Normalize the returned feed ID (remove 0x prefix if present, lowercase)
+            let normalized_returned_id = feed.id.trim().trim_start_matches("0x").to_lowercase();
+            tracing::info!("Pyth returned feed ID: {} (normalized: {})", feed.id, normalized_returned_id);
 
             // Find the mint that corresponds to this feed ID
+            let mut matched = false;
             for mint in mints {
                 if let Some(feed_id) = Self::get_price_feed_id(mint) {
-                    // Pyth returns IDs with 0x prefix, our mappings have 0x prefix
-                    // Do case-insensitive comparison
-                    let feed_id_lower = feed_id.to_lowercase();
-                    let returned_id_lower = feed.id.to_lowercase();
+                    // Normalize our stored feed ID (remove 0x prefix, lowercase)
+                    let normalized_stored_id = feed_id.trim_start_matches("0x").to_lowercase();
 
-                    tracing::debug!("Comparing: {} vs {}", returned_id_lower, feed_id_lower);
+                    tracing::debug!(
+                        "Comparing Pyth ID '{}' with stored ID '{}' for {}",
+                        normalized_returned_id,
+                        normalized_stored_id,
+                        crate::mev::TokenRegistry::token_name(mint)
+                    );
 
-                    if returned_id_lower == feed_id_lower {
+                    if normalized_returned_id == normalized_stored_id {
+                        matched = true;
+                        tracing::info!("✓ Matched feed {} to mint {}", feed.id, crate::mev::TokenRegistry::token_name(mint));
+
                         // Parse price: price * 10^expo
                         if let Ok(price_val) = feed.price.price.parse::<f64>() {
                             let expo = feed.price.expo;
@@ -143,8 +152,13 @@ impl PriceOracle {
                         } else {
                             tracing::warn!("Failed to parse price value: {}", feed.price.price);
                         }
+                        break;
                     }
                 }
+            }
+
+            if !matched {
+                tracing::warn!("✗ No mint mapping found for Pyth feed ID: {} (normalized: {})", feed.id, normalized_returned_id);
             }
         }
 
