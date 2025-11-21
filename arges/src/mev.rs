@@ -713,11 +713,18 @@ impl MevAnalyzer {
         // Build per-owner balance map: owner -> mint -> (pre, post, decimals)
         // This groups balance changes by pool/account owner
         let mut owner_balances: HashMap<String, HashMap<String, (f64, f64, u8)>> = HashMap::new();
+        // Track the order in which we first see each owner (to preserve chronological order)
+        let mut owner_order: Vec<String> = Vec::new();
 
         // Collect pre-balances grouped by owner
         for pre in pre_token_balances {
             use solana_transaction_status::option_serializer::OptionSerializer;
             if let OptionSerializer::Some(ref owner) = pre.owner {
+                // Track first appearance of this owner
+                if !owner_balances.contains_key(owner) {
+                    owner_order.push(owner.clone());
+                }
+
                 let owner_map = owner_balances.entry(owner.clone()).or_insert_with(HashMap::new);
                 let amount = pre.ui_token_amount.ui_amount.unwrap_or(0.0);
                 owner_map.insert(pre.mint.clone(), (amount, 0.0, pre.ui_token_amount.decimals));
@@ -728,6 +735,11 @@ impl MevAnalyzer {
         for post in post_token_balances {
             use solana_transaction_status::option_serializer::OptionSerializer;
             if let OptionSerializer::Some(ref owner) = post.owner {
+                // Track first appearance of this owner
+                if !owner_balances.contains_key(owner) {
+                    owner_order.push(owner.clone());
+                }
+
                 let owner_map = owner_balances.entry(owner.clone()).or_insert_with(HashMap::new);
                 let amount = post.ui_token_amount.ui_amount.unwrap_or(0.0);
 
@@ -739,26 +751,28 @@ impl MevAnalyzer {
             }
         }
 
-        // Calculate balance changes per owner (pool)
+        // Calculate balance changes per owner (pool) in chronological order
         // For each pool: positive change = token received from user (from_token)
         //                negative change = token sent to user (to_token)
         let mut pool_changes: Vec<(String, Vec<(String, f64, u8)>)> = Vec::new(); // (owner, [(mint, change, decimals)])
 
-        for (owner, mint_map) in &owner_balances {
-            let mut changes: Vec<(String, f64, u8)> = Vec::new();
-            for (mint, (pre, post, decimals)) in mint_map {
-                let change = post - pre;
-                if change.abs() > 1e-12 {
-                    changes.push((mint.clone(), change, *decimals));
+        // Iterate through owners in the order we first encountered them
+        for owner in &owner_order {
+            if let Some(mint_map) = owner_balances.get(owner) {
+                let mut changes: Vec<(String, f64, u8)> = Vec::new();
+                for (mint, (pre, post, decimals)) in mint_map {
+                    let change = post - pre;
+                    if change.abs() > 1e-12 {
+                        changes.push((mint.clone(), change, *decimals));
+                    }
                 }
-            }
-            if !changes.is_empty() {
-                pool_changes.push((owner.clone(), changes));
+                if !changes.is_empty() {
+                    pool_changes.push((owner.clone(), changes));
+                }
             }
         }
 
-        // Sort pool_changes by owner address for consistent ordering
-        pool_changes.sort_by(|a, b| a.0.cmp(&b.0));
+        // Pools are now in chronological order based on first appearance in balance data
 
         // Create swaps from pool balance changes
         // Iterate through pool changes and assign DEX programs
