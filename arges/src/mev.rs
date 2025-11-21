@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use solana_transaction_status::{UiInstruction, UiParsedInstruction, UiTransactionTokenBalance, UiCompiledInstruction};
 use serde::Serialize;
 
@@ -722,8 +722,8 @@ impl MevAnalyzer {
             }
         }
 
-        // Simple approach: create one swap per swap instruction
-        // Match swaps to token pairs based on chronological order and balance changes
+        // For 2-token arbitrage, deduplicate swap instructions by DEX program
+        // to avoid counting the same swap multiple times
         if token_volumes.len() >= 2 {
             // Sort by volume to identify primary tokens
             token_volumes.sort_by(|a, b| {
@@ -734,18 +734,28 @@ impl MevAnalyzer {
             let (token_a, a_sent, a_received, a_decimals) = tokens[0];
             let (token_b, b_sent, b_received, b_decimals) = tokens.get(1).unwrap_or(&tokens[0]);
 
-            // Build swaps alternating between tokens
-            let swap_count = swap_instructions.len();
-            for (i, swap_ix) in swap_instructions.iter().enumerate() {
+            // Deduplicate swap instructions by DEX program to get unique swaps
+            let mut unique_dex_swaps: Vec<&SwapInstruction> = Vec::new();
+            let mut seen_dexes: HashSet<String> = HashSet::new();
+            for swap_ix in &swap_instructions {
+                if !seen_dexes.contains(&swap_ix.dex_program) {
+                    unique_dex_swaps.push(swap_ix);
+                    seen_dexes.insert(swap_ix.dex_program.clone());
+                }
+            }
+
+            // For 2-token arbitrage, pattern is: A → B → A
+            // Build swaps based on unique DEX programs
+            for (i, swap_ix) in unique_dex_swaps.iter().enumerate() {
                 let (from_token, from_amount, from_decimals, to_token, to_amount, to_decimals) =
                     if i % 2 == 0 {
-                        // Even swaps: primary token -> secondary token
-                        (token_a.clone(), a_sent / (swap_count as f64 / 2.0), *a_decimals,
-                         token_b.clone(), b_received / (swap_count as f64 / 2.0), *b_decimals)
+                        // Even swaps: token A → token B
+                        (token_a.clone(), *a_sent, *a_decimals,
+                         token_b.clone(), *b_received, *b_decimals)
                     } else {
-                        // Odd swaps: secondary token -> primary token
-                        (token_b.clone(), b_sent / (swap_count as f64 / 2.0), *b_decimals,
-                         token_a.clone(), a_received / (swap_count as f64 / 2.0), *a_decimals)
+                        // Odd swaps: token B → token A
+                        (token_b.clone(), *b_sent, *b_decimals,
+                         token_a.clone(), *a_received, *a_decimals)
                     };
 
                 swaps.push(Swap {
