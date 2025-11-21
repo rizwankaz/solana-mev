@@ -88,8 +88,6 @@ pub struct Profitability {
     pub fees_usd: f64,
     /// Net profit after fees in USD
     pub net_profit_usd: f64,
-    /// Whether this MEV is profitable after fees
-    pub is_profitable: bool,
 }
 
 /// Multi-transaction MEV event (sandwich, JIT)

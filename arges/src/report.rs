@@ -342,7 +342,6 @@ pub struct ProfitabilityJson {
     pub profit_usd: f64,
     pub fees_usd: f64,
     pub net_profit_usd: f64,
-    pub is_profitable: bool,
 }
 
 /// JSON structure for individual swap
@@ -417,13 +416,11 @@ fn calculate_profitability(
 
     // Calculate net profit
     let net_profit_usd = profit_usd - fees_usd;
-    let is_profitable = net_profit_usd > 0.0;
 
     Some(crate::mev::Profitability {
         profit_usd,
         fees_usd,
         net_profit_usd,
-        is_profitable,
     })
 }
 
@@ -500,7 +497,7 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
 
         // Only include profitable trades (or trades where we couldn't determine profitability)
         let should_include = profitability.as_ref()
-            .map(|p| p.is_profitable)
+            .map(|p| p.net_profit_usd > 0.0)
             .unwrap_or(true); // Include if we couldn't calculate profitability
 
         if should_include {
@@ -527,7 +524,6 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
                     profit_usd: p.profit_usd,
                     fees_usd: p.fees_usd,
                     net_profit_usd: p.net_profit_usd,
-                    is_profitable: p.is_profitable,
                 }),
             });
         }
