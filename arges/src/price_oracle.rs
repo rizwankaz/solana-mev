@@ -60,13 +60,30 @@ impl PriceOracle {
     pub async fn fetch_prices(&self, mints: &[String]) -> Result<HashMap<String, f64>> {
         let mut prices = HashMap::new();
 
+        tracing::info!("Attempting to fetch prices for {} mints", mints.len());
+        for mint in mints {
+            tracing::debug!("Mint: {}", mint);
+        }
+
         // Get price feed IDs for all mints
         let feed_ids: Vec<String> = mints
             .iter()
-            .filter_map(|mint| Self::get_price_feed_id(mint).map(|id| id.to_string()))
+            .filter_map(|mint| {
+                let feed_id = Self::get_price_feed_id(mint).map(|id| id.to_string());
+                if let Some(ref id) = feed_id {
+                    tracing::info!("Found price feed for {}: {}",
+                        crate::mev::TokenRegistry::token_name(mint), id);
+                } else {
+                    tracing::warn!("No price feed mapping for token: {}", mint);
+                }
+                feed_id
+            })
             .collect();
 
+        tracing::info!("Found {} price feed IDs", feed_ids.len());
+
         if feed_ids.is_empty() {
+            tracing::warn!("No price feeds to fetch, returning empty prices");
             return Ok(prices);
         }
 
