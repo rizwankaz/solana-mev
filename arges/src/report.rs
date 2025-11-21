@@ -314,6 +314,8 @@ pub struct MevValidationJson {
     pub mev_transactions: Vec<MevTransactionJson>,
     pub sandwich_attacks: Vec<MultiTxMevJson>,
     pub jit_attacks: Vec<MultiTxMevJson>,
+    /// Total net profit in USD across all MEV events in this block
+    pub total_net_profit_usd: f64,
 }
 
 /// JSON structure for individual MEV transaction
@@ -502,10 +504,11 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
         // Calculate profitability
         let profitability = calculate_profitability(&event, tx, &prices);
 
-        // Only include profitable trades (or trades where we couldn't determine profitability)
-        let should_include = profitability.as_ref()
+        // Only include successful and profitable trades
+        // Exclude failed transactions and unprofitable swaps
+        let should_include = event.success && profitability.as_ref()
             .map(|p| p.net_profit_usd > 0.0)
-            .unwrap_or(true); // Include if we couldn't calculate profitability
+            .unwrap_or(false); // Exclude if we couldn't calculate profitability
 
         if should_include {
             mev_transactions.push(MevTransactionJson {
@@ -573,6 +576,12 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
 
     let mev_count = mev_transactions.len();
 
+    // Calculate total net profit across all MEV events in this block
+    let total_net_profit_usd: f64 = mev_transactions.iter()
+        .filter_map(|tx| tx.profitability.as_ref())
+        .map(|p| p.net_profit_usd)
+        .sum();
+
     let report = MevValidationJson {
         slot: block.slot,
         blockhash: block.blockhash.clone(),
@@ -582,6 +591,7 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
         mev_transactions,
         sandwich_attacks,
         jit_attacks,
+        total_net_profit_usd,
     };
 
     serde_json::to_string_pretty(&report)
