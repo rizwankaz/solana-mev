@@ -222,6 +222,67 @@ impl MevSummary {
     }
 }
 
+/// Known token addresses and metadata
+pub struct TokenRegistry;
+
+impl TokenRegistry {
+    // Major stablecoins
+    pub const USDC: &'static str = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+    pub const USDT: &'static str = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
+    pub const USDS: &'static str = "USDSwr9ApdHk5bvJKMjzff41FfuX8bSxdKcR81vTwcA";
+    pub const PYUSD: &'static str = "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo";
+
+    // Wrapped SOL
+    pub const WSOL: &'static str = "So11111111111111111111111111111111111111112";
+
+    // Major tokens
+    pub const JUP: &'static str = "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN";
+    pub const BONK: &'static str = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263";
+    pub const WIF: &'static str = "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm";
+    pub const POPCAT: &'static str = "7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr";
+    pub const MEW: &'static str = "MEW1gQWJ3nEXg2qgERiKu7FAFj79PHvQVREQUzScPP5";
+    pub const PYTH: &'static str = "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3";
+    pub const JTO: &'static str = "jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL";
+    pub const ORCA: &'static str = "orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE";
+    pub const RAY: &'static str = "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R";
+    pub const DARK: &'static str = "FmQ7v2QUqXVVtAXkngBh3Mwx7s3mKT55nQ5Z673dURYS";
+
+    // Wrapped assets
+    pub const WBTC: &'static str = "3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh";
+    pub const WETH: &'static str = "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs";
+
+    /// Get human-readable name for a known token
+    pub fn token_name(mint: &str) -> String {
+        match mint {
+            Self::USDC => "USDC".to_string(),
+            Self::USDT => "USDT".to_string(),
+            Self::USDS => "USDS".to_string(),
+            Self::PYUSD => "PYUSD".to_string(),
+            Self::WSOL => "SOL".to_string(),
+            Self::JUP => "JUP".to_string(),
+            Self::BONK => "BONK".to_string(),
+            Self::WIF => "WIF".to_string(),
+            Self::POPCAT => "POPCAT".to_string(),
+            Self::MEW => "MEW".to_string(),
+            Self::PYTH => "PYTH".to_string(),
+            Self::JTO => "JTO".to_string(),
+            Self::ORCA => "ORCA".to_string(),
+            Self::RAY => "RAY".to_string(),
+            Self::DARK => "DARK".to_string(),
+            Self::WBTC => "WBTC".to_string(),
+            Self::WETH => "WETH".to_string(),
+            _ => {
+                // Truncate unknown tokens for readability
+                if mint.len() > 10 {
+                    format!("{}...{}", &mint[..6], &mint[mint.len()-4..])
+                } else {
+                    mint.to_string()
+                }
+            }
+        }
+    }
+}
+
 /// Known program IDs for MEV detection
 pub struct ProgramRegistry;
 
