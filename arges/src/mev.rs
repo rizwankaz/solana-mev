@@ -311,7 +311,9 @@ impl ProgramRegistry {
     pub const PHOENIX: &'static str = "PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY";
     pub const METEORA_DAMM_V2: &'static str = "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG";
     pub const METEORA_DLMM: &'static str = "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo";
+    pub const METEORA_POOLS: &'static str = "Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB"; // Dynamic AMM
     pub const LIFINITY_V2: &'static str = "EewxydAPCCVuNEyrVN68PuSYdQ7wKn27V9Gjeoi8dy3S";
+    pub const TESSERA_V4: &'static str = "TessVxmKMfMPSkxMCyp4VzrKkH9SZxKHuXEL3GLQH"; // Wintermute prop AMM
     // Anchor-based DEXs
     pub const OPENBOOK_V2: &'static str = "opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb"; // Anchor
     pub const DRIFT_PROTOCOL: &'static str = "dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH"; // Anchor
@@ -353,7 +355,9 @@ impl ProgramRegistry {
                 | Self::PHOENIX
                 | Self::METEORA_DAMM_V2
                 | Self::METEORA_DLMM
+                | Self::METEORA_POOLS
                 | Self::LIFINITY_V2
+                | Self::TESSERA_V4
                 | Self::OPENBOOK_V2
                 | Self::DRIFT_PROTOCOL
                 | Self::SABER
@@ -394,12 +398,15 @@ impl ProgramRegistry {
             Self::PHOENIX => "Phoenix".to_string(),
             Self::METEORA_DAMM_V2 => "Meteora DAMM V2".to_string(),
             Self::METEORA_DLMM => "Meteora DLMM".to_string(),
+            Self::METEORA_POOLS => "Meteora Pools".to_string(),
             Self::LIFINITY_V2 => "Lifinity V2".to_string(),
+            Self::TESSERA_V4 => "TesseraV4".to_string(),
             Self::OPENBOOK_V2 => "OpenBook V2".to_string(),
             Self::DRIFT_PROTOCOL => "Drift Protocol".to_string(),
             Self::SABER => "Saber".to_string(),
             Self::MARINADE_FINANCE => "Marinade Finance".to_string(),
             Self::SANCTUM => "Sanctum".to_string(),
+            Self::PUMP_FUN => "Pump.fun".to_string(),
             Self::MARGINFI_V2 => "MarginFi V2".to_string(),
             Self::SOLEND => "Solend".to_string(),
             Self::KAMINO_LEND => "Kamino Lend".to_string(),
