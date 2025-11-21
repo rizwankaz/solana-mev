@@ -673,6 +673,7 @@ impl MevAnalyzer {
 
     /// Decode and extract swap instructions from inner instructions
     /// This properly handles both parsed and compiled instructions
+    /// Treats any call to a known DEX program as a swap
     fn extract_swap_instructions(
         instructions: &[UiInstruction],
         account_keys: &[String],
@@ -684,31 +685,17 @@ impl MevAnalyzer {
                 UiInstruction::Parsed(parsed_ui_ix) => {
                     match parsed_ui_ix {
                         UiParsedInstruction::Parsed(parsed_ix) => {
-                            // Check if this is a parsed swap instruction
-                            if let Some(instruction_type) = parsed_ix.parsed.get("type").and_then(|v| v.as_str()) {
-                                let lower_type = instruction_type.to_lowercase();
-                                if lower_type.contains("swap") {
-                                    // twoHopSwap counts as 2 swaps
-                                    let count = if lower_type.contains("twohop") || lower_type.contains("two_hop") {
-                                        2
-                                    } else {
-                                        1
-                                    };
-
-                                    for _ in 0..count {
-                                        swap_instructions.push(SwapInstruction {
-                                            dex_program: parsed_ix.program_id.clone(),
-                                            account_indices: Vec::new(), // Parsed instructions don't expose account indices easily
-                                        });
-                                    }
-                                }
+                            // If the program is a known DEX, treat it as a swap
+                            if ProgramRegistry::is_dex(&parsed_ix.program_id) {
+                                swap_instructions.push(SwapInstruction {
+                                    dex_program: parsed_ix.program_id.clone(),
+                                    account_indices: Vec::new(), // Parsed instructions don't expose account indices
+                                });
                             }
                         },
                         UiParsedInstruction::PartiallyDecoded(partial) => {
-                            // Check if the program is a known DEX
+                            // If the program is a known DEX, treat it as a swap
                             if ProgramRegistry::is_dex(&partial.program_id) {
-                                // PartiallyDecoded instructions have instruction data
-                                // If a DEX program is called, it's likely a swap
                                 swap_instructions.push(SwapInstruction {
                                     dex_program: partial.program_id.clone(),
                                     account_indices: Vec::new(), // PartiallyDecoded uses account pubkeys, not indices
@@ -720,9 +707,8 @@ impl MevAnalyzer {
                 UiInstruction::Compiled(compiled_ix) => {
                     // Extract program ID from account keys
                     if let Some(program_id) = account_keys.get(compiled_ix.program_id_index as usize) {
-                        // Check if this is a DEX program
+                        // If this is a DEX program, treat it as a swap
                         if ProgramRegistry::is_dex(program_id) {
-                            // For compiled instructions, each call to a DEX is likely a swap
                             swap_instructions.push(SwapInstruction {
                                 dex_program: program_id.clone(),
                                 account_indices: compiled_ix.accounts.clone(),
