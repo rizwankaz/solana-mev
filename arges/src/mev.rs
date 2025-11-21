@@ -894,41 +894,50 @@ impl MevAnalyzer {
             // Find pairs of accounts (opposite balance changes, different mints)
             // These represent pools involved in this swap
             let mut from_token = String::new();
-            let mut from_amount = 0.0;
+            let mut from_amount = f64::MAX;
             let mut from_decimals = 9;
             let mut to_token = String::new();
-            let mut to_amount = 0.0;
+            let mut to_amount = f64::MAX;
             let mut to_decimals = 9;
             let mut swap_accounts: Vec<String> = Vec::new();
 
             // Look for pairs of accounts with balance changes
+            // For multi-hop arbitrage, we want the SMALLEST changes (actual swap amounts),
+            // not the LARGEST changes (which might be cumulative user account balances)
             for pubkey in &accessed_accounts {
                 if let Some((mint, pre, post, decimals)) = account_balances.get(pubkey) {
                     let change = post - pre;
                     if change.abs() > 1e-12 {
                         if change > 0.0 {
                             // Pool received this token (user sent it)
-                            if from_token.is_empty() {
+                            // Take the smallest positive change to avoid picking up cumulative balances
+                            if change.abs() < from_amount {
                                 from_token = mint.clone();
                                 from_amount = change.abs();
                                 from_decimals = *decimals;
-                                swap_accounts.push(pubkey.clone());
+                                if !swap_accounts.contains(pubkey) {
+                                    swap_accounts.push(pubkey.clone());
+                                }
                             }
                         } else {
                             // Pool sent this token (user received it)
-                            if to_token.is_empty() {
+                            // Take the smallest negative change to avoid picking up cumulative balances
+                            if change.abs() < to_amount {
                                 to_token = mint.clone();
                                 to_amount = change.abs();
                                 to_decimals = *decimals;
-                                swap_accounts.push(pubkey.clone());
+                                if !swap_accounts.contains(pubkey) {
+                                    swap_accounts.push(pubkey.clone());
+                                }
                             }
                         }
                     }
                 }
             }
 
-            // Only add swap if we found both from and to tokens
-            if !from_token.is_empty() && !to_token.is_empty() {
+            // Only add swap if we found both from and to tokens with valid amounts
+            if !from_token.is_empty() && !to_token.is_empty()
+                && from_amount < f64::MAX && to_amount < f64::MAX {
                 swaps.push(Swap {
                     from_token,
                     from_amount,
