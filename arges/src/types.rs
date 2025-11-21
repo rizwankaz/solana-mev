@@ -175,9 +175,26 @@ impl FetchedTransaction {
                             }
                         }
                     },
-                    solana_transaction_status::UiMessage::Raw(_raw) => {
-                        // For raw messages, we'd need to decode the instruction data
-                        // which is more complex - skip for now
+                    solana_transaction_status::UiMessage::Raw(raw) => {
+                        // For raw messages, decode ComputeBudget instructions
+                        for compiled_ix in &raw.instructions {
+                            if let Some(program_id) = raw.account_keys.get(compiled_ix.program_id_index as usize) {
+                                if program_id == COMPUTE_BUDGET_PROGRAM {
+                                    // Decode the instruction data
+                                    // SetComputeUnitPrice has discriminator 3 and then u64 micro_lamports
+                                    if let Ok(data) = bs58::decode(&compiled_ix.data).into_vec() {
+                                        if data.len() == 9 && data[0] == 3 {
+                                            // Extract u64 from bytes 1-8 (little-endian)
+                                            let micro_lamports = u64::from_le_bytes([
+                                                data[1], data[2], data[3], data[4],
+                                                data[5], data[6], data[7], data[8]
+                                            ]);
+                                            return Some(micro_lamports);
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     },
                 }
             },
