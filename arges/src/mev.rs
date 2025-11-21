@@ -736,24 +736,18 @@ impl MevAnalyzer {
         account_keys: &[String],
         pre_token_balances: &[UiTransactionTokenBalance],
         post_token_balances: &[UiTransactionTokenBalance],
-        _program_ids: &[String],
+        program_ids: &[String],
     ) -> Vec<Swap> {
         let mut swaps = Vec::new();
 
-        // Extract swap instructions with account indices
-        let swap_instructions = Self::extract_swap_instructions(instructions, account_keys);
+        // Get DEX programs from program_ids (already in execution order, includes inner instructions)
+        let dex_programs: Vec<String> = program_ids.iter()
+            .filter(|p| ProgramRegistry::is_dex(p))
+            .cloned()
+            .collect();
 
-        if swap_instructions.is_empty() {
+        if dex_programs.is_empty() {
             return swaps;
-        }
-
-        // Build account_index -> pool_owner mapping
-        let mut account_to_owner: HashMap<u8, String> = HashMap::new();
-        for balance in pre_token_balances.iter().chain(post_token_balances.iter()) {
-            use solana_transaction_status::option_serializer::OptionSerializer;
-            if let OptionSerializer::Some(ref owner) = balance.owner {
-                account_to_owner.insert(balance.account_index, owner.clone());
-            }
         }
 
         // Build per-owner balance map: owner -> mint -> (pre, post, decimals)
@@ -823,11 +817,11 @@ impl MevAnalyzer {
         // Sort pools by account_index to get consistent ordering
         pool_list.sort_by_key(|(idx, _, _)| *idx);
 
-        // Match pools to swap instructions sequentially
-        // This works when account_indices aren't available (Parsed/PartiallyDecoded instructions)
+        // Match pools to DEX programs sequentially
+        // Pools are sorted by account_index, DEX programs are in execution order
         for (idx, (_min_idx, _owner, changes)) in pool_list.iter().enumerate() {
-            if idx >= swap_instructions.len() {
-                break; // More pools than swap instructions
+            if idx >= dex_programs.len() {
+                break; // More pools than DEX programs
             }
 
             let mut from_token = String::new();
@@ -858,7 +852,7 @@ impl MevAnalyzer {
                     from_amount,
                     to_token,
                     to_amount,
-                    dex_program: swap_instructions[idx].dex_program.clone(),
+                    dex_program: dex_programs[idx].clone(),
                     from_decimals,
                     to_decimals,
                 });
