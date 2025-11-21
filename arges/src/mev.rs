@@ -391,7 +391,8 @@ impl MevAnalyzer {
         }
 
         // Calculate token changes first (needed for classification)
-        let token_changes = Self::calculate_token_changes(pre_token_balances, post_token_balances);
+        // Only include the signer's accounts to get true profit/loss
+        let token_changes = Self::calculate_token_changes(pre_token_balances, post_token_balances, signer.as_deref());
 
         // Detect category based on program interactions AND token changes
         let category = Self::detect_category(&program_ids, &token_changes)?;
@@ -511,31 +512,59 @@ impl MevAnalyzer {
     }
 
     /// Calculate token balance changes from pre/post token balances
+    /// Only sums changes for accounts owned by the signer to get true profit/loss
     fn calculate_token_changes(
         pre_token_balances: &[UiTransactionTokenBalance],
         post_token_balances: &[UiTransactionTokenBalance],
+        signer: Option<&str>,
     ) -> Vec<TokenChange> {
         let mut changes = Vec::new();
         let mut token_map: HashMap<(u8, String), (Option<f64>, Option<f64>, u8)> = HashMap::new();
 
-        // Collect pre-balances
+        // Collect pre-balances (filter by signer's accounts only)
         for pre_balance in pre_token_balances {
+            // Skip if this account is not owned by the signer
+            if let Some(signer_addr) = signer {
+                use solana_transaction_status::option_serializer::OptionSerializer;
+                match &pre_balance.owner {
+                    OptionSerializer::Some(owner) => {
+                        if owner != signer_addr {
+                            continue;
+                        }
+                    }
+                    _ => continue, // Skip if no owner info
+                }
+            }
+
             let key = (pre_balance.account_index, pre_balance.mint.clone());
             let entry = token_map.entry(key).or_insert((None, None, pre_balance.ui_token_amount.decimals));
             entry.0 = pre_balance.ui_token_amount.ui_amount;
             entry.2 = pre_balance.ui_token_amount.decimals;
         }
 
-        // Collect post-balances
+        // Collect post-balances (filter by signer's accounts only)
         for post_balance in post_token_balances {
+            // Skip if this account is not owned by the signer
+            if let Some(signer_addr) = signer {
+                use solana_transaction_status::option_serializer::OptionSerializer;
+                match &post_balance.owner {
+                    OptionSerializer::Some(owner) => {
+                        if owner != signer_addr {
+                            continue;
+                        }
+                    }
+                    _ => continue, // Skip if no owner info
+                }
+            }
+
             let key = (post_balance.account_index, post_balance.mint.clone());
             let entry = token_map.entry(key).or_insert((None, None, post_balance.ui_token_amount.decimals));
             entry.1 = post_balance.ui_token_amount.ui_amount;
             entry.2 = post_balance.ui_token_amount.decimals;
         }
 
-        // Calculate net token changes by summing across ALL accounts for each mint
-        // This gives us the true net position change for the signer
+        // Calculate net token changes by summing across signer's accounts for each mint
+        // This gives us the true net position change (profit/loss) for the signer
         let mut mint_totals: HashMap<String, (f64, u8)> = HashMap::new(); // (total_change, decimals)
 
         for ((_account_idx, mint), (pre_opt, post_opt, decimals)) in token_map {
@@ -543,8 +572,7 @@ impl MevAnalyzer {
             let post = post_opt.unwrap_or(0.0);
             let change = post - pre;
 
-            // Sum all changes for this mint across all accounts
-            // Don't skip small individual changes - they might sum to something significant
+            // Sum all changes for this mint across signer's accounts
             mint_totals.entry(mint.clone())
                 .and_modify(|e| {
                     e.0 += change;
@@ -557,7 +585,6 @@ impl MevAnalyzer {
         // Convert to TokenChange structs
         for (mint, (total_change, decimals)) in mint_totals {
             // Only include non-zero changes (very small threshold to catch tiny arbitrage profits)
-            // Use 1e-12 threshold instead of 1e-7 to capture tiny profits
             if total_change.abs() > 1e-12 {
                 changes.push(TokenChange {
                     mint,
@@ -654,9 +681,9 @@ impl MevAnalyzer {
     ///
     /// Strategy:
     /// 1. Extract all swap instructions from inner instructions (handles compiled instructions)
-    /// 2. For each swap instruction, identify the tokens involved using balance changes
-    /// 3. Extract precise amounts from per-account balance changes
-    /// 4. Build accurate swap sequence with real token addresses and amounts
+    /// 2. Group balance changes by pool owner (exclude signer)
+    /// 3. For each pool: positive change = from_token (user sent), negative change = to_token (user received)
+    /// 4. Match pools to DEX programs to build accurate swap sequence
     fn detect_swaps(
         instructions: &[UiInstruction],
         account_keys: &[String],
@@ -673,93 +700,96 @@ impl MevAnalyzer {
             return swaps;
         }
 
-        // Build per-account balance map: account_index -> (mint, pre, post, decimals)
-        let mut account_balance_map: HashMap<u8, Vec<(String, f64, f64, u8)>> = HashMap::new();
+        // Deduplicate swap instructions by DEX program to get unique swaps
+        let mut unique_dex_swaps: Vec<&SwapInstruction> = Vec::new();
+        let mut seen_dexes: HashSet<String> = HashSet::new();
+        for swap_ix in &swap_instructions {
+            if !seen_dexes.contains(&swap_ix.dex_program) {
+                unique_dex_swaps.push(swap_ix);
+                seen_dexes.insert(swap_ix.dex_program.clone());
+            }
+        }
 
-        // Collect pre-balances
+        // Build per-owner balance map: owner -> mint -> (pre, post, decimals)
+        // This groups balance changes by pool/account owner
+        let mut owner_balances: HashMap<String, HashMap<String, (f64, f64, u8)>> = HashMap::new();
+
+        // Collect pre-balances grouped by owner
         for pre in pre_token_balances {
-            let entry = account_balance_map.entry(pre.account_index).or_insert_with(Vec::new);
-            let amount = pre.ui_token_amount.ui_amount.unwrap_or(0.0);
-            let decimals = pre.ui_token_amount.decimals;
-            entry.push((pre.mint.clone(), amount, 0.0, decimals));
+            use solana_transaction_status::option_serializer::OptionSerializer;
+            if let OptionSerializer::Some(ref owner) = pre.owner {
+                let owner_map = owner_balances.entry(owner.clone()).or_insert_with(HashMap::new);
+                let amount = pre.ui_token_amount.ui_amount.unwrap_or(0.0);
+                owner_map.insert(pre.mint.clone(), (amount, 0.0, pre.ui_token_amount.decimals));
+            }
         }
 
         // Update with post-balances
         for post in post_token_balances {
-            let entry = account_balance_map.entry(post.account_index).or_insert_with(Vec::new);
-            let amount = post.ui_token_amount.ui_amount.unwrap_or(0.0);
-            let decimals = post.ui_token_amount.decimals;
+            use solana_transaction_status::option_serializer::OptionSerializer;
+            if let OptionSerializer::Some(ref owner) = post.owner {
+                let owner_map = owner_balances.entry(owner.clone()).or_insert_with(HashMap::new);
+                let amount = post.ui_token_amount.ui_amount.unwrap_or(0.0);
 
-            // Find matching mint or add new entry
-            if let Some(balance) = entry.iter_mut().find(|(mint, _, _, _)| mint == &post.mint) {
-                balance.2 = amount;
-            } else {
-                entry.push((post.mint.clone(), 0.0, amount, decimals));
+                if let Some(balance) = owner_map.get_mut(&post.mint) {
+                    balance.1 = amount;
+                } else {
+                    owner_map.insert(post.mint.clone(), (0.0, amount, post.ui_token_amount.decimals));
+                }
             }
         }
 
-        // Build balance_changes map for all accounts: mint -> Vec<(change, decimals)>
-        let mut mint_changes: HashMap<String, Vec<(f64, u8)>> = HashMap::new();
-        for (_acc_idx, balances) in &account_balance_map {
-            for (mint, pre, post, decimals) in balances {
+        // Calculate balance changes per owner (pool)
+        // For each pool: positive change = token received from user (from_token)
+        //                negative change = token sent to user (to_token)
+        let mut pool_changes: Vec<(String, Vec<(String, f64, u8)>)> = Vec::new(); // (owner, [(mint, change, decimals)])
+
+        for (owner, mint_map) in &owner_balances {
+            let mut changes: Vec<(String, f64, u8)> = Vec::new();
+            for (mint, (pre, post, decimals)) in mint_map {
                 let change = post - pre;
                 if change.abs() > 1e-12 {
-                    mint_changes.entry(mint.clone())
-                        .or_insert_with(Vec::new)
-                        .push((change, *decimals));
+                    changes.push((mint.clone(), change, *decimals));
                 }
+            }
+            if !changes.is_empty() {
+                pool_changes.push((owner.clone(), changes));
             }
         }
 
-        // Identify tokens and their total volume
-        let mut token_volumes: Vec<(String, f64, f64, u8)> = Vec::new(); // (mint, total_sent, total_received, decimals)
-        for (mint, changes) in &mint_changes {
-            let total_sent: f64 = changes.iter().filter(|(c, _)| *c < 0.0).map(|(c, _)| c.abs()).sum();
-            let total_received: f64 = changes.iter().filter(|(c, _)| *c > 0.0).map(|(c, _)| c.abs()).sum();
-            let decimals = changes.first().map(|(_, d)| *d).unwrap_or(9);
-            if total_sent > 0.0 || total_received > 0.0 {
-                token_volumes.push((mint.clone(), total_sent, total_received, decimals));
+        // Match each unique DEX to a pool's balance changes
+        // We assume the number of unique DEXs matches the number of pools involved
+        for (idx, swap_ix) in unique_dex_swaps.iter().enumerate() {
+            if idx >= pool_changes.len() {
+                break;
             }
-        }
 
-        // For 2-token arbitrage, deduplicate swap instructions by DEX program
-        // to avoid counting the same swap multiple times
-        if token_volumes.len() >= 2 {
-            // Sort by volume to identify primary tokens
-            token_volumes.sort_by(|a, b| {
-                (a.1 + a.2).partial_cmp(&(b.1 + b.2)).unwrap_or(std::cmp::Ordering::Equal).reverse()
-            });
+            let (_pool_owner, changes) = &pool_changes[idx];
 
-            let tokens: Vec<&(String, f64, f64, u8)> = token_volumes.iter().take(2).collect();
-            let (token_a, a_sent, a_received, a_decimals) = tokens[0];
-            let (token_b, b_sent, b_received, b_decimals) = tokens.get(1).unwrap_or(&tokens[0]);
+            // Find from_token (positive change = received from user) and to_token (negative change = sent to user)
+            let mut from_token = String::new();
+            let mut from_amount = 0.0;
+            let mut from_decimals = 9;
+            let mut to_token = String::new();
+            let mut to_amount = 0.0;
+            let mut to_decimals = 9;
 
-            // Deduplicate swap instructions by DEX program to get unique swaps
-            let mut unique_dex_swaps: Vec<&SwapInstruction> = Vec::new();
-            let mut seen_dexes: HashSet<String> = HashSet::new();
-            for swap_ix in &swap_instructions {
-                if !seen_dexes.contains(&swap_ix.dex_program) {
-                    unique_dex_swaps.push(swap_ix);
-                    seen_dexes.insert(swap_ix.dex_program.clone());
+            for (mint, change, decimals) in changes {
+                if *change > 0.0 {
+                    // Pool received this token (user sent it)
+                    from_token = mint.clone();
+                    from_amount = change.abs();
+                    from_decimals = *decimals;
+                } else if *change < 0.0 {
+                    // Pool sent this token (user received it)
+                    to_token = mint.clone();
+                    to_amount = change.abs();
+                    to_decimals = *decimals;
                 }
             }
 
-            // For 2-token arbitrage, pattern is: B → A → B (where A is high volume, B is profit token)
-            // Build swaps based on unique DEX programs
-            for (i, swap_ix) in unique_dex_swaps.iter().enumerate() {
-                let (from_token, from_amount, from_decimals, to_token, to_amount, to_decimals) =
-                    if i % 2 == 0 {
-                        // Even swaps (first): token B sent → token A received
-                        // (profit token → high volume intermediate token)
-                        (token_b.clone(), *b_sent, *b_decimals,
-                         token_a.clone(), *a_received, *a_decimals)
-                    } else {
-                        // Odd swaps (second): token A sent → token B received
-                        // (high volume intermediate token → profit token)
-                        (token_a.clone(), *a_sent, *a_decimals,
-                         token_b.clone(), *b_received, *b_decimals)
-                    };
-
+            // Only add swap if we found both from and to tokens
+            if !from_token.is_empty() && !to_token.is_empty() {
                 swaps.push(Swap {
                     from_token,
                     from_amount,
@@ -770,7 +800,10 @@ impl MevAnalyzer {
                     to_decimals,
                 });
             }
-        } else {
+        }
+
+        // If we didn't find swaps via pool matching, try the fallback approach
+        if swaps.is_empty() {
             // Fallback: Try to extract tokens from instruction account indices
             // This is useful for failed transactions that have no post-balance changes
 
