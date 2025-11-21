@@ -60,7 +60,7 @@ impl PriceOracle {
     pub async fn fetch_prices(&self, mints: &[String]) -> Result<HashMap<String, f64>> {
         let mut prices = HashMap::new();
 
-        tracing::info!("Attempting to fetch prices for {} mints", mints.len());
+        tracing::info!("attempting to fetch prices for {} tokens", mints.len());
         for mint in mints {
             tracing::debug!("Mint: {}", mint);
         }
@@ -71,19 +71,19 @@ impl PriceOracle {
             .filter_map(|mint| {
                 let feed_id = Self::get_price_feed_id(mint).map(|id| id.to_string());
                 if let Some(ref id) = feed_id {
-                    tracing::info!("Found price feed for {}: {}",
+                    tracing::info!("found price feed for {}: {}",
                         crate::mev::TokenRegistry::token_name(mint), id);
                 } else {
-                    tracing::warn!("No price feed mapping for token: {}", mint);
+                    tracing::warn!("no price feed for token: {}", mint);
                 }
                 feed_id
             })
             .collect();
 
-        tracing::info!("Found {} price feed IDs", feed_ids.len());
+        tracing::info!("found {} price feed IDs", feed_ids.len());
 
         if feed_ids.is_empty() {
-            tracing::warn!("No price feeds to fetch, returning empty prices");
+            tracing::warn!("no price feeds to fetch");
             return Ok(prices);
         }
 
@@ -91,8 +91,8 @@ impl PriceOracle {
         let ids_param = feed_ids.join("&ids[]=");
         let url = format!("{}/v2/updates/price/latest?ids[]={}", self.base_url, ids_param);
 
-        tracing::info!("Fetching {} Pyth price feeds...", feed_ids.len());
-        tracing::debug!("Pyth URL: {}", url);
+        tracing::info!("fetching {} Pyth price feeds...", feed_ids.len());
+        tracing::debug!("pyth url: {}", url);
 
         // Fetch prices from Pyth
         let response = self
@@ -105,21 +105,21 @@ impl PriceOracle {
         let status = response.status();
         if !status.is_success() {
             let error_text = response.text().await.unwrap_or_default();
-            tracing::error!("Pyth API returned error status {}: {}", status, error_text);
-            return Err(anyhow::anyhow!("Pyth API error: {}", status));
+            tracing::error!("pyth returned {}: {}", status, error_text);
+            return Err(anyhow::anyhow!("pyth error: {}", status));
         }
 
         let pyth_response: PythResponse = response
             .json()
             .await
-            .context("Failed to parse Pyth response")?;
+            .context("failed to parse response")?;
 
         // Parse prices and map back to mint addresses
-        tracing::info!("Parsing {} price feeds from Pyth response", pyth_response.parsed.len());
+        tracing::info!("parsing {} price feeds from pyth", pyth_response.parsed.len());
         for feed in pyth_response.parsed {
             // Normalize the returned feed ID (remove 0x prefix if present, lowercase)
             let normalized_returned_id = feed.id.trim().trim_start_matches("0x").to_lowercase();
-            tracing::info!("Pyth returned feed ID: {} (normalized: {})", feed.id, normalized_returned_id);
+            tracing::info!("pyth returned feed ID: {} (normalized: {})", feed.id, normalized_returned_id);
 
             // Find the mint that corresponds to this feed ID
             let mut matched = false;
@@ -129,7 +129,7 @@ impl PriceOracle {
                     let normalized_stored_id = feed_id.trim_start_matches("0x").to_lowercase();
 
                     tracing::debug!(
-                        "Comparing Pyth ID '{}' with stored ID '{}' for {}",
+                        "comparing pyth ID '{}' with stored id '{}' for {}",
                         normalized_returned_id,
                         normalized_stored_id,
                         crate::mev::TokenRegistry::token_name(mint)
@@ -137,7 +137,7 @@ impl PriceOracle {
 
                     if normalized_returned_id == normalized_stored_id {
                         matched = true;
-                        tracing::info!("✓ Matched feed {} to mint {}", feed.id, crate::mev::TokenRegistry::token_name(mint));
+                        tracing::info!("+ matched feed {} to token {}", feed.id, crate::mev::TokenRegistry::token_name(mint));
 
                         // Parse price: price * 10^expo
                         if let Ok(price_val) = feed.price.price.parse::<f64>() {
@@ -150,7 +150,7 @@ impl PriceOracle {
                                 adjusted_price
                             );
                         } else {
-                            tracing::warn!("Failed to parse price value: {}", feed.price.price);
+                            tracing::warn!("failed to parse price value: {}", feed.price.price);
                         }
                         break;
                     }
@@ -158,11 +158,11 @@ impl PriceOracle {
             }
 
             if !matched {
-                tracing::warn!("✗ No mint mapping found for Pyth feed ID: {} (normalized: {})", feed.id, normalized_returned_id);
+                tracing::warn!("- no token mapping found for pyth feed ID: {} (normalized: {})", feed.id, normalized_returned_id);
             }
         }
 
-        tracing::info!("Successfully fetched {} prices from Pyth", prices.len());
+        tracing::info!("successfully fetched {} prices from pyth", prices.len());
         Ok(prices)
     }
 
