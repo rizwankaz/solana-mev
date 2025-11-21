@@ -586,22 +586,51 @@ impl MevAnalyzer {
         // This is the dominant MEV type on Solana (50-74% of transactions per sandwiched.me)
         //
         // Important: Distinguish aggregator routing from actual arbitrage
-        // - Aggregators (Jupiter V6, etc.) route through multiple DEXs to get best price
-        // - This is NOT arbitrage, just smart routing on behalf of the user
-        // - Only flag as arbitrage if 2+ DEXs are present AND no aggregator
+        // - Aggregators (Jupiter V6, etc.) can be used for BOTH:
+        //   1. Normal routing: User swaps Token A → Token B (different tokens)
+        //   2. MEV arbitrage: Bot uses Jupiter for closed-loop arbitrage (A → B → C → A)
         if dex_count >= 2 {
-            // If an aggregator is present, it's routing (NOT arbitrage)
-            // The user called the aggregator, which routes through multiple DEXs
-            // Examples of routing (NOT arbitrage):
-            // - Jupiter + Pump.fun = aggregator routing
-            // - Jupiter + Drift + Meteora + Orca = aggregator routing (multi-hop swap)
+            // If an aggregator is present, we need to check if it's routing or arbitrage
             if aggregator_count > 0 {
-                return None; // This is normal aggregator routing, not MEV
+                // Distinguish using token balance changes:
+                //
+                // Normal routing (NOT arbitrage):
+                // - Different input/output tokens: -100 USDC, +2.5 SOL
+                // - Both negative (input) and positive (output) changes
+                //
+                // Closed-loop arbitrage (IS arbitrage):
+                // - Same start/end token: +66 SOL (started with 0.01 SOL, ended with 66.69 SOL)
+                // - Only positive changes (profits), intermediates cancel out
+                // - Example: 0.01 SOL → RAY → ZBCN → 66.69 SOL = +66.68 SOL
+                //
+                // Failed arbitrage (IS arbitrage):
+                // - Net loss but still closed loop: -0.1 SOL
+                // - Only negative changes (losses)
+
+                let has_significant_positive = token_changes.iter()
+                    .any(|tc| tc.ui_amount_change > 0.0001);
+                let has_significant_negative = token_changes.iter()
+                    .any(|tc| tc.ui_amount_change < -0.0001);
+
+                // If there are both significant gains AND losses in different tokens,
+                // this is normal aggregator routing (Token A → Token B)
+                if has_significant_positive && has_significant_negative {
+                    return None; // Normal routing, not MEV
+                }
+
+                // If only profits (or only losses), this is closed-loop arbitrage
+                // where intermediate tokens cancel out
+                if !token_changes.is_empty() {
+                    return Some(MevCategory::Arbitrage);
+                }
+
+                // No token changes, not MEV
+                return None;
             }
 
-            // Only flag as arbitrage if 2+ DEXs with NO aggregator
+            // No aggregator, multiple DEXs = definitely arbitrage
             // Examples of actual arbitrage:
-            // - Titan + Orca = 2 DEXs, no aggregator = ARBITRAGE
+            // - Raydium + Orca = 2 DEXs, no aggregator = ARBITRAGE
             // - Raydium + Meteora + Phoenix = 3 DEXs, no aggregator = ARBITRAGE
             return Some(MevCategory::Arbitrage);
         }
