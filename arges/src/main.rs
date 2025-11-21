@@ -45,7 +45,7 @@ async fn main() -> anyhow::Result<()> {
 
     let fetcher = Arc::new(BlockFetcher::new(config));
 
-    // Determine which slot to fetch
+    // determine which slot to fetch
     let target_slot = match args.slot {
         Some(slot) => {
             info!("fetching user-specified slot: {}", slot);
