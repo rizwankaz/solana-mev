@@ -115,11 +115,21 @@ impl PriceOracle {
             .context("Failed to parse Pyth response")?;
 
         // Parse prices and map back to mint addresses
+        tracing::info!("Parsing {} price feeds from Pyth response", pyth_response.parsed.len());
         for feed in pyth_response.parsed {
+            tracing::debug!("Pyth returned feed ID: {}", feed.id);
+
             // Find the mint that corresponds to this feed ID
             for mint in mints {
                 if let Some(feed_id) = Self::get_price_feed_id(mint) {
-                    if feed.id == feed_id {
+                    // Pyth returns IDs with 0x prefix, our mappings have 0x prefix
+                    // Do case-insensitive comparison
+                    let feed_id_lower = feed_id.to_lowercase();
+                    let returned_id_lower = feed.id.to_lowercase();
+
+                    tracing::debug!("Comparing: {} vs {}", returned_id_lower, feed_id_lower);
+
+                    if returned_id_lower == feed_id_lower {
                         // Parse price: price * 10^expo
                         if let Ok(price_val) = feed.price.price.parse::<f64>() {
                             let expo = feed.price.expo;
@@ -130,6 +140,8 @@ impl PriceOracle {
                                 crate::mev::TokenRegistry::token_name(mint),
                                 adjusted_price
                             );
+                        } else {
+                            tracing::warn!("Failed to parse price value: {}", feed.price.price);
                         }
                     }
                 }
