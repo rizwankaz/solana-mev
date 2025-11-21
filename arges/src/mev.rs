@@ -744,18 +744,20 @@ impl MevAnalyzer {
                 }
             }
 
-            // For 2-token arbitrage, pattern is: A → B → A
+            // For 2-token arbitrage, pattern is: B → A → B (where A is high volume, B is profit token)
             // Build swaps based on unique DEX programs
             for (i, swap_ix) in unique_dex_swaps.iter().enumerate() {
                 let (from_token, from_amount, from_decimals, to_token, to_amount, to_decimals) =
                     if i % 2 == 0 {
-                        // Even swaps: token A → token B
-                        (token_a.clone(), *a_sent, *a_decimals,
-                         token_b.clone(), *b_received, *b_decimals)
-                    } else {
-                        // Odd swaps: token B → token A
+                        // Even swaps (first): token B sent → token A received
+                        // (profit token → high volume intermediate token)
                         (token_b.clone(), *b_sent, *b_decimals,
                          token_a.clone(), *a_received, *a_decimals)
+                    } else {
+                        // Odd swaps (second): token A sent → token B received
+                        // (high volume intermediate token → profit token)
+                        (token_a.clone(), *a_sent, *a_decimals,
+                         token_b.clone(), *b_received, *b_decimals)
                     };
 
                 swaps.push(Swap {
