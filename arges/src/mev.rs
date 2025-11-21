@@ -784,68 +784,84 @@ impl MevAnalyzer {
             }
         }
 
-        // Match each swap instruction to a pool based on account indices
-        // Track which pools we've already used to avoid duplicates
-        let mut used_pools: HashSet<String> = HashSet::new();
+        // Get all pools with balance changes, with their minimum account_index for sorting
+        // This gives us a deterministic order for matching
+        let mut pool_list: Vec<(u8, String, Vec<(String, f64, u8)>)> = Vec::new();
 
-        for swap_ix in &swap_instructions {
-            // Find which pool this swap instruction accessed
-            let mut pool_owner: Option<String> = None;
+        for (owner, mint_map) in &owner_balances {
+            let mut changes: Vec<(String, f64, u8)> = Vec::new();
+            for (mint, (pre, post, decimals)) in mint_map {
+                let change = post - pre;
+                if change.abs() > 1e-12 {
+                    changes.push((mint.clone(), change, *decimals));
+                }
+            }
+            if !changes.is_empty() {
+                // Find the minimum account_index for this owner to determine sort order
+                let min_account_idx = pre_token_balances
+                    .iter()
+                    .chain(post_token_balances.iter())
+                    .filter_map(|b| {
+                        use solana_transaction_status::option_serializer::OptionSerializer;
+                        if let OptionSerializer::Some(ref o) = b.owner {
+                            if o == owner {
+                                Some(b.account_index)
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    })
+                    .min()
+                    .unwrap_or(255);
 
-            // Look through the instruction's account indices to find a pool account
-            for &account_idx in &swap_ix.account_indices {
-                if let Some(owner) = account_to_owner.get(&account_idx) {
-                    // Check if this owner has balance changes and hasn't been used yet
-                    if owner_balances.contains_key(owner) && !used_pools.contains(owner) {
-                        pool_owner = Some(owner.clone());
-                        break;
-                    }
+                pool_list.push((min_account_idx, owner.clone(), changes));
+            }
+        }
+
+        // Sort pools by account_index to get consistent ordering
+        pool_list.sort_by_key(|(idx, _, _)| *idx);
+
+        // Match pools to swap instructions sequentially
+        // This works when account_indices aren't available (Parsed/PartiallyDecoded instructions)
+        for (idx, (_min_idx, _owner, changes)) in pool_list.iter().enumerate() {
+            if idx >= swap_instructions.len() {
+                break; // More pools than swap instructions
+            }
+
+            let mut from_token = String::new();
+            let mut from_amount = 0.0;
+            let mut from_decimals = 9;
+            let mut to_token = String::new();
+            let mut to_amount = 0.0;
+            let mut to_decimals = 9;
+
+            for (mint, change, decimals) in changes {
+                if *change > 0.0 {
+                    // Pool received this token (user sent it)
+                    from_token = mint.clone();
+                    from_amount = change.abs();
+                    from_decimals = *decimals;
+                } else if *change < 0.0 {
+                    // Pool sent this token (user received it)
+                    to_token = mint.clone();
+                    to_amount = change.abs();
+                    to_decimals = *decimals;
                 }
             }
 
-            // If we found a pool, create a swap from its balance changes
-            if let Some(ref owner) = pool_owner {
-                if let Some(mint_map) = owner_balances.get(owner) {
-                    let mut from_token = String::new();
-                    let mut from_amount = 0.0;
-                    let mut from_decimals = 9;
-                    let mut to_token = String::new();
-                    let mut to_amount = 0.0;
-                    let mut to_decimals = 9;
-
-                    for (mint, (pre, post, decimals)) in mint_map {
-                        let change = post - pre;
-                        if change.abs() > 1e-12 {
-                            if change > 0.0 {
-                                // Pool received this token (user sent it)
-                                from_token = mint.clone();
-                                from_amount = change.abs();
-                                from_decimals = *decimals;
-                            } else {
-                                // Pool sent this token (user received it)
-                                to_token = mint.clone();
-                                to_amount = change.abs();
-                                to_decimals = *decimals;
-                            }
-                        }
-                    }
-
-                    // Only add swap if we found both from and to tokens
-                    if !from_token.is_empty() && !to_token.is_empty() {
-                        swaps.push(Swap {
-                            from_token,
-                            from_amount,
-                            to_token,
-                            to_amount,
-                            dex_program: swap_ix.dex_program.clone(),
-                            from_decimals,
-                            to_decimals,
-                        });
-
-                        // Mark this pool as used
-                        used_pools.insert(owner.clone());
-                    }
-                }
+            // Only add swap if we found both from and to tokens
+            if !from_token.is_empty() && !to_token.is_empty() {
+                swaps.push(Swap {
+                    from_token,
+                    from_amount,
+                    to_token,
+                    to_amount,
+                    dex_program: swap_instructions[idx].dex_program.clone(),
+                    from_decimals,
+                    to_decimals,
+                });
             }
         }
 
