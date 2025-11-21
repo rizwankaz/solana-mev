@@ -1014,26 +1014,61 @@ impl MevAnalyzer {
                         continue;
                     }
 
-                    // Get or analyze MEV events for frontrun and backrun
-                    // If they're not already classified as MEV, analyze them now
-                    let mev_front = match mev_i {
-                        Some(event) => event.clone(),
-                        None => match tx_i.analyze_mev() {
-                            Some(event) => event,
-                            None => continue,
-                        }
+                    // Check if this could be a sandwich based on token changes
+                    // We need to analyze token changes even for transactions not classified as MEV
+                    let front_token_changes = if let Some(event) = mev_i {
+                        event.token_changes.clone()
+                    } else {
+                        let (pre, post) = tx_i.get_token_balances();
+                        Self::calculate_token_changes(&pre, &post, tx_i.signer().as_deref())
                     };
 
-                    let mev_back = match mev_k {
-                        Some(event) => event.clone(),
-                        None => match tx_k.analyze_mev() {
-                            Some(event) => event,
-                            None => continue,
-                        }
+                    let back_token_changes = if let Some(event) = mev_k {
+                        event.token_changes.clone()
+                    } else {
+                        let (pre, post) = tx_k.get_token_balances();
+                        Self::calculate_token_changes(&pre, &post, tx_k.signer().as_deref())
                     };
 
                     // Check if this looks like a sandwich
-                    if Self::is_sandwich_pattern(&mev_front, &mev_back, tx_i.signer().as_deref(), tx_k.signer().as_deref()) {
+                    if Self::is_sandwich_pattern_from_token_changes(
+                        &front_token_changes,
+                        &back_token_changes,
+                        tx_i.signer().as_deref(),
+                        tx_k.signer().as_deref(),
+                    ) {
+                        // Now create or get full MEV events for profit calculation
+                        let mev_front = mev_i.clone().or_else(|| tx_i.analyze_mev()).unwrap_or_else(|| {
+                            // Create a minimal MEV event for sandwich component
+                            MevEvent {
+                                category: MevCategory::Arbitrage,
+                                signature: tx_i.signature.clone(),
+                                signer: tx_i.signer(),
+                                programs_involved: Vec::new(),
+                                token_changes: front_token_changes.clone(),
+                                sol_change_lamports: 0,
+                                success: tx_i.is_success(),
+                                swaps: Vec::new(),
+                                swap_count: 0,
+                                profitability: None,
+                            }
+                        });
+
+                        let mev_back = mev_k.clone().or_else(|| tx_k.analyze_mev()).unwrap_or_else(|| {
+                            // Create a minimal MEV event for sandwich component
+                            MevEvent {
+                                category: MevCategory::Arbitrage,
+                                signature: tx_k.signature.clone(),
+                                signer: tx_k.signer(),
+                                programs_involved: Vec::new(),
+                                token_changes: back_token_changes.clone(),
+                                sol_change_lamports: 0,
+                                success: tx_k.is_success(),
+                                swaps: Vec::new(),
+                                swap_count: 0,
+                                profitability: None,
+                            }
+                        });
                         tracing::debug!(
                             "detected sandwich: frontrun={} victim={} backrun={}",
                             mev_front.signature, tx_j.signature, mev_back.signature
@@ -1090,15 +1125,15 @@ impl MevAnalyzer {
         sandwiches
     }
 
-    /// Check if two transactions form a sandwich pattern
+    /// Check if two transactions form a sandwich pattern based on token changes
     ///
     /// Requirements:
     /// - Same signer for both transactions (same bot)
     /// - Trade the same token pair in opposite directions
     /// - Both transactions involve swaps (have token changes)
-    fn is_sandwich_pattern(
-        frontrun: &MevEvent,
-        backrun: &MevEvent,
+    fn is_sandwich_pattern_from_token_changes(
+        front_token_changes: &[TokenChange],
+        back_token_changes: &[TokenChange],
         frontrun_signer: Option<&str>,
         backrun_signer: Option<&str>,
     ) -> bool {
@@ -1111,13 +1146,13 @@ impl MevAnalyzer {
         }
 
         // Both must have token changes (swaps)
-        if frontrun.token_changes.is_empty() || backrun.token_changes.is_empty() {
+        if front_token_changes.is_empty() || back_token_changes.is_empty() {
             return false;
         }
 
         // Check if they trade the same token pair in opposite directions
-        let front_tokens: Vec<&str> = frontrun.token_changes.iter().map(|tc| tc.mint.as_str()).collect();
-        let back_tokens: Vec<&str> = backrun.token_changes.iter().map(|tc| tc.mint.as_str()).collect();
+        let front_tokens: Vec<&str> = front_token_changes.iter().map(|tc| tc.mint.as_str()).collect();
+        let back_tokens: Vec<&str> = back_token_changes.iter().map(|tc| tc.mint.as_str()).collect();
 
         // Must have overlapping tokens
         let has_common_tokens = front_tokens.iter().any(|t| back_tokens.contains(t));
@@ -1127,8 +1162,8 @@ impl MevAnalyzer {
 
         // Check for opposite directions (buy then sell)
         // If a token increases in frontrun and decreases in backrun (or vice versa), it's likely a sandwich
-        for tc_front in &frontrun.token_changes {
-            for tc_back in &backrun.token_changes {
+        for tc_front in front_token_changes {
+            for tc_back in back_token_changes {
                 if tc_front.mint == tc_back.mint {
                     // Opposite signs indicate buying then selling (or vice versa)
                     if (tc_front.ui_amount_change > 0.0 && tc_back.ui_amount_change < 0.0) ||

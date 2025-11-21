@@ -319,7 +319,7 @@ impl FetchedTransaction {
     }
 
     /// Get pre and post token balances
-    fn get_token_balances(&self) -> (Vec<solana_transaction_status::UiTransactionTokenBalance>, Vec<solana_transaction_status::UiTransactionTokenBalance>) {
+    pub fn get_token_balances(&self) -> (Vec<solana_transaction_status::UiTransactionTokenBalance>, Vec<solana_transaction_status::UiTransactionTokenBalance>) {
         let meta = match &self.meta {
             Some(m) => m,
             None => return (Vec::new(), Vec::new()),
