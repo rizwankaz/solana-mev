@@ -137,6 +137,56 @@ impl FetchedTransaction {
         self.meta.as_ref().map(|m| m.fee)
     }
 
+    /// Get priority fee (compute unit price * compute units consumed)
+    pub fn priority_fee(&self) -> Option<u64> {
+        let compute_unit_price = self.get_compute_unit_price()?;
+        let compute_units = self.compute_units_consumed()?;
+
+        // Compute unit price is in micro-lamports, so divide by 1_000_000
+        Some((compute_unit_price as u128 * compute_units as u128 / 1_000_000) as u64)
+    }
+
+    /// Extract compute unit price from ComputeBudget instructions
+    fn get_compute_unit_price(&self) -> Option<u64> {
+        const COMPUTE_BUDGET_PROGRAM: &str = "ComputeBudget111111111111111111111111111111";
+
+        match &self.transaction {
+            EncodedTransaction::Json(tx) => {
+                match &tx.message {
+                    solana_transaction_status::UiMessage::Parsed(parsed) => {
+                        for ix in &parsed.instructions {
+                            if let solana_transaction_status::UiInstruction::Parsed(parsed_ui_ix) = ix {
+                                if let solana_transaction_status::UiParsedInstruction::Parsed(parsed_ix) = parsed_ui_ix {
+                                    if parsed_ix.program_id == COMPUTE_BUDGET_PROGRAM
+                                        && parsed_ix.program == "compute-budget" {
+                                        // Check if this is SetComputeUnitPrice instruction
+                                        if let Some(serde_json::Value::String(ix_type)) = parsed_ix.parsed.get("type") {
+                                            if ix_type == "setComputeUnitPrice" {
+                                                // Extract the microLamports value
+                                                if let Some(serde_json::Value::Object(info)) = parsed_ix.parsed.get("info") {
+                                                    if let Some(serde_json::Value::Number(price)) = info.get("microLamports") {
+                                                        return price.as_u64();
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    solana_transaction_status::UiMessage::Raw(_raw) => {
+                        // For raw messages, we'd need to decode the instruction data
+                        // which is more complex - skip for now
+                    },
+                }
+            },
+            _ => {}
+        }
+
+        None
+    }
+
     /// Get signer (first account in transaction)
     pub fn signer(&self) -> Option<String> {
         match &self.transaction {
