@@ -74,7 +74,8 @@ impl PriceOracle {
         let ids_param = feed_ids.join("&ids[]=");
         let url = format!("{}/v2/updates/price/latest?ids[]={}", self.base_url, ids_param);
 
-        tracing::debug!("Fetching Pyth prices from: {}", url);
+        tracing::info!("Fetching {} Pyth price feeds...", feed_ids.len());
+        tracing::debug!("Pyth URL: {}", url);
 
         // Fetch prices from Pyth
         let response = self
@@ -83,6 +84,13 @@ impl PriceOracle {
             .send()
             .await
             .context("Failed to fetch Pyth prices")?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let error_text = response.text().await.unwrap_or_default();
+            tracing::error!("Pyth API returned error status {}: {}", status, error_text);
+            return Err(anyhow::anyhow!("Pyth API error: {}", status));
+        }
 
         let pyth_response: PythResponse = response
             .json()
@@ -100,12 +108,10 @@ impl PriceOracle {
                             let expo = feed.price.expo;
                             let adjusted_price = price_val * 10f64.powi(expo);
                             prices.insert(mint.clone(), adjusted_price);
-                            tracing::debug!(
-                                "Price for {}: ${:.6} (raw: {}, expo: {})",
-                                mint,
-                                adjusted_price,
-                                price_val,
-                                expo
+                            tracing::info!(
+                                "Fetched price for {}: ${:.6}",
+                                crate::mev::TokenRegistry::token_name(mint),
+                                adjusted_price
                             );
                         }
                     }
@@ -113,6 +119,7 @@ impl PriceOracle {
             }
         }
 
+        tracing::info!("Successfully fetched {} prices from Pyth", prices.len());
         Ok(prices)
     }
 

@@ -461,9 +461,16 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
     }
 
     let mints_vec: Vec<String> = all_mints.into_iter().collect();
-    let prices = oracle.fetch_prices(&mints_vec).await.unwrap_or_default();
-
-    tracing::info!("Fetched {} token prices from Pyth", prices.len());
+    let prices = match oracle.fetch_prices(&mints_vec).await {
+        Ok(p) => {
+            tracing::info!("Successfully fetched {} token prices from Pyth", p.len());
+            p
+        }
+        Err(e) => {
+            tracing::error!("Failed to fetch prices from Pyth: {:?}", e);
+            HashMap::new()
+        }
+    };
 
     // Build MEV transactions with profitability
     for (event, tx) in mev_events_with_tx {
