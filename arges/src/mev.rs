@@ -987,6 +987,11 @@ impl MevAnalyzer {
     /// - Opposite directions (buy then sell)
     /// - Net positive profit for the attacker
     /// - Victim transaction in between
+    /// - Same signer for frontrun and backrun
+    ///
+    /// Note: This function analyzes ALL transactions with swaps, not just those
+    /// classified as MEV events, since individual sandwich components may appear
+    /// as "normal" aggregator swaps.
     fn detect_sandwiches(
         transactions: &[(usize, &crate::types::FetchedTransaction, Option<MevEvent>)]
     ) -> Vec<MultiTxMevEvent> {
@@ -1001,7 +1006,7 @@ impl MevAnalyzer {
                     }
 
                     let (idx_i, tx_i, mev_i) = &transactions[i];
-                    let (idx_j, tx_j, mev_j) = &transactions[j];
+                    let (idx_j, tx_j, _mev_j) = &transactions[j];
                     let (idx_k, tx_k, mev_k) = &transactions[k];
 
                     // All must be successful
@@ -1009,12 +1014,30 @@ impl MevAnalyzer {
                         continue;
                     }
 
-                    // Need MEV events for i and k
-                    let Some(mev_front) = mev_i else { continue };
-                    let Some(mev_back) = mev_k else { continue };
+                    // Get or analyze MEV events for frontrun and backrun
+                    // If they're not already classified as MEV, analyze them now
+                    let mev_front = match mev_i {
+                        Some(event) => event.clone(),
+                        None => match tx_i.analyze_mev() {
+                            Some(event) => event,
+                            None => continue,
+                        }
+                    };
+
+                    let mev_back = match mev_k {
+                        Some(event) => event.clone(),
+                        None => match tx_k.analyze_mev() {
+                            Some(event) => event,
+                            None => continue,
+                        }
+                    };
 
                     // Check if this looks like a sandwich
-                    if Self::is_sandwich_pattern(mev_front, mev_j, mev_back) {
+                    if Self::is_sandwich_pattern(&mev_front, &mev_back, tx_i.signer().as_deref(), tx_k.signer().as_deref()) {
+                        tracing::debug!(
+                            "detected sandwich: frontrun={} victim={} backrun={}",
+                            mev_front.signature, tx_j.signature, mev_back.signature
+                        );
                         // Calculate total profit
                         let mut all_token_changes = mev_front.token_changes.clone();
                         all_token_changes.extend(mev_back.token_changes.clone());
@@ -1067,14 +1090,28 @@ impl MevAnalyzer {
         sandwiches
     }
 
-    /// Check if three transactions form a sandwich pattern
+    /// Check if two transactions form a sandwich pattern
+    ///
+    /// Requirements:
+    /// - Same signer for both transactions (same bot)
+    /// - Trade the same token pair in opposite directions
+    /// - Both transactions involve swaps (have token changes)
     fn is_sandwich_pattern(
         frontrun: &MevEvent,
-        victim: &Option<MevEvent>,
         backrun: &MevEvent,
+        frontrun_signer: Option<&str>,
+        backrun_signer: Option<&str>,
     ) -> bool {
-        // Both frontrun and backrun should be ARBITRAGE (swaps)
-        if frontrun.category != MevCategory::Arbitrage || backrun.category != MevCategory::Arbitrage {
+        // Must have the same signer (sandwich bot)
+        if frontrun_signer.is_none() || backrun_signer.is_none() {
+            return false;
+        }
+        if frontrun_signer != backrun_signer {
+            return false;
+        }
+
+        // Both must have token changes (swaps)
+        if frontrun.token_changes.is_empty() || backrun.token_changes.is_empty() {
             return false;
         }
 
