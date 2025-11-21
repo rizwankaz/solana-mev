@@ -154,19 +154,52 @@ impl FetchedTransaction {
             EncodedTransaction::Json(tx) => {
                 match &tx.message {
                     solana_transaction_status::UiMessage::Parsed(parsed) => {
+                        // Try to find ComputeBudget instruction in parsed message
                         for ix in &parsed.instructions {
-                            if let solana_transaction_status::UiInstruction::Parsed(parsed_ui_ix) = ix {
-                                if let solana_transaction_status::UiParsedInstruction::Parsed(parsed_ix) = parsed_ui_ix {
-                                    if parsed_ix.program_id == COMPUTE_BUDGET_PROGRAM
-                                        && parsed_ix.program == "compute-budget" {
-                                        // Check if this is SetComputeUnitPrice instruction
-                                        if let Some(serde_json::Value::String(ix_type)) = parsed_ix.parsed.get("type") {
-                                            if ix_type == "setComputeUnitPrice" {
-                                                // Extract the microLamports value
-                                                if let Some(serde_json::Value::Object(info)) = parsed_ix.parsed.get("info") {
-                                                    if let Some(serde_json::Value::Number(price)) = info.get("microLamports") {
-                                                        return price.as_u64();
+                            match ix {
+                                // Handle fully parsed instructions
+                                solana_transaction_status::UiInstruction::Parsed(parsed_ui_ix) => {
+                                    if let solana_transaction_status::UiParsedInstruction::Parsed(parsed_ix) = parsed_ui_ix {
+                                        if parsed_ix.program_id == COMPUTE_BUDGET_PROGRAM
+                                            && parsed_ix.program == "compute-budget" {
+                                            // Check if this is SetComputeUnitPrice instruction
+                                            if let Some(serde_json::Value::String(ix_type)) = parsed_ix.parsed.get("type") {
+                                                if ix_type == "setComputeUnitPrice" {
+                                                    // Extract the microLamports value
+                                                    if let Some(serde_json::Value::Object(info)) = parsed_ix.parsed.get("info") {
+                                                        if let Some(serde_json::Value::Number(price)) = info.get("microLamports") {
+                                                            return price.as_u64();
+                                                        }
                                                     }
+                                                }
+                                            }
+                                        }
+                                    } else if let solana_transaction_status::UiParsedInstruction::PartiallyDecoded(partial) = parsed_ui_ix {
+                                        // Handle partially decoded instructions
+                                        if partial.program_id == COMPUTE_BUDGET_PROGRAM {
+                                            if let Ok(data) = bs58::decode(&partial.data).into_vec() {
+                                                if data.len() == 9 && data[0] == 3 {
+                                                    let micro_lamports = u64::from_le_bytes([
+                                                        data[1], data[2], data[3], data[4],
+                                                        data[5], data[6], data[7], data[8]
+                                                    ]);
+                                                    return Some(micro_lamports);
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                // Handle compiled instructions in parsed message
+                                solana_transaction_status::UiInstruction::Compiled(compiled_ix) => {
+                                    if let Some(program_id) = parsed.account_keys.get(compiled_ix.program_id_index as usize) {
+                                        if program_id.pubkey == COMPUTE_BUDGET_PROGRAM {
+                                            if let Ok(data) = bs58::decode(&compiled_ix.data).into_vec() {
+                                                if data.len() == 9 && data[0] == 3 {
+                                                    let micro_lamports = u64::from_le_bytes([
+                                                        data[1], data[2], data[3], data[4],
+                                                        data[5], data[6], data[7], data[8]
+                                                    ]);
+                                                    return Some(micro_lamports);
                                                 }
                                             }
                                         }
