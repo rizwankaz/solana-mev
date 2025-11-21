@@ -376,7 +376,7 @@ impl ProgramRegistry {
             Self::RAYDIUM_AMM_V4 => "Raydium AMM V4".to_string(),
             Self::RAYDIUM_CPMM => "Raydium CPMM".to_string(),
             Self::RAYDIUM_CLMM => "Raydium CLMM".to_string(),
-            Self::ORCA_WHIRLPOOL => "Orca Whirlpool".to_string(),
+            Self::ORCA_WHIRLPOOL => "Orca Whirlpools".to_string(),
             Self::PHOENIX => "Phoenix".to_string(),
             Self::METEORA_DAMM_V2 => "Meteora DAMM V2".to_string(),
             Self::METEORA_DLMM => "Meteora DLMM".to_string(),
@@ -761,15 +761,11 @@ impl MevAnalyzer {
             return swaps;
         }
 
-        // Deduplicate swap instructions by DEX program to get unique swaps
-        let mut unique_dex_swaps: Vec<&SwapInstruction> = Vec::new();
-        let mut seen_dexes: HashSet<String> = HashSet::new();
-        for swap_ix in &swap_instructions {
-            if !seen_dexes.contains(&swap_ix.dex_program) {
-                unique_dex_swaps.push(swap_ix);
-                seen_dexes.insert(swap_ix.dex_program.clone());
-            }
-        }
+        // Keep all swap instructions in chronological order (don't deduplicate)
+        // Each swap instruction represents a separate swap, even if using the same DEX
+        let dex_programs_in_order: Vec<String> = swap_instructions.iter()
+            .map(|si| si.dex_program.clone())
+            .collect();
 
         // Build per-owner balance map: owner -> mint -> (pre, post, decimals)
         // This groups balance changes by pool/account owner
@@ -863,8 +859,8 @@ impl MevAnalyzer {
             // Only add swap if we found both from and to tokens
             if !from_token.is_empty() && !to_token.is_empty() {
                 // Assign DEX program based on index, or use "Unknown" if we run out
-                let dex_program = if idx < unique_dex_swaps.len() {
-                    unique_dex_swaps[idx].dex_program.clone()
+                let dex_program = if idx < dex_programs_in_order.len() {
+                    dex_programs_in_order[idx].clone()
                 } else {
                     "Unknown".to_string()
                 };
