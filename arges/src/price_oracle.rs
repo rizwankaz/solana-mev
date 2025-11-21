@@ -145,7 +145,7 @@ impl PriceOracle {
                             let adjusted_price = price_val * 10f64.powi(expo);
                             prices.insert(mint.clone(), adjusted_price);
                             tracing::info!(
-                                "Fetched price for {}: ${:.6}",
+                                "fetched price for {}: ${:.6}",
                                 crate::mev::TokenRegistry::token_name(mint),
                                 adjusted_price
                             );

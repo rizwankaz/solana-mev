@@ -460,7 +460,7 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
     let mints_vec: Vec<String> = all_mints.into_iter().collect();
     let prices = match oracle.fetch_prices(&mints_vec).await {
         Ok(p) => {
-            tracing::info!("Successfully fetched {} token prices from Pyth", p.len());
+            tracing::info!("successfully fetched {} token prices from Pyth", p.len());
             p
         }
         Err(e) => {
