@@ -757,15 +757,12 @@ impl MevAnalyzer {
             }
         }
 
-        // Match each unique DEX to a pool's balance changes
-        // We assume the number of unique DEXs matches the number of pools involved
-        for (idx, swap_ix) in unique_dex_swaps.iter().enumerate() {
-            if idx >= pool_changes.len() {
-                break;
-            }
+        // Sort pool_changes by owner address for consistent ordering
+        pool_changes.sort_by(|a, b| a.0.cmp(&b.0));
 
-            let (_pool_owner, changes) = &pool_changes[idx];
-
+        // Create swaps from pool balance changes
+        // Iterate through pool changes and assign DEX programs
+        for (idx, (_pool_owner, changes)) in pool_changes.iter().enumerate() {
             // Find from_token (positive change = received from user) and to_token (negative change = sent to user)
             let mut from_token = String::new();
             let mut from_amount = 0.0;
@@ -790,12 +787,19 @@ impl MevAnalyzer {
 
             // Only add swap if we found both from and to tokens
             if !from_token.is_empty() && !to_token.is_empty() {
+                // Assign DEX program based on index, or use "Unknown" if we run out
+                let dex_program = if idx < unique_dex_swaps.len() {
+                    unique_dex_swaps[idx].dex_program.clone()
+                } else {
+                    "Unknown".to_string()
+                };
+
                 swaps.push(Swap {
                     from_token,
                     from_amount,
                     to_token,
                     to_amount,
-                    dex_program: swap_ix.dex_program.clone(),
+                    dex_program,
                     from_decimals,
                     to_decimals,
                 });
