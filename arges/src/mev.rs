@@ -314,8 +314,9 @@ impl ProgramRegistry {
     pub const METEORA_POOLS: &'static str = "Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB"; // Dynamic AMM
     pub const LIFINITY_V2: &'static str = "EewxydAPCCVuNEyrVN68PuSYdQ7wKn27V9Gjeoi8dy3S";
     pub const TESSERA_V4: &'static str = "TessVxmKMfMPSkxMCyp4VzrKkH9SZxKHuXEL3GLQH"; // Wintermute prop AMM
+    pub const SERUM_DEX_V3: &'static str = "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin"; // Serum v3
     // Anchor-based DEXs
-    pub const OPENBOOK_V2: &'static str = "opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb"; // Anchor
+    pub const OPENBOOK_V2: &'static str = "opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb"; // Anchor (Serum fork)
     pub const DRIFT_PROTOCOL: &'static str = "dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH"; // Anchor
     pub const SABER: &'static str = "SSwpkEEcbUqx4vtoEByFjSkhKdCT862DNVb52nZg1UZ";
     pub const MARINADE_FINANCE: &'static str = "MarBmsSgKXdrN1egZf5sqe1TMai9K1rChYNDJgjq7aD";
@@ -358,6 +359,7 @@ impl ProgramRegistry {
                 | Self::METEORA_POOLS
                 | Self::LIFINITY_V2
                 | Self::TESSERA_V4
+                | Self::SERUM_DEX_V3
                 | Self::OPENBOOK_V2
                 | Self::DRIFT_PROTOCOL
                 | Self::SABER
@@ -401,6 +403,7 @@ impl ProgramRegistry {
             Self::METEORA_POOLS => "Meteora Pools".to_string(),
             Self::LIFINITY_V2 => "Lifinity V2".to_string(),
             Self::TESSERA_V4 => "TesseraV4".to_string(),
+            Self::SERUM_DEX_V3 => "Serum DEX v3".to_string(),
             Self::OPENBOOK_V2 => "OpenBook V2".to_string(),
             Self::DRIFT_PROTOCOL => "Drift Protocol".to_string(),
             Self::SABER => "Saber".to_string(),
