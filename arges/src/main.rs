@@ -48,7 +48,7 @@ async fn main() -> anyhow::Result<()> {
     // determine which slot to fetch
     let target_slot = match args.slot {
         Some(slot) => {
-            info!("fetching user-specified slot: {}", slot);
+            info!("fetching slot: {}", slot);
             slot
         }
         None => {
