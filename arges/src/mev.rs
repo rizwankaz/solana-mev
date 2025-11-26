@@ -96,13 +96,13 @@ pub struct MultiTxMevEvent {
     pub category: MevCategory,
     /// Frontrun/setup transaction
     pub frontrun_signature: String,
-    pub frontrun_tx_index: usize,
+    pub frontrun_tx_signer: Option<String>,
     /// Victim/target transaction
     pub victim_signature: String,
-    pub victim_tx_index: usize,
+    pub victim_tx_signer: Option<String>,
     /// Backrun/exit transaction
     pub backrun_signature: String,
-    pub backrun_tx_index: usize,
+    pub backrun_tx_signer: Option<String>,
     /// Extracted profit (in tokens)
     pub profit_token_changes: Vec<TokenChange>,
     /// Total SOL profit
@@ -1105,11 +1105,11 @@ impl MevAnalyzer {
                         sandwiches.push(MultiTxMevEvent {
                             category: MevCategory::Sandwich,
                             frontrun_signature: mev_front.signature.clone(),
-                            frontrun_tx_index: *idx_i,
+                            frontrun_tx_signer: mev_front.signer(),
                             victim_signature: tx_j.signature.clone(),
-                            victim_tx_index: *idx_j,
+                            victim_tx_signer: tx_j.signer(),
                             backrun_signature: mev_back.signature.clone(),
-                            backrun_tx_index: *idx_k,
+                            backrun_tx_signer: mev_back.signer(),
                             profit_token_changes,
                             total_sol_profit_lamports: total_sol_profit,
                             programs_involved: programs,
@@ -1247,11 +1247,11 @@ impl MevAnalyzer {
                 jit_attacks.push(MultiTxMevEvent {
                     category: MevCategory::JitLiquidity,
                     frontrun_signature: mev_add.signature.clone(),
-                    frontrun_tx_index: *idx_i,
+                    frontrun_tx_signer: mev_add.signer(),
                     victim_signature: mev_target.signature.clone(),
-                    victim_tx_index: *idx_j,
+                    victim_tx_signer: mev_target.signer(),
                     backrun_signature: mev_remove.signature.clone(),
-                    backrun_tx_index: *idx_k,
+                    backrun_tx_signer: mev_remove.signer(),
                     profit_token_changes,
                     total_sol_profit_lamports: total_sol_profit,
                     programs_involved: programs,
