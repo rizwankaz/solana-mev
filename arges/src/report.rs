@@ -374,12 +374,11 @@ pub struct TokenChangeJson {
 #[derive(Serialize)]
 pub struct MultiTxMevJson {
     pub category: String,
+    pub attacker: Option<String>,
     pub frontrun_signature: String,
-    pub frontrun_attacker: Option<String>,
     pub victim_signature: String,
     pub victim: Option<String>,
     pub backrun_signature: String,
-    pub backrun_attacker: Option<String>,
     pub profit_tokens: Vec<TokenChangeJson>,
     pub total_sol_profit_lamports: i64,
 }
@@ -548,12 +547,11 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
     for event in multi_tx_events {
         let json_event = MultiTxMevJson {
             category: format!("{:?}", event.category).to_uppercase(),
+            attacker: event.attacker,
             frontrun_signature: event.frontrun_signature,
-            frontrun_attacker: event.frontrun_attacker,
             victim_signature: event.victim_signature,
             victim: event.victim,
             backrun_signature: event.backrun_signature,
-            backrun_attacker: event.backrun_attacker,
             profit_tokens: event.profit_token_changes.iter()
                 .map(|tc| TokenChangeJson {
                     token_address: tc.mint.clone(),
