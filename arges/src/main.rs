@@ -2,7 +2,6 @@ mod fetcher;
 mod mev;
 mod price_oracle;
 mod report;
-mod stream;
 mod types;
 
 use fetcher::BlockFetcher;

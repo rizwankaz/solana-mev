@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use solana_transaction_status::{
     EncodedTransaction, UiTransactionStatusMeta,
 };
-use crate::mev::{MevAnalyzer, MevEvent, MevSummary};
+use crate::mev::{MevAnalyzer, MevEvent};
 
 /// block fetcher config
 #[derive(Debug, Clone)]
@@ -86,19 +86,6 @@ impl FetchedBlock {
             .iter()
             .filter_map(|tx| tx.fee())
             .sum()
-    }
-
-    /// Analyze MEV in the block
-    pub fn analyze_mev(&self) -> MevSummary {
-        let mut summary = MevSummary::new();
-
-        for tx in &self.transactions {
-            if let Some(event) = tx.analyze_mev() {
-                summary.add_event(&event);
-            }
-        }
-
-        summary
     }
 }
 

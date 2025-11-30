@@ -114,131 +114,6 @@ pub struct MultiTxMevEvent {
     pub programs_involved: Vec<String>,
 }
 
-/// Aggregated MEV statistics for a block
-#[derive(Debug, Clone, Default)]
-pub struct MevSummary {
-    /// Count of arbitrage transactions
-    pub arbitrage_count: usize,
-    /// Token profits from arbitrage (mint -> total profit)
-    pub arbitrage_token_profits: HashMap<String, f64>,
-
-    /// Count of liquidation transactions
-    pub liquidation_count: usize,
-    /// Token profits from liquidations (mint -> total profit)
-    pub liquidation_token_profits: HashMap<String, f64>,
-
-    /// Count of mint transactions
-    pub mint_count: usize,
-    /// New tokens minted (mint -> total amount)
-    pub minted_tokens: HashMap<String, f64>,
-
-    /// Count of spam/failed MEV attempts
-    pub spam_count: usize,
-
-    /// Programs used, with frequency count
-    pub programs_used: HashMap<String, usize>,
-
-    /// Total SOL change across all MEV (can be negative due to fees)
-    pub total_sol_change: i64,
-}
-
-impl MevSummary {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Add an MEV event to the summary
-    pub fn add_event(&mut self, event: &MevEvent) {
-        // Update counts and profits based on category
-        match event.category {
-            MevCategory::Arbitrage => {
-                if event.success {
-                    self.arbitrage_count += 1;
-                    // Track token profits
-                    for token_change in &event.token_changes {
-                        if token_change.ui_amount_change > 0.0 {
-                            *self.arbitrage_token_profits
-                                .entry(token_change.mint.clone())
-                                .or_insert(0.0) += token_change.ui_amount_change;
-                        }
-                    }
-                    self.total_sol_change += event.sol_change_lamports;
-                } else {
-                    self.spam_count += 1;
-                }
-            }
-            MevCategory::Liquidation => {
-                if event.success {
-                    self.liquidation_count += 1;
-                    // Track token profits from liquidations
-                    for token_change in &event.token_changes {
-                        if token_change.ui_amount_change > 0.0 {
-                            *self.liquidation_token_profits
-                                .entry(token_change.mint.clone())
-                                .or_insert(0.0) += token_change.ui_amount_change;
-                        }
-                    }
-                    self.total_sol_change += event.sol_change_lamports;
-                } else {
-                    self.spam_count += 1;
-                }
-            }
-            MevCategory::Mint => {
-                if event.success {
-                    self.mint_count += 1;
-                    // Track new tokens minted
-                    for token_change in &event.token_changes {
-                        if token_change.ui_amount_change > 0.0 {
-                            *self.minted_tokens
-                                .entry(token_change.mint.clone())
-                                .or_insert(0.0) += token_change.ui_amount_change;
-                        }
-                    }
-                } else {
-                    self.spam_count += 1;
-                }
-            }
-            MevCategory::Spam => {
-                self.spam_count += 1;
-            }
-            // Sandwich and JIT are tracked separately in multi-tx MEV events
-            MevCategory::Sandwich | MevCategory::JitLiquidity => {
-                // These won't be in individual transactions, but in multi-tx events
-                // If they appear here, count as spam
-                self.spam_count += 1;
-            }
-        }
-
-        // Track program usage
-        for program in &event.programs_involved {
-            *self.programs_used.entry(program.clone()).or_insert(0) += 1;
-        }
-    }
-
-    /// Total MEV transactions (excluding spam)
-    pub fn total_mev_count(&self) -> usize {
-        self.arbitrage_count + self.liquidation_count + self.mint_count
-    }
-
-    /// Get top token profits across all MEV categories
-    pub fn top_token_profits(&self, limit: usize) -> Vec<(String, f64)> {
-        let mut all_profits: HashMap<String, f64> = HashMap::new();
-
-        // Combine all token profits
-        for (mint, profit) in &self.arbitrage_token_profits {
-            *all_profits.entry(mint.clone()).or_insert(0.0) += profit;
-        }
-        for (mint, profit) in &self.liquidation_token_profits {
-            *all_profits.entry(mint.clone()).or_insert(0.0) += profit;
-        }
-
-        // Sort by profit descending
-        let mut profits: Vec<_> = all_profits.into_iter().collect();
-        profits.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-        profits.into_iter().take(limit).collect()
-    }
-}
-
 /// Known token addresses and metadata
 pub struct TokenRegistry;
 
@@ -417,7 +292,6 @@ impl ProgramRegistry {
             Self::TOKEN_2022_PROGRAM => "Token-2022".to_string(),
             Self::METAPLEX_TOKEN_METADATA => "Metaplex Metadata".to_string(),
             Self::METAPLEX_CORE => "Metaplex Core".to_string(),
-            Self::PUMP_FUN => "Pump.fun AMM".to_string(),
             _ => {
                 // Return full address for unknown programs
                 program_id.to_string()
@@ -822,7 +696,7 @@ impl MevAnalyzer {
         account_keys: &[String],
         pre_token_balances: &[UiTransactionTokenBalance],
         post_token_balances: &[UiTransactionTokenBalance],
-        program_ids: &[String],
+        _program_ids: &[String],
     ) -> Vec<Swap> {
         let mut swaps = Vec::new();
 
