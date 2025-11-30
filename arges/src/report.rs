@@ -322,7 +322,7 @@ pub struct MevValidationJson {
 #[derive(Serialize)]
 pub struct MevTransactionJson {
     pub signature: String,
-    pub signer: Option<String>,
+    pub attacker_signer: Option<String>,
     pub category: String,
     pub success: bool,
     pub program_addresses: Vec<String>,
@@ -513,7 +513,7 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
         if should_include {
             mev_transactions.push(MevTransactionJson {
                 signature: event.signature.clone(),
-                signer: event.signer.clone(),
+                attacker_signer: event.attacker_signer.clone(),
                 category: format!("{:?}", event.category).to_uppercase(),
                 success: event.success,
                 program_addresses: event.programs_involved.clone(),

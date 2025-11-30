@@ -65,7 +65,7 @@ impl MevCategory {
 pub struct MevEvent {
     pub category: MevCategory,
     pub signature: String,
-    pub signer: Option<String>,
+    pub attacker_signer: Option<String>,
     pub programs_involved: Vec<String>,
     pub token_changes: Vec<TokenChange>,
     pub sol_change_lamports: i64,
@@ -456,7 +456,7 @@ impl MevAnalyzer {
     ///    - Failed → SPAM
     pub fn analyze_transaction(
         signature: &str,
-        signer: Option<String>,
+        attacker_signer: Option<String>,
         instructions: &[UiInstruction],
         account_keys: &[String],
         success: bool,
@@ -473,8 +473,8 @@ impl MevAnalyzer {
         }
 
         // Calculate token changes first (needed for classification)
-        // Only include the signer's accounts to get true profit/loss
-        let token_changes = Self::calculate_token_changes(pre_token_balances, post_token_balances, signer.as_deref());
+        // Only include the attacker's accounts to get true profit/loss
+        let token_changes = Self::calculate_token_changes(pre_token_balances, post_token_balances, attacker_signer.as_deref());
 
         // Detect category based on program interactions AND token changes
         let category = Self::detect_category(&program_ids, &token_changes)?;
@@ -495,7 +495,7 @@ impl MevAnalyzer {
         Some(MevEvent {
             category,
             signature: signature.to_string(),
-            signer,
+            attacker_signer,
             programs_involved: program_ids,
             token_changes,
             sol_change_lamports,
@@ -643,23 +643,23 @@ impl MevAnalyzer {
     }
 
     /// Calculate token balance changes from pre/post token balances
-    /// Only sums changes for accounts owned by the signer to get true profit/loss
+    /// Only sums changes for accounts owned by the attacker to get true profit/loss
     fn calculate_token_changes(
         pre_token_balances: &[UiTransactionTokenBalance],
         post_token_balances: &[UiTransactionTokenBalance],
-        signer: Option<&str>,
+        attacker_signer: Option<&str>,
     ) -> Vec<TokenChange> {
         let mut changes = Vec::new();
         let mut token_map: HashMap<(u8, String), (Option<f64>, Option<f64>, u8)> = HashMap::new();
 
-        // Collect pre-balances (filter by signer's accounts only)
+        // Collect pre-balances (filter by attacker's accounts only)
         for pre_balance in pre_token_balances {
-            // Skip if this account is not owned by the signer
-            if let Some(signer_addr) = signer {
+            // Skip if this account is not owned by the attacker
+            if let Some(attacker_addr) = attacker_signer {
                 use solana_transaction_status::option_serializer::OptionSerializer;
                 match &pre_balance.owner {
                     OptionSerializer::Some(owner) => {
-                        if owner != signer_addr {
+                        if owner != attacker_addr {
                             continue;
                         }
                     }
@@ -673,14 +673,14 @@ impl MevAnalyzer {
             entry.2 = pre_balance.ui_token_amount.decimals;
         }
 
-        // Collect post-balances (filter by signer's accounts only)
+        // Collect post-balances (filter by attacker's accounts only)
         for post_balance in post_token_balances {
-            // Skip if this account is not owned by the signer
-            if let Some(signer_addr) = signer {
+            // Skip if this account is not owned by the attacker
+            if let Some(attacker_addr) = attacker_signer {
                 use solana_transaction_status::option_serializer::OptionSerializer;
                 match &post_balance.owner {
                     OptionSerializer::Some(owner) => {
-                        if owner != signer_addr {
+                        if owner != attacker_addr {
                             continue;
                         }
                     }
@@ -694,8 +694,8 @@ impl MevAnalyzer {
             entry.2 = post_balance.ui_token_amount.decimals;
         }
 
-        // Calculate net token changes by summing across signer's accounts for each mint
-        // This gives us the true net position change (profit/loss) for the signer
+        // Calculate net token changes by summing across attacker's accounts for each mint
+        // This gives us the true net position change (profit/loss) for the attacker
         let mut mint_totals: HashMap<String, (f64, u8)> = HashMap::new(); // (total_change, decimals)
 
         for ((_account_idx, mint), (pre_opt, post_opt, decimals)) in token_map {
@@ -703,7 +703,7 @@ impl MevAnalyzer {
             let post = post_opt.unwrap_or(0.0);
             let change = post - pre;
 
-            // Sum all changes for this mint across signer's accounts
+            // Sum all changes for this mint across attacker's accounts
             mint_totals.entry(mint.clone())
                 .and_modify(|e| {
                     e.0 += change;
@@ -1038,7 +1038,7 @@ impl MevAnalyzer {
                             MevEvent {
                                 category: MevCategory::Arbitrage,
                                 signature: tx_i.signature.clone(),
-                                signer: tx_i.signer(),
+                                attacker_signer: tx_i.signer(),
                                 programs_involved: Vec::new(),
                                 token_changes: front_token_changes.clone(),
                                 sol_change_lamports: 0,
@@ -1054,7 +1054,7 @@ impl MevAnalyzer {
                             MevEvent {
                                 category: MevCategory::Arbitrage,
                                 signature: tx_k.signature.clone(),
-                                signer: tx_k.signer(),
+                                attacker_signer: tx_k.signer(),
                                 programs_involved: Vec::new(),
                                 token_changes: back_token_changes.clone(),
                                 sol_change_lamports: 0,
