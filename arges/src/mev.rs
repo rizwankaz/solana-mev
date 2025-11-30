@@ -96,15 +96,15 @@ pub struct MultiTxMevEvent {
     pub category: MevCategory,
     /// Frontrun/setup transaction
     pub frontrun_signature: String,
-    pub frontrun_signer: Option<String>,
+    pub frontrun_attacker: Option<String>,
     pub frontrun_tx_index: usize,
     /// Victim/target transaction
     pub victim_signature: String,
-    pub victim_signer: Option<String>,
+    pub victim: Option<String>,
     pub victim_tx_index: usize,
     /// Backrun/exit transaction
     pub backrun_signature: String,
-    pub backrun_signer: Option<String>,
+    pub backrun_attacker: Option<String>,
     pub backrun_tx_index: usize,
     /// Extracted profit (in tokens)
     pub profit_token_changes: Vec<TokenChange>,
@@ -1100,13 +1100,13 @@ impl MevAnalyzer {
                         sandwiches.push(MultiTxMevEvent {
                             category: MevCategory::Sandwich,
                             frontrun_signature: mev_front.signature.clone(),
-                            frontrun_signer: tx_i.signer(),
+                            frontrun_attacker: tx_i.signer(),
                             frontrun_tx_index: *idx_i,
                             victim_signature: tx_j.signature.clone(),
-                            victim_signer: tx_j.signer(),
+                            victim: tx_j.signer(),
                             victim_tx_index: *idx_j,
                             backrun_signature: mev_back.signature.clone(),
-                            backrun_signer: tx_k.signer(),
+                            backrun_attacker: tx_k.signer(),
                             backrun_tx_index: *idx_k,
                             profit_token_changes,
                             total_sol_profit_lamports: total_sol_profit,
@@ -1126,20 +1126,20 @@ impl MevAnalyzer {
     /// Check if two transactions form a sandwich pattern based on token changes
     ///
     /// Requirements:
-    /// - Same signer for both transactions (same bot)
+    /// - Same attacker for both transactions (same bot)
     /// - Trade the same token pair in opposite directions
     /// - Both transactions involve swaps (have token changes)
     fn is_sandwich_pattern_from_token_changes(
         front_token_changes: &[TokenChange],
         back_token_changes: &[TokenChange],
-        frontrun_signer: Option<&str>,
-        backrun_signer: Option<&str>,
+        frontrun_attacker: Option<&str>,
+        backrun_attacker: Option<&str>,
     ) -> bool {
-        // Must have the same signer (sandwich bot)
-        if frontrun_signer.is_none() || backrun_signer.is_none() {
+        // Must have the same attacker (sandwich bot)
+        if frontrun_attacker.is_none() || backrun_attacker.is_none() {
             return false;
         }
-        if frontrun_signer != backrun_signer {
+        if frontrun_attacker != backrun_attacker {
             return false;
         }
 
@@ -1245,13 +1245,13 @@ impl MevAnalyzer {
                 jit_attacks.push(MultiTxMevEvent {
                     category: MevCategory::JitLiquidity,
                     frontrun_signature: mev_add.signature.clone(),
-                    frontrun_signer: tx_i.signer(),
+                    frontrun_attacker: tx_i.signer(),
                     frontrun_tx_index: *idx_i,
                     victim_signature: mev_target.signature.clone(),
-                    victim_signer: tx_j.signer(),
+                    victim: tx_j.signer(),
                     victim_tx_index: *idx_j,
                     backrun_signature: mev_remove.signature.clone(),
-                    backrun_signer: tx_k.signer(),
+                    backrun_attacker: tx_k.signer(),
                     backrun_tx_index: *idx_k,
                     profit_token_changes,
                     total_sol_profit_lamports: total_sol_profit,
