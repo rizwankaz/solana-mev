@@ -96,13 +96,16 @@ pub struct MultiTxMevEvent {
     pub category: MevCategory,
     /// Frontrun/setup transaction
     pub frontrun_signature: String,
-    pub frontrun_tx_signer: Option<String>,
+    pub frontrun_signer: Option<String>,
+    pub frontrun_tx_index: usize,
     /// Victim/target transaction
     pub victim_signature: String,
-    pub victim_tx_signer: Option<String>,
+    pub victim_signer: Option<String>,
+    pub victim_tx_index: usize,
     /// Backrun/exit transaction
     pub backrun_signature: String,
-    pub backrun_tx_signer: Option<String>,
+    pub backrun_signer: Option<String>,
+    pub backrun_tx_index: usize,
     /// Extracted profit (in tokens)
     pub profit_token_changes: Vec<TokenChange>,
     /// Total SOL profit
@@ -286,12 +289,8 @@ impl TokenRegistry {
             Self::WBTC => "WBTC".to_string(),
             Self::WETH => "WETH".to_string(),
             _ => {
-                // Truncate unknown tokens for readability
-                if mint.len() > 10 {
-                    format!("{}...{}", &mint[..6], &mint[mint.len()-4..])
-                } else {
-                    mint.to_string()
-                }
+                // Return full address for unknown tokens
+                mint.to_string()
             }
         }
     }
@@ -420,12 +419,8 @@ impl ProgramRegistry {
             Self::METAPLEX_CORE => "Metaplex Core".to_string(),
             Self::PUMP_FUN => "Pump.fun AMM".to_string(),
             _ => {
-                // Truncate unknown programs for readability
-                if program_id.len() > 10 {
-                    format!("{}...{}", &program_id[..6], &program_id[program_id.len()-4..])
-                } else {
-                    program_id.to_string()
-                }
+                // Return full address for unknown programs
+                program_id.to_string()
             }
         }
     }
@@ -1105,11 +1100,14 @@ impl MevAnalyzer {
                         sandwiches.push(MultiTxMevEvent {
                             category: MevCategory::Sandwich,
                             frontrun_signature: mev_front.signature.clone(),
-                            frontrun_tx_signer: mev_front.signer(),
+                            frontrun_signer: tx_i.signer(),
+                            frontrun_tx_index: *idx_i,
                             victim_signature: tx_j.signature.clone(),
-                            victim_tx_signer: tx_j.signer(),
+                            victim_signer: tx_j.signer(),
+                            victim_tx_index: *idx_j,
                             backrun_signature: mev_back.signature.clone(),
-                            backrun_tx_signer: mev_back.signer(),
+                            backrun_signer: tx_k.signer(),
+                            backrun_tx_index: *idx_k,
                             profit_token_changes,
                             total_sol_profit_lamports: total_sol_profit,
                             programs_involved: programs,
@@ -1247,11 +1245,14 @@ impl MevAnalyzer {
                 jit_attacks.push(MultiTxMevEvent {
                     category: MevCategory::JitLiquidity,
                     frontrun_signature: mev_add.signature.clone(),
-                    frontrun_tx_signer: mev_add.signer(),
+                    frontrun_signer: tx_i.signer(),
+                    frontrun_tx_index: *idx_i,
                     victim_signature: mev_target.signature.clone(),
-                    victim_tx_signer: mev_target.signer(),
+                    victim_signer: tx_j.signer(),
+                    victim_tx_index: *idx_j,
                     backrun_signature: mev_remove.signature.clone(),
-                    backrun_tx_signer: mev_remove.signer(),
+                    backrun_signer: tx_k.signer(),
+                    backrun_tx_index: *idx_k,
                     profit_token_changes,
                     total_sol_profit_lamports: total_sol_profit,
                     programs_involved: programs,
