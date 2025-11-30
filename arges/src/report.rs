@@ -1,4 +1,4 @@
-use crate::mev::{MevSummary, ProgramRegistry, TokenRegistry, MevEvent, MultiTxMevEvent, MevAnalyzer};
+use crate::mev::{MevSummary, ProgramRegistry, TokenRegistry, MevEvent, MevAnalyzer};
 use crate::types::FetchedBlock;
 use serde::Serialize;
 

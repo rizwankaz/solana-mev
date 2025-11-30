@@ -340,27 +340,40 @@ impl FetchedTransaction {
 
     /// Analyze this transaction for MEV patterns
     pub fn analyze_mev(&self) -> Option<MevEvent> {
-        // Skip failed transactions entirely - they don't represent successful MEV activity
+        // Skip failed transactions
         if !self.is_success() {
             return None;
         }
 
+        let meta = self.meta.as_ref()?;
+
+        // Extract data directly without unnecessary clones
         let instructions = self.get_instructions();
         let account_keys = self.get_account_keys();
-        let (pre_balances, post_balances) = self.get_balances();
-        let (pre_token_balances, post_token_balances) = self.get_token_balances();
         let signer = self.signer();
+
+        // Get token balances as slices, avoiding clones
+        let (pre_token_balances, post_token_balances) = match (
+            &meta.pre_token_balances,
+            &meta.post_token_balances,
+        ) {
+            (
+                solana_transaction_status::option_serializer::OptionSerializer::Some(pre),
+                solana_transaction_status::option_serializer::OptionSerializer::Some(post),
+            ) => (pre.as_slice(), post.as_slice()),
+            _ => (&[][..], &[][..]),
+        };
 
         MevAnalyzer::analyze_transaction(
             &self.signature,
             signer,
             &instructions,
             &account_keys,
-            true, // always true now since we filter failed transactions above
-            &pre_balances,
-            &post_balances,
-            &pre_token_balances,
-            &post_token_balances,
+            true,
+            &meta.pre_balances,
+            &meta.post_balances,
+            pre_token_balances,
+            post_token_balances,
         )
     }
 }

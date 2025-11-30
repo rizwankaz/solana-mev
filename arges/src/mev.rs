@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use solana_transaction_status::{UiInstruction, UiParsedInstruction, UiTransactionTokenBalance, UiCompiledInstruction};
+use solana_transaction_status::{UiInstruction, UiParsedInstruction, UiTransactionTokenBalance};
 use serde::Serialize;
 
 /// Individual swap within an arbitrage
@@ -511,33 +511,25 @@ impl MevAnalyzer {
     /// Returns ALL programs involved, not just known ones.
     /// This allows us to detect new/unknown DEX programs and protocols.
     fn extract_program_ids(instructions: &[UiInstruction]) -> Vec<String> {
-        let mut programs = Vec::new();
+        let mut seen = HashSet::with_capacity(instructions.len().min(16));
 
         for ix in instructions {
             let program_id = match ix {
                 UiInstruction::Parsed(parsed) => {
                     match parsed {
-                        UiParsedInstruction::Parsed(parsed_ix) => Some(parsed_ix.program_id.clone()),
-                        UiParsedInstruction::PartiallyDecoded(partial) => Some(partial.program_id.clone()),
+                        UiParsedInstruction::Parsed(parsed_ix) => Some(&parsed_ix.program_id),
+                        UiParsedInstruction::PartiallyDecoded(partial) => Some(&partial.program_id),
                     }
                 }
-                UiInstruction::Compiled(_) => {
-                    // For compiled instructions, we would need the account keys
-                    // from the transaction message to resolve program IDs
-                    None
-                }
+                UiInstruction::Compiled(_) => None,
             };
 
             if let Some(program_str) = program_id {
-                // Include ALL programs, not just known ones
-                // This lets us detect swaps on new/unknown DEX programs
-                if !programs.contains(&program_str) {
-                    programs.push(program_str);
-                }
+                seen.insert(program_str);
             }
         }
 
-        programs
+        seen.into_iter().map(|s| s.to_owned()).collect()
     }
 
     /// Detect MEV category based on program interactions AND token balance changes
