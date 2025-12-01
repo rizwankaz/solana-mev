@@ -277,9 +277,22 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
         // Only include MEV events where we successfully calculated positive profitability
         // Exclude: failed transactions, unprofitable transactions, and transactions where we can't calculate profit
         let should_include = if event.success {
-            profitability.as_ref()
+            let include = profitability.as_ref()
                 .map(|p| p.net_profit_usd > 0.0)
-                .unwrap_or(false)  // Exclude if we can't calculate profitability
+                .unwrap_or(false);  // Exclude if we can't calculate profitability
+
+            if let Some(p) = &profitability {
+                tracing::info!(
+                    "tx {}: net_profit=${:.6}, include={}",
+                    &event.signature[..12],
+                    p.net_profit_usd,
+                    include
+                );
+            } else {
+                tracing::debug!("tx {}: no profitability data, excluding", &event.signature[..12]);
+            }
+
+            include
         } else {
             false  // Always exclude failed transactions
         };
