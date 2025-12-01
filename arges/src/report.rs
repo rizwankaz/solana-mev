@@ -210,6 +210,26 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
         }
     };
 
+    // Derive prices from swap ratios for tokens not in Pyth feeds
+    // Collect all swaps from all MEV events
+    let all_swaps: Vec<_> = mev_events_with_tx.iter()
+        .flat_map(|(event, _)| event.swaps.iter())
+        .cloned()
+        .collect();
+
+    let derived_prices = PriceOracle::derive_prices_from_swaps(&all_swaps, &prices);
+
+    // Merge derived prices with Pyth prices (Pyth takes precedence)
+    let mut combined_prices = prices.clone();
+    for (mint, price) in derived_prices {
+        combined_prices.entry(mint).or_insert(price);
+    }
+
+    if combined_prices.len() > prices.len() {
+        tracing::info!("total prices available: {} ({} from Pyth + {} derived from swaps)",
+            combined_prices.len(), prices.len(), combined_prices.len() - prices.len());
+    }
+
     // Build MEV transactions with profitability
     for (event, tx) in mev_events_with_tx {
         let swaps_json: Vec<SwapJson> = event.swaps.iter()
@@ -234,7 +254,7 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
         };
 
         // Calculate profitability (if prices available)
-        let profitability = calculate_profitability(&event, tx, &prices);
+        let profitability = calculate_profitability(&event, tx, &combined_prices);
 
         // Only include MEV events where we successfully calculated positive profitability
         // Exclude: failed transactions, unprofitable transactions, and transactions where we can't calculate profit

@@ -302,6 +302,53 @@ impl PriceOracle {
         &self.mint_to_symbol
     }
 
+    /// Derive token prices from swap ratios using known prices
+    ///
+    /// For tokens not in price feeds, calculate their USD value based on swap ratios
+    /// against tokens with known prices (e.g., if UnknownToken swaps to SOL, derive price)
+    pub fn derive_prices_from_swaps(
+        swaps: &[crate::mev::Swap],
+        known_prices: &HashMap<String, f64>,
+    ) -> HashMap<String, f64> {
+        let mut derived_prices = HashMap::new();
+
+        for swap in swaps {
+            // Try to derive from_token price if unknown
+            if !known_prices.contains_key(&swap.from_token) && !derived_prices.contains_key(&swap.from_token) {
+                if let Some(&to_price) = known_prices.get(&swap.to_token).or_else(|| derived_prices.get(&swap.to_token)) {
+                    // from_token_price = (to_amount * to_price) / from_amount
+                    if swap.from_amount > 0.0 {
+                        let from_price = (swap.to_amount * to_price) / swap.from_amount;
+                        if from_price > 0.0 && from_price.is_finite() {
+                            derived_prices.insert(swap.from_token.clone(), from_price);
+                            tracing::debug!("derived price for {} from swap ratio: ${:.6}", swap.from_token, from_price);
+                        }
+                    }
+                }
+            }
+
+            // Try to derive to_token price if unknown
+            if !known_prices.contains_key(&swap.to_token) && !derived_prices.contains_key(&swap.to_token) {
+                if let Some(&from_price) = known_prices.get(&swap.from_token).or_else(|| derived_prices.get(&swap.from_token)) {
+                    // to_token_price = (from_amount * from_price) / to_amount
+                    if swap.to_amount > 0.0 {
+                        let to_price = (swap.from_amount * from_price) / swap.to_amount;
+                        if to_price > 0.0 && to_price.is_finite() {
+                            derived_prices.insert(swap.to_token.clone(), to_price);
+                            tracing::debug!("derived price for {} from swap ratio: ${:.6}", swap.to_token, to_price);
+                        }
+                    }
+                }
+            }
+        }
+
+        if !derived_prices.is_empty() {
+            tracing::info!("derived {} token prices from swap ratios", derived_prices.len());
+        }
+
+        derived_prices
+    }
+
     /// Convert lamports to SOL
     pub fn lamports_to_sol(lamports: u64) -> f64 {
         lamports as f64 / 1_000_000_000.0
