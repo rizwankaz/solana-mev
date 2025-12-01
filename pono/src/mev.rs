@@ -2,26 +2,26 @@ use std::collections::{HashMap, HashSet};
 use solana_transaction_status::{UiInstruction, UiParsedInstruction, UiTransactionTokenBalance};
 use serde::Serialize;
 
-/// Individual swap within an arbitrage
+/// swap
 #[derive(Debug, Clone, Serialize)]
 pub struct Swap {
-    /// Token being sold/input
+    /// token sold
     pub from_token: String,
-    /// Amount of from_token
+    /// amount of from_token
     pub from_amount: f64,
-    /// Token being bought/output
+    /// token bought
     pub to_token: String,
-    /// Amount of to_token
+    /// amount of to_token
     pub to_amount: f64,
-    /// DEX program used for this swap
+    /// dex used
     pub dex_program: String,
-    /// Decimals for from_token
+    /// from_token decimals
     pub from_decimals: u8,
-    /// Decimals for to_token
+    /// to_token decimals
     pub to_decimals: u8,
 }
 
-/// Token balance change for a specific mint
+/// token balance change for a specific mint
 #[derive(Debug, Clone, Serialize)]
 pub struct TokenChange {
     pub mint: String,
@@ -33,17 +33,17 @@ pub struct TokenChange {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum MevCategory {
-    /// Cross-DEX arbitrage opportunities
+    /// atomic arbs
     Arbitrage,
-    /// Liquidations on lending protocols
+    /// lending liquidations
     Liquidation,
-    /// Token or NFT mints
+    /// mints
     Mint,
-    /// Sandwich attack (frontrun + backrun)
+    /// sandwich
     Sandwich,
-    /// JIT (Just-In-Time) liquidity attack
+    /// jit
     JitLiquidity,
-    /// Failed MEV attempts (spam)
+    /// failed mev
     Spam,
 }
 
@@ -60,7 +60,7 @@ impl MevCategory {
     }
 }
 
-/// Individual MEV event detected in a transaction
+/// mev detected
 #[derive(Debug, Clone, Serialize)]
 pub struct MevEvent {
     pub category: MevCategory,
@@ -70,23 +70,16 @@ pub struct MevEvent {
     pub token_changes: Vec<TokenChange>,
     pub sol_change_lamports: i64,
     pub success: bool,
-    /// Individual swaps that make up this MEV transaction
     pub swaps: Vec<Swap>,
-    /// Number of swaps detected
     pub swap_count: usize,
-    /// Profitability analysis (requires price oracle)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub profitability: Option<Profitability>,
 }
 
-/// Profitability analysis for MEV event
 #[derive(Debug, Clone, Serialize)]
 pub struct Profitability {
-    /// Token profit in USD
     pub profit_usd: f64,
-    /// Total fees (tx_fee + priority_fee) in USD
     pub fees_usd: f64,
-    /// Net profit after fees in USD
     pub net_profit_usd: f64,
 }
 
@@ -112,63 +105,6 @@ pub struct MultiTxMevEvent {
     pub total_sol_profit_lamports: i64,
     /// Programs involved across all transactions
     pub programs_involved: Vec<String>,
-}
-
-/// Known token addresses and metadata
-pub struct TokenRegistry;
-
-impl TokenRegistry {
-    // Major stablecoins
-    pub const USDC: &'static str = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
-    pub const USDT: &'static str = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
-    pub const USDS: &'static str = "USDSwr9ApdHk5bvJKMjzff41FfuX8bSxdKcR81vTwcA";
-    pub const PYUSD: &'static str = "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo";
-
-    // Wrapped SOL
-    pub const WSOL: &'static str = "So11111111111111111111111111111111111111112";
-
-    // Major tokens
-    pub const JUP: &'static str = "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN";
-    pub const BONK: &'static str = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263";
-    pub const WIF: &'static str = "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm";
-    pub const POPCAT: &'static str = "7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr";
-    pub const MEW: &'static str = "MEW1gQWJ3nEXg2qgERiKu7FAFj79PHvQVREQUzScPP5";
-    pub const PYTH: &'static str = "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3";
-    pub const JTO: &'static str = "jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL";
-    pub const ORCA: &'static str = "orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE";
-    pub const RAY: &'static str = "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R";
-    pub const DARK: &'static str = "FmQ7v2QUqXVVtAXkngBh3Mwx7s3mKT55nQ5Z673dURYS";
-
-    // Wrapped assets
-    pub const WBTC: &'static str = "3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh";
-    pub const WETH: &'static str = "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs";
-
-    /// Get human-readable name for a known token
-    pub fn token_name(mint: &str) -> String {
-        match mint {
-            Self::USDC => "USDC".to_string(),
-            Self::USDT => "USDT".to_string(),
-            Self::USDS => "USDS".to_string(),
-            Self::PYUSD => "PYUSD".to_string(),
-            Self::WSOL => "SOL".to_string(),
-            Self::JUP => "JUP".to_string(),
-            Self::BONK => "BONK".to_string(),
-            Self::WIF => "WIF".to_string(),
-            Self::POPCAT => "POPCAT".to_string(),
-            Self::MEW => "MEW".to_string(),
-            Self::PYTH => "PYTH".to_string(),
-            Self::JTO => "JTO".to_string(),
-            Self::ORCA => "ORCA".to_string(),
-            Self::RAY => "RAY".to_string(),
-            Self::DARK => "DARK".to_string(),
-            Self::WBTC => "WBTC".to_string(),
-            Self::WETH => "WETH".to_string(),
-            _ => {
-                // Return full address for unknown tokens
-                mint.to_string()
-            }
-        }
-    }
 }
 
 /// Known program IDs for MEV detection
@@ -260,43 +196,6 @@ impl ProgramRegistry {
                 | Self::METAPLEX_TOKEN_METADATA
                 | Self::METAPLEX_CORE
         )
-    }
-
-    /// Get a human-readable name for a known program
-    pub fn program_name(program_id: &str) -> String {
-        match program_id {
-            Self::JUPITER_V6 => "Jupiter V6".to_string(),
-            Self::JUPITER_LIMIT_ORDER => "Jupiter Limit Order".to_string(),
-            Self::RAYDIUM_AMM_V4 => "Raydium AMM V4".to_string(),
-            Self::RAYDIUM_CPMM => "Raydium CPMM".to_string(),
-            Self::RAYDIUM_CLMM => "Raydium CLMM".to_string(),
-            Self::ORCA_WHIRLPOOL => "Orca Whirlpools".to_string(),
-            Self::PHOENIX => "Phoenix".to_string(),
-            Self::METEORA_DAMM_V2 => "Meteora DAMM V2".to_string(),
-            Self::METEORA_DLMM => "Meteora DLMM".to_string(),
-            Self::METEORA_POOLS => "Meteora Pools".to_string(),
-            Self::LIFINITY_V2 => "Lifinity V2".to_string(),
-            Self::TESSERA_V4 => "TesseraV4".to_string(),
-            Self::SERUM_DEX_V3 => "Serum DEX v3".to_string(),
-            Self::OPENBOOK_V2 => "OpenBook V2".to_string(),
-            Self::DRIFT_PROTOCOL => "Drift Protocol".to_string(),
-            Self::SABER => "Saber".to_string(),
-            Self::MARINADE_FINANCE => "Marinade Finance".to_string(),
-            Self::SANCTUM => "Sanctum".to_string(),
-            Self::PUMP_FUN => "Pump.fun".to_string(),
-            Self::MARGINFI_V2 => "MarginFi V2".to_string(),
-            Self::SOLEND => "Solend".to_string(),
-            Self::KAMINO_LEND => "Kamino Lend".to_string(),
-            Self::MANGO_V4 => "Mango V4".to_string(),
-            Self::TOKEN_PROGRAM => "Token Program".to_string(),
-            Self::TOKEN_2022_PROGRAM => "Token-2022".to_string(),
-            Self::METAPLEX_TOKEN_METADATA => "Metaplex Metadata".to_string(),
-            Self::METAPLEX_CORE => "Metaplex Core".to_string(),
-            _ => {
-                // Return full address for unknown programs
-                program_id.to_string()
-            }
-        }
     }
 }
 
