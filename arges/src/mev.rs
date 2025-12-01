@@ -272,6 +272,12 @@ impl MevAnalyzer {
         };
         let swap_count = swaps.len();
 
+        // Validate arbitrage classification: require at least 2 swaps for true arbitrage
+        // Single-swap "arbitrages" are just favorable swaps, not MEV
+        if category == MevCategory::Arbitrage && swap_count < 2 {
+            return None;
+        }
+
         // Track both successful AND failed MEV events
         // Failed attempts still consume compute units and block space
         Some(MevEvent {
