@@ -1,6 +1,23 @@
-use crate::mev::{MevEvent, MevAnalyzer};
+use crate::mev::{MevEvent, MevAnalyzer, ProgramRegistry};
 use crate::types::FetchedBlock;
 use serde::Serialize;
+
+/// Get display name for a DEX program
+fn get_dex_name(program_id: &str) -> Option<String> {
+    match program_id {
+        ProgramRegistry::RAYDIUM_AMM_V4 => Some("Raydium V4".to_string()),
+        ProgramRegistry::RAYDIUM_CLMM => Some("Raydium CLMM".to_string()),
+        ProgramRegistry::RAYDIUM_CPMM => Some("Raydium CPMM".to_string()),
+        ProgramRegistry::ORCA_WHIRLPOOL => Some("Orca Whirlpool".to_string()),
+        ProgramRegistry::METEORA_DLMM => Some("Meteora DLMM".to_string()),
+        ProgramRegistry::METEORA_POOLS => Some("Meteora Pools".to_string()),
+        ProgramRegistry::PHOENIX => Some("Phoenix".to_string()),
+        ProgramRegistry::LIFINITY_V2 => Some("Lifinity V2".to_string()),
+        ProgramRegistry::PUMP_FUN => Some("Pump.fun".to_string()),
+        ProgramRegistry::JUPITER_V6 => Some("Jupiter Aggregator".to_string()),
+        _ => None,
+    }
+}
 
 /// JSON structure for MEV validation report
 #[derive(Serialize)]
@@ -49,10 +66,16 @@ pub struct ProfitabilityJson {
 #[derive(Serialize)]
 pub struct SwapJson {
     pub from_token: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub from_token_name: Option<String>,
     pub from_amount: f64,
     pub to_token: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub to_token_name: Option<String>,
     pub to_amount: f64,
     pub dex_program: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dex_name: Option<String>,
     pub from_decimals: u8,
     pub to_decimals: u8,
 }
@@ -61,6 +84,8 @@ pub struct SwapJson {
 #[derive(Serialize)]
 pub struct TokenChangeJson {
     pub token_address: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token_name: Option<String>,
     pub amount: f64,
     pub decimals: u8,
 }
@@ -140,7 +165,7 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
     }
 
     // Initialize price oracle (loads token and feed lists at startup)
-    let prices = match PriceOracle::new().await {
+    let (prices, token_names) = match PriceOracle::new().await {
         Ok(oracle) => {
             let mut all_mints: HashSet<String> = HashSet::new();
 
@@ -156,8 +181,11 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
 
             let mints_vec: Vec<String> = all_mints.into_iter().collect();
 
+            // Get token names from Jupiter's token list
+            let token_names = oracle.get_token_names().clone();
+
             // Use historical prices from the block timestamp for accurate profitability analysis
-            match oracle.fetch_prices(&mints_vec, block.block_time).await {
+            let prices = match oracle.fetch_prices(&mints_vec, block.block_time).await {
                 Ok(p) => {
                     if block.block_time.is_some() {
                         tracing::info!("successfully fetched {} historical token prices from Pyth for block timestamp {}",
@@ -171,12 +199,14 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
                     tracing::error!("Failed to fetch prices from Pyth: {:?}", e);
                     HashMap::new()
                 }
-            }
+            };
+
+            (prices, token_names)
         }
         Err(e) => {
             tracing::error!("Failed to initialize price oracle: {:?}", e);
             tracing::warn!("Profitability analysis will be unavailable - continuing without USD prices");
-            HashMap::new()
+            (HashMap::new(), HashMap::new())
         }
     };
 
@@ -185,10 +215,13 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
         let swaps_json: Vec<SwapJson> = event.swaps.iter()
             .map(|swap| SwapJson {
                 from_token: swap.from_token.clone(),
+                from_token_name: token_names.get(&swap.from_token).cloned(),
                 from_amount: swap.from_amount,
                 to_token: swap.to_token.clone(),
+                to_token_name: token_names.get(&swap.to_token).cloned(),
                 to_amount: swap.to_amount,
                 dex_program: swap.dex_program.clone(),
+                dex_name: get_dex_name(&swap.dex_program),
                 from_decimals: swap.from_decimals,
                 to_decimals: swap.to_decimals,
             })
@@ -224,6 +257,7 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
                 token_changes: event.token_changes.iter()
                     .map(|tc| TokenChangeJson {
                         token_address: tc.mint.clone(),
+                        token_name: token_names.get(&tc.mint).cloned(),
                         amount: tc.ui_amount_change,
                         decimals: tc.decimals,
                     })
@@ -259,6 +293,7 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
             profit_tokens: event.profit_token_changes.iter()
                 .map(|tc| TokenChangeJson {
                     token_address: tc.mint.clone(),
+                    token_name: token_names.get(&tc.mint).cloned(),
                     amount: tc.ui_amount_change,
                     decimals: tc.decimals,
                 })

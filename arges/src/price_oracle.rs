@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
 
 /// Jupiter token metadata
 #[derive(Debug, Clone, Deserialize)]
@@ -296,6 +295,11 @@ impl PriceOracle {
     pub async fn get_price(&self, mint: &str, publish_time: Option<i64>) -> Result<Option<f64>> {
         let prices = self.fetch_prices(&[mint.to_string()], publish_time).await?;
         Ok(prices.get(mint).copied())
+    }
+
+    /// Get token display names (mint address → symbol)
+    pub fn get_token_names(&self) -> &HashMap<String, String> {
+        &self.mint_to_symbol
     }
 
     /// Convert lamports to SOL
