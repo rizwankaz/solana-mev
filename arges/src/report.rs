@@ -26,7 +26,6 @@ pub struct MevValidationJson {
     pub blockhash: String,
     pub timestamp: Option<String>,
     pub total_transactions: usize,
-    pub mev_count: usize,
     pub mev_transactions: Vec<MevTransactionJson>,
     pub sandwich_attacks: Vec<MultiTxMevJson>,
     pub jit_attacks: Vec<MultiTxMevJson>,
@@ -111,10 +110,14 @@ fn calculate_profitability(
 ) -> Option<crate::mev::Profitability> {
     use crate::price_oracle::PriceOracle;
 
+    // Get SOL price first (needed for both profit and fees)
+    let sol_price = prices.get("So11111111111111111111111111111111111111112").copied()?;
+
     // Calculate token profit in USD
     let mut profit_usd = 0.0;
     let mut has_prices = false;
 
+    // Add SPL token balance changes
     for token_change in &event.token_changes {
         if let Some(&price) = prices.get(&token_change.mint) {
             profit_usd += token_change.ui_amount_change * price;
@@ -122,14 +125,18 @@ fn calculate_profitability(
         }
     }
 
+    // Add SOL balance change (critical for accurate profitability!)
+    // sol_change_lamports is signed: positive = gained SOL, negative = spent SOL
+    let sol_change_sol = event.sol_change_lamports as f64 / 1_000_000_000.0;
+    profit_usd += sol_change_sol * sol_price;
+    has_prices = true;  // We always have SOL price
+
     // If we don't have any price data, return None
     if !has_prices {
         return None;
     }
 
     // Calculate total fees in USD (tx_fee + priority_fee)
-    let sol_price = prices.get("So11111111111111111111111111111111111111112").copied().unwrap_or(0.0);
-
     let tx_fee_sol = tx.fee().map(PriceOracle::lamports_to_sol).unwrap_or(0.0);
     let priority_fee_sol = tx.priority_fee().map(PriceOracle::lamports_to_sol).unwrap_or(0.0);
     let total_fees_sol = tx_fee_sol + priority_fee_sol;
@@ -329,8 +336,6 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
 
     let timestamp = block.timestamp().map(|t| t.format("%Y-%m-%d %H:%M:%S UTC").to_string());
 
-    let mev_count = mev_transactions.len();
-
     // Calculate total net profit across all MEV events in this block
     let total_net_profit_usd: f64 = mev_transactions.iter()
         .filter_map(|tx| tx.profitability.as_ref())
@@ -342,7 +347,6 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
         blockhash: block.blockhash.clone(),
         timestamp,
         total_transactions: block.transactions.len(),
-        mev_count,
         mev_transactions,
         sandwich_attacks,
         jit_attacks,
