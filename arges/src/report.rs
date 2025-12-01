@@ -140,10 +140,18 @@ fn calculate_profitability(
     );
 
     profit_usd += sol_change_usd;
-    has_prices = true;  // We always have SOL price
 
-    // If we don't have any price data, return None
-    if !has_prices {
+    // Only calculate profitability if we have prices for the tokens involved
+    // For transactions with token_changes, we need at least one token price (not just SOL)
+    // For pure SOL transactions (no tokens), we can calculate from SOL alone
+    if !event.token_changes.is_empty() && !has_prices {
+        // Transaction involves tokens but we don't have prices for any of them
+        // Can't accurately calculate profitability - return None
+        tracing::debug!(
+            "tx {}: involves {} tokens but no prices available, excluding",
+            &event.signature[..12],
+            event.token_changes.len()
+        );
         return None;
     }
 
