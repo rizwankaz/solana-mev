@@ -61,7 +61,7 @@ impl PriceOracle {
     pub async fn new() -> Result<Self> {
         let client = reqwest::Client::new();
         let pyth_base_url = "https://hermes.pyth.network".to_string();
-        let jupiter_token_list_url = "https://token.jup.ag/all".to_string();
+        let jupiter_token_list_url = "https://cache.jup.ag/tokens".to_string();
 
         tracing::info!("initializing price oracle (loading token and feed lists)...");
 
