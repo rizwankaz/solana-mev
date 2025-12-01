@@ -236,13 +236,12 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
         // Calculate profitability (if prices available)
         let profitability = calculate_profitability(&event, tx, &prices);
 
-        // Include successful MEV events
-        // If profitability available, only include if profitable
-        // If profitability unavailable (no prices), include all successful events
+        // Only include MEV events where we successfully calculated positive profitability
+        // Exclude: failed transactions, unprofitable transactions, and transactions where we can't calculate profit
         let should_include = if event.success {
             profitability.as_ref()
                 .map(|p| p.net_profit_usd > 0.0)
-                .unwrap_or(true)  // Include if we can't calculate profitability
+                .unwrap_or(false)  // Exclude if we can't calculate profitability
         } else {
             false  // Always exclude failed transactions
         };
