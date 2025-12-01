@@ -79,8 +79,7 @@ impl PriceOracle {
             .filter_map(|mint| {
                 let feed_id = Self::get_price_feed_id(mint).map(|id| id.to_string());
                 if let Some(ref id) = feed_id {
-                    tracing::info!("found price feed for {}: {}",
-                        crate::mev::TokenRegistry::token_name(mint), id);
+                    tracing::info!("found price feed for {}: {}", mint, id);
                 } else {
                     tracing::warn!("no price feed for token: {}", mint);
                 }
@@ -146,12 +145,12 @@ impl PriceOracle {
                         "comparing pyth ID '{}' with stored id '{}' for {}",
                         normalized_returned_id,
                         normalized_stored_id,
-                        crate::mev::TokenRegistry::token_name(mint)
+                        mint
                     );
 
                     if normalized_returned_id == normalized_stored_id {
                         matched = true;
-                        tracing::info!("+ matched feed {} to token {}", feed.id, crate::mev::TokenRegistry::token_name(mint));
+                        tracing::info!("+ matched feed {} to token {}", feed.id, mint);
 
                         // Parse price: price * 10^expo
                         if let Ok(price_val) = feed.price.price.parse::<f64>() {
@@ -160,7 +159,7 @@ impl PriceOracle {
                             prices.insert(mint.clone(), adjusted_price);
                             tracing::info!(
                                 "fetched price for {}: ${:.6}",
-                                crate::mev::TokenRegistry::token_name(mint),
+                                mint,
                                 adjusted_price
                             );
                         } else {

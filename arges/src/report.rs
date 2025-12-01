@@ -1,4 +1,4 @@
-use crate::mev::{ProgramRegistry, TokenRegistry, MevEvent, MevAnalyzer};
+use crate::mev::{MevEvent, MevAnalyzer};
 use crate::types::FetchedBlock;
 use serde::Serialize;
 
@@ -49,13 +49,10 @@ pub struct ProfitabilityJson {
 #[derive(Serialize)]
 pub struct SwapJson {
     pub from_token: String,
-    pub from_token_name: String,
     pub from_amount: f64,
     pub to_token: String,
-    pub to_token_name: String,
     pub to_amount: f64,
     pub dex_program: String,
-    pub dex_name: String,
     pub from_decimals: u8,
     pub to_decimals: u8,
 }
@@ -64,7 +61,6 @@ pub struct SwapJson {
 #[derive(Serialize)]
 pub struct TokenChangeJson {
     pub token_address: String,
-    pub token_name: String,
     pub amount: f64,
     pub decimals: u8,
 }
@@ -181,13 +177,10 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
         let swaps_json: Vec<SwapJson> = event.swaps.iter()
             .map(|swap| SwapJson {
                 from_token: swap.from_token.clone(),
-                from_token_name: TokenRegistry::token_name(&swap.from_token),
                 from_amount: swap.from_amount,
                 to_token: swap.to_token.clone(),
-                to_token_name: TokenRegistry::token_name(&swap.to_token),
                 to_amount: swap.to_amount,
                 dex_program: swap.dex_program.clone(),
-                dex_name: ProgramRegistry::program_name(&swap.dex_program),
                 from_decimals: swap.from_decimals,
                 to_decimals: swap.to_decimals,
             })
@@ -218,7 +211,6 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
                 token_changes: event.token_changes.iter()
                     .map(|tc| TokenChangeJson {
                         token_address: tc.mint.clone(),
-                        token_name: TokenRegistry::token_name(&tc.mint),
                         amount: tc.ui_amount_change,
                         decimals: tc.decimals,
                     })
@@ -254,7 +246,6 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
             profit_tokens: event.profit_token_changes.iter()
                 .map(|tc| TokenChangeJson {
                     token_address: tc.mint.clone(),
-                    token_name: TokenRegistry::token_name(&tc.mint),
                     amount: tc.ui_amount_change,
                     decimals: tc.decimals,
                 })
