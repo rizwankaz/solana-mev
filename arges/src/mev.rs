@@ -132,6 +132,7 @@ impl ProgramRegistry {
     pub const LIFINITY_V2: &'static str = "EewxydAPCCVuNEyrVN68PuSYdQ7wKn27V9Gjeoi8dy3S";
     pub const TESSERA_V4: &'static str = "TessVxmKMfMPSkxMCyp4VzrKkH9SZxKHuXEL3GLQH"; // Wintermute prop AMM
     pub const SERUM_DEX_V3: &'static str = "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin"; // Serum v3
+    pub const PANCAKESWAP_CLMM: &'static str = "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq"; // PancakeSwap Concentrated Liquidity
     // Anchor-based DEXs
     pub const OPENBOOK_V2: &'static str = "opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb"; // Anchor (Serum fork)
     pub const DRIFT_PROTOCOL: &'static str = "dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH"; // Anchor
@@ -183,6 +184,7 @@ impl ProgramRegistry {
                 | Self::MARINADE_FINANCE
                 | Self::SANCTUM
                 | Self::PUMP_FUN
+                | Self::PANCAKESWAP_CLMM
         )
     }
 

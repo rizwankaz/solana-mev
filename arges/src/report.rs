@@ -15,6 +15,7 @@ fn get_dex_name(program_id: &str) -> Option<String> {
         ProgramRegistry::LIFINITY_V2 => Some("Lifinity V2".to_string()),
         ProgramRegistry::PUMP_FUN => Some("Pump.fun".to_string()),
         ProgramRegistry::JUPITER_V6 => Some("Jupiter Aggregator".to_string()),
+        ProgramRegistry::PANCAKESWAP_CLMM => Some("PancakeSwap".to_string()),
         _ => None,
     }
 }
