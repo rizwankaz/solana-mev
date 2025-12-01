@@ -259,8 +259,8 @@ impl MevAnalyzer {
         // Detect category based on program interactions AND token changes
         let category = Self::detect_category(&program_ids, &token_changes)?;
 
-        // Calculate SOL balance change (signed)
-        let sol_change_lamports = Self::calculate_sol_change(pre_balances, post_balances);
+        // Calculate SOL balance change (signed) - only for the attacker's account
+        let sol_change_lamports = Self::calculate_sol_change(pre_balances, post_balances, attacker_signer.as_deref(), account_keys);
 
         // Detect individual swaps (for arbitrage transactions)
         let swaps = if category == MevCategory::Arbitrage {
@@ -501,16 +501,33 @@ impl MevAnalyzer {
     }
 
     /// Calculate SOL balance change (signed, in lamports)
-    fn calculate_sol_change(pre_balances: &[u64], post_balances: &[u64]) -> i64 {
+    fn calculate_sol_change(
+        pre_balances: &[u64],
+        post_balances: &[u64],
+        attacker: Option<&str>,
+        account_keys: &[String],
+    ) -> i64 {
         if pre_balances.is_empty() || post_balances.is_empty() {
             return 0;
         }
 
-        // Sum all account balance changes
-        let total_pre: i64 = pre_balances.iter().map(|&b| b as i64).sum();
-        let total_post: i64 = post_balances.iter().map(|&b| b as i64).sum();
+        // Find the attacker's account index
+        // Default to first account (fee payer) if no attacker specified
+        let attacker_index = if let Some(attacker_addr) = attacker {
+            account_keys
+                .iter()
+                .position(|key| key == attacker_addr)
+                .unwrap_or(0)
+        } else {
+            0
+        };
 
-        total_post - total_pre
+        // Only calculate SOL change for the attacker's account
+        if attacker_index < pre_balances.len() && attacker_index < post_balances.len() {
+            post_balances[attacker_index] as i64 - pre_balances[attacker_index] as i64
+        } else {
+            0
+        }
     }
 
     /// Decode and extract swap instructions from inner instructions

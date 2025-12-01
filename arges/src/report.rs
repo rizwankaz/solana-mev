@@ -128,7 +128,18 @@ fn calculate_profitability(
     // Add SOL balance change (critical for accurate profitability!)
     // sol_change_lamports is signed: positive = gained SOL, negative = spent SOL
     let sol_change_sol = event.sol_change_lamports as f64 / 1_000_000_000.0;
-    profit_usd += sol_change_sol * sol_price;
+    let sol_change_usd = sol_change_sol * sol_price;
+
+    tracing::debug!(
+        "tx {}: tokens_usd=${:.6}, sol_change={} lamports ({:.9} SOL = ${:.6})",
+        &event.signature[..12],
+        profit_usd,
+        event.sol_change_lamports,
+        sol_change_sol,
+        sol_change_usd
+    );
+
+    profit_usd += sol_change_usd;
     has_prices = true;  // We always have SOL price
 
     // If we don't have any price data, return None
