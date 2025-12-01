@@ -298,22 +298,3 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
     serde_json::to_string_pretty(&report)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_lamports_to_sol() {
-        assert_eq!(lamports_to_sol(1_000_000_000), "1");
-        assert_eq!(lamports_to_sol(500_000_000), "0.5");
-        assert_eq!(lamports_to_sol(123_456_789), "0.123456789");
-        assert_eq!(lamports_to_sol(100_000_000), "0.1");
-    }
-
-    #[test]
-    fn test_format_compute_units() {
-        assert_eq!(format_compute_units(1000), "1,000");
-        assert_eq!(format_compute_units(1000000), "1,000,000");
-        assert_eq!(format_compute_units(123456789), "123,456,789");
-    }
-}

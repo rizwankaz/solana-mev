@@ -105,17 +105,31 @@ impl PriceOracle {
 
         // Build symbol → feed ID map (only USD price feeds)
         let mut symbol_to_feed = HashMap::new();
+        let mut total_feeds = 0;
+        let mut usd_feeds = 0;
+
         for feed in feeds {
+            total_feeds += 1;
+
             // Only include USD price feeds (e.g., "SOL/USD", "USDC/USD")
             if feed.attributes.symbol.contains("/USD") {
+                usd_feeds += 1;
+
                 // Extract base symbol (e.g., "SOL" from "SOL/USD")
                 if let Some(base_symbol) = feed.attributes.symbol.split('/').next() {
+                    tracing::debug!("extracted '{}' from '{}' → feed_id {}",
+                        base_symbol, feed.attributes.symbol, feed.id);
                     symbol_to_feed.insert(base_symbol.to_string(), feed.id);
                 }
             }
         }
 
-        tracing::info!("loaded {} Pyth USD price feeds", symbol_to_feed.len());
+        tracing::info!("loaded {} Pyth USD price feeds from {} total feeds ({} were USD pairs)",
+            symbol_to_feed.len(), total_feeds, usd_feeds);
+
+        // Log first few symbols for debugging
+        let sample_symbols: Vec<_> = symbol_to_feed.keys().take(10).collect();
+        tracing::debug!("sample symbols in map: {:?}", sample_symbols);
         Ok(symbol_to_feed)
     }
 
@@ -150,11 +164,23 @@ impl PriceOracle {
         for mint in mints {
             if let Some(symbol) = self.mint_to_symbol.get(mint) {
                 tracing::info!("mint {} → symbol '{}'", mint, symbol);
+
+                // Debug: check if symbol exists with different case or whitespace
+                let symbol_trimmed = symbol.trim();
+                tracing::debug!("looking up symbol '{}' (trimmed: '{}', len: {})",
+                    symbol, symbol_trimmed, symbol.len());
+
                 if let Some(feed_id) = self.symbol_to_feed.get(symbol) {
                     mint_to_feed.insert(mint.clone(), feed_id.clone());
                     tracing::info!("✓ resolved {} → {} → {}", mint, symbol, feed_id);
                 } else {
-                    tracing::warn!("✗ no Pyth feed for symbol '{}' (from mint {})", symbol, mint);
+                    // Debug: show similar symbols that DO exist
+                    let similar: Vec<_> = self.symbol_to_feed.keys()
+                        .filter(|k| k.contains(symbol.as_str()) || symbol.contains(k.as_str()))
+                        .take(5)
+                        .collect();
+                    tracing::warn!("✗ no Pyth feed for symbol '{}' (from mint {}). Similar keys in map: {:?}",
+                        symbol, mint, similar);
                 }
             } else {
                 tracing::warn!("✗ token not in Jupiter list: {}", mint);
@@ -304,6 +330,49 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_symbol_extraction_logic() {
+        // Test the symbol extraction logic that processes Pyth feeds
+        let test_cases = vec![
+            ("SOL/USD", "SOL"),
+            ("USDC/USD", "USDC"),
+            ("BTC/USD", "BTC"),
+            ("Crypto.SOL/USD", "Crypto.SOL"),  // Some feeds might have prefixes
+        ];
+
+        for (input, expected) in test_cases {
+            let result = input.split('/').next();
+            assert_eq!(result, Some(expected), "Failed to extract {} from {}", expected, input);
+        }
+    }
+
+    #[test]
+    fn test_hashmap_symbol_matching() {
+        use std::collections::HashMap;
+
+        // Simulate the symbol_to_feed HashMap
+        let mut symbol_to_feed = HashMap::new();
+
+        // Simulate extracting "SOL" from "SOL/USD"
+        let pyth_feed_symbol = "SOL/USD";
+        let extracted_symbol = pyth_feed_symbol.split('/').next().unwrap().to_string();
+        symbol_to_feed.insert(extracted_symbol.clone(), "feed_id_123".to_string());
+
+        // Simulate Jupiter returning "SOL" for the SOL mint
+        let jupiter_symbol = "SOL";
+
+        // This should match
+        let result = symbol_to_feed.get(jupiter_symbol);
+        assert!(result.is_some(), "Failed to match symbol '{}' in HashMap. Keys: {:?}",
+            jupiter_symbol, symbol_to_feed.keys().collect::<Vec<_>>());
+        assert_eq!(result.unwrap(), "feed_id_123");
+
+        println!("✓ Symbol matching logic works correctly");
+        println!("  Pyth feed: {} → extracted: {}", pyth_feed_symbol, extracted_symbol);
+        println!("  Jupiter symbol: {}", jupiter_symbol);
+        println!("  HashMap lookup: {:?}", result);
+    }
+
     #[tokio::test]
     async fn test_preloaded_feed_resolution() {
         let oracle = PriceOracle::new().await.expect("failed to initialize oracle");
@@ -311,6 +380,23 @@ mod tests {
         // Verify preloaded data
         assert!(!oracle.mint_to_symbol.is_empty(), "should have loaded tokens");
         assert!(!oracle.symbol_to_feed.is_empty(), "should have loaded price feeds");
+
+        // Log some sample data for debugging
+        println!("Loaded {} tokens from Jupiter", oracle.mint_to_symbol.len());
+        println!("Loaded {} Pyth feeds", oracle.symbol_to_feed.len());
+
+        // Check if SOL exists in both maps
+        let sol_mint = "So11111111111111111111111111111111111111112";
+        if let Some(sol_symbol) = oracle.mint_to_symbol.get(sol_mint) {
+            println!("SOL mint → symbol: '{}'", sol_symbol);
+            println!("SOL symbol in feed map: {}", oracle.symbol_to_feed.contains_key(sol_symbol));
+
+            if !oracle.symbol_to_feed.contains_key(sol_symbol) {
+                // Show what symbols ARE in the feed map
+                let sample_feeds: Vec<_> = oracle.symbol_to_feed.keys().take(20).collect();
+                println!("Sample feed symbols: {:?}", sample_feeds);
+            }
+        }
 
         // Test with various tokens
         let mints = vec![
