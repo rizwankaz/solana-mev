@@ -149,19 +149,20 @@ impl PriceOracle {
 
         for mint in mints {
             if let Some(symbol) = self.mint_to_symbol.get(mint) {
+                tracing::info!("mint {} → symbol '{}'", mint, symbol);
                 if let Some(feed_id) = self.symbol_to_feed.get(symbol) {
                     mint_to_feed.insert(mint.clone(), feed_id.clone());
-                    tracing::debug!("resolved {} → {} → {}", mint, symbol, feed_id);
+                    tracing::info!("✓ resolved {} → {} → {}", mint, symbol, feed_id);
                 } else {
-                    tracing::debug!("no Pyth feed for symbol: {}", symbol);
+                    tracing::warn!("✗ no Pyth feed for symbol '{}' (from mint {})", symbol, mint);
                 }
             } else {
-                tracing::debug!("token not in Jupiter list: {}", mint);
+                tracing::warn!("✗ token not in Jupiter list: {}", mint);
             }
         }
 
         if !mint_to_feed.is_empty() {
-            tracing::debug!("resolved {} feed IDs from preloaded data", mint_to_feed.len());
+            tracing::info!("resolved {} feed IDs from preloaded data", mint_to_feed.len());
         }
 
         mint_to_feed
