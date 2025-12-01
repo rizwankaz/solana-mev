@@ -2,7 +2,7 @@ use crate::mev::{MevEvent, MevAnalyzer};
 use crate::types::FetchedBlock;
 use serde::Serialize;
 
-/// json for block
+/// JSON structure for MEV validation report
 #[derive(Serialize)]
 pub struct MevValidationJson {
     pub slot: u64,
@@ -13,10 +13,11 @@ pub struct MevValidationJson {
     pub mev_transactions: Vec<MevTransactionJson>,
     pub sandwich_attacks: Vec<MultiTxMevJson>,
     pub jit_attacks: Vec<MultiTxMevJson>,
+    /// Total net profit in USD across all MEV events in this block
     pub total_net_profit_usd: f64,
 }
 
-/// json for transaction
+/// JSON structure for individual MEV transaction
 #[derive(Serialize)]
 pub struct MevTransactionJson {
     pub signature: String,
@@ -36,7 +37,7 @@ pub struct MevTransactionJson {
     pub profitability: Option<ProfitabilityJson>,
 }
 
-/// json for profitability
+/// JSON structure for profitability analysis
 #[derive(Serialize)]
 pub struct ProfitabilityJson {
     pub profit_usd: f64,
@@ -44,7 +45,7 @@ pub struct ProfitabilityJson {
     pub net_profit_usd: f64,
 }
 
-/// json for swap
+/// JSON structure for individual swap
 #[derive(Serialize)]
 pub struct SwapJson {
     pub from_token: String,
@@ -56,7 +57,7 @@ pub struct SwapJson {
     pub to_decimals: u8,
 }
 
-/// json for token change
+/// JSON structure for token changes
 #[derive(Serialize)]
 pub struct TokenChangeJson {
     pub token_address: String,
@@ -64,7 +65,7 @@ pub struct TokenChangeJson {
     pub decimals: u8,
 }
 
-/// json for sandwich, jit
+/// JSON structure for multi-transaction MEV events (sandwich, JIT)
 #[derive(Serialize)]
 pub struct MultiTxMevJson {
     pub category: String,
@@ -77,7 +78,7 @@ pub struct MultiTxMevJson {
     pub total_sol_profit_lamports: i64,
 }
 
-/// calculating net profit
+/// Calculate profitability for an MEV event
 fn calculate_profitability(
     event: &MevEvent,
     tx: &crate::types::FetchedTransaction,
@@ -85,7 +86,7 @@ fn calculate_profitability(
 ) -> Option<crate::mev::Profitability> {
     use crate::price_oracle::PriceOracle;
 
-    // profit in usd
+    // Calculate token profit in USD
     let mut profit_usd = 0.0;
     let mut has_prices = false;
 
@@ -96,11 +97,12 @@ fn calculate_profitability(
         }
     }
 
+    // If we don't have any price data, return None
     if !has_prices {
         return None;
     }
 
-    // fees in usd
+    // Calculate total fees in USD (tx_fee + priority_fee)
     let sol_price = prices.get("So11111111111111111111111111111111111111112").copied().unwrap_or(0.0);
 
     let tx_fee_sol = tx.fee().map(PriceOracle::lamports_to_sol).unwrap_or(0.0);
@@ -108,7 +110,7 @@ fn calculate_profitability(
     let total_fees_sol = tx_fee_sol + priority_fee_sol;
     let fees_usd = total_fees_sol * sol_price;
 
-    // net profit
+    // Calculate net profit
     let net_profit_usd = profit_usd - fees_usd;
 
     Some(crate::mev::Profitability {
@@ -118,7 +120,7 @@ fn calculate_profitability(
     })
 }
 
-/// mevblock json
+/// Format MEV validation report as JSON with profitability analysis
 pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, serde_json::Error> {
     use crate::price_oracle::PriceOracle;
     use std::collections::{HashMap, HashSet};
@@ -127,7 +129,7 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
     let mut tx_with_mev = Vec::new();
     let mut mev_events_with_tx = Vec::new();
 
-    // all events indexed
+    // Collect all MEV events with their transaction indices
     for (idx, tx) in block.transactions.iter().enumerate() {
         if let Some(event) = tx.analyze_mev() {
             mev_events_with_tx.push((event.clone(), tx));
@@ -137,40 +139,48 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
         }
     }
 
-    // fetch relevant prices
-    let oracle = PriceOracle::new();
-    let mut all_mints: HashSet<String> = HashSet::new();
+    // Initialize price oracle (loads token and feed lists at startup)
+    let prices = match PriceOracle::new().await {
+        Ok(oracle) => {
+            let mut all_mints: HashSet<String> = HashSet::new();
 
-    // add mint
-    all_mints.insert("So11111111111111111111111111111111111111112".to_string());
+            // Add SOL mint for fee calculations
+            all_mints.insert("So11111111111111111111111111111111111111112".to_string());
 
-    // collect mints
-    for (event, _) in &mev_events_with_tx {
-        for token_change in &event.token_changes {
-            all_mints.insert(token_change.mint.clone());
-        }
-    }
-
-    let mints_vec: Vec<String> = all_mints.into_iter().collect();
-
-    // pyth prices
-    let prices = match oracle.fetch_prices(&mints_vec, block.block_time).await {
-        Ok(p) => {
-            if block.block_time.is_some() {
-                tracing::info!("successfully fetched {} historical token prices from Pyth for block timestamp {}",
-                    p.len(), block.block_time.unwrap());
-            } else {
-                tracing::info!("successfully fetched {} current token prices from Pyth", p.len());
+            // Collect all token mints from token changes
+            for (event, _) in &mev_events_with_tx {
+                for token_change in &event.token_changes {
+                    all_mints.insert(token_change.mint.clone());
+                }
             }
-            p
+
+            let mints_vec: Vec<String> = all_mints.into_iter().collect();
+
+            // Use historical prices from the block timestamp for accurate profitability analysis
+            match oracle.fetch_prices(&mints_vec, block.block_time).await {
+                Ok(p) => {
+                    if block.block_time.is_some() {
+                        tracing::info!("successfully fetched {} historical token prices from Pyth for block timestamp {}",
+                            p.len(), block.block_time.unwrap());
+                    } else {
+                        tracing::info!("successfully fetched {} current token prices from Pyth", p.len());
+                    }
+                    p
+                }
+                Err(e) => {
+                    tracing::error!("Failed to fetch prices from Pyth: {:?}", e);
+                    HashMap::new()
+                }
+            }
         }
         Err(e) => {
-            tracing::error!("Failed to fetch prices from Pyth: {:?}", e);
+            tracing::error!("Failed to initialize price oracle: {:?}", e);
+            tracing::warn!("Profitability analysis will be unavailable - continuing without USD prices");
             HashMap::new()
         }
     };
 
-    // build tx jsons
+    // Build MEV transactions with profitability
     for (event, tx) in mev_events_with_tx {
         let swaps_json: Vec<SwapJson> = event.swaps.iter()
             .map(|swap| SwapJson {
@@ -190,13 +200,19 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
             None
         };
 
-        // calculate profit
+        // Calculate profitability (if prices available)
         let profitability = calculate_profitability(&event, tx, &prices);
 
-        // excluding failed mev
-        let should_include = event.success && profitability.as_ref()
-            .map(|p| p.net_profit_usd > 0.0)
-            .unwrap_or(false);
+        // Include successful MEV events
+        // If profitability available, only include if profitable
+        // If profitability unavailable (no prices), include all successful events
+        let should_include = if event.success {
+            profitability.as_ref()
+                .map(|p| p.net_profit_usd > 0.0)
+                .unwrap_or(true)  // Include if we can't calculate profitability
+        } else {
+            false  // Always exclude failed transactions
+        };
 
         if should_include {
             mev_transactions.push(MevTransactionJson {
@@ -226,7 +242,7 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
         }
     }
 
-    // detect sandwich, jit
+    // Detect multi-transaction MEV events (sandwich, JIT)
     let multi_tx_events = MevAnalyzer::detect_multi_tx_mev(&tx_with_mev);
 
     let mut sandwich_attacks = Vec::new();
@@ -261,7 +277,7 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
 
     let mev_count = mev_transactions.len();
 
-    // calculate net profit of all events
+    // Calculate total net profit across all MEV events in this block
     let total_net_profit_usd: f64 = mev_transactions.iter()
         .filter_map(|tx| tx.profitability.as_ref())
         .map(|p| p.net_profit_usd)
@@ -280,24 +296,4 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
     };
 
     serde_json::to_string_pretty(&report)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_lamports_to_sol() {
-        assert_eq!(lamports_to_sol(1_000_000_000), "1");
-        assert_eq!(lamports_to_sol(500_000_000), "0.5");
-        assert_eq!(lamports_to_sol(123_456_789), "0.123456789");
-        assert_eq!(lamports_to_sol(100_000_000), "0.1");
-    }
-
-    #[test]
-    fn test_format_compute_units() {
-        assert_eq!(format_compute_units(1000), "1,000");
-        assert_eq!(format_compute_units(1000000), "1,000,000");
-        assert_eq!(format_compute_units(123456789), "123,456,789");
-    }
 }
