@@ -111,15 +111,21 @@ impl PriceOracle {
         for feed in feeds {
             total_feeds += 1;
 
-            // Only include USD price feeds (e.g., "SOL/USD", "USDC/USD")
+            // Only include USD price feeds (e.g., "SOL/USD", "Crypto.SOL/USD", "Equity.US.BTC/USD")
             if feed.attributes.symbol.contains("/USD") {
                 usd_feeds += 1;
 
-                // Extract base symbol (e.g., "SOL" from "SOL/USD")
-                if let Some(base_symbol) = feed.attributes.symbol.split('/').next() {
+                // Extract base symbol from formats like:
+                // - "SOL/USD" → "SOL"
+                // - "Crypto.SOL/USD" → "SOL"
+                // - "Equity.US.WYNN/USD" → "WYNN"
+                if let Some(base_part) = feed.attributes.symbol.split('/').next() {
+                    // Strip any prefix (e.g., "Crypto.", "Equity.US.")
+                    let symbol = base_part.split('.').last().unwrap_or(base_part);
+
                     tracing::debug!("extracted '{}' from '{}' → feed_id {}",
-                        base_symbol, feed.attributes.symbol, feed.id);
-                    symbol_to_feed.insert(base_symbol.to_string(), feed.id);
+                        symbol, feed.attributes.symbol, feed.id);
+                    symbol_to_feed.insert(symbol.to_string(), feed.id);
                 }
             }
         }
@@ -337,12 +343,17 @@ mod tests {
             ("SOL/USD", "SOL"),
             ("USDC/USD", "USDC"),
             ("BTC/USD", "BTC"),
-            ("Crypto.SOL/USD", "Crypto.SOL"),  // Some feeds might have prefixes
+            ("Crypto.SOL/USD", "SOL"),  // Crypto prefix should be stripped
+            ("Crypto.USDC/USD", "USDC"),  // Crypto prefix should be stripped
+            ("Equity.US.WYNN/USD", "WYNN"),  // Multi-level prefix should be stripped
         ];
 
         for (input, expected) in test_cases {
-            let result = input.split('/').next();
-            assert_eq!(result, Some(expected), "Failed to extract {} from {}", expected, input);
+            // Extract base symbol (same logic as production code)
+            let symbol = input.split('/').next()
+                .and_then(|base_part| base_part.split('.').last())
+                .unwrap();
+            assert_eq!(symbol, expected, "Failed to extract {} from {}", expected, input);
         }
     }
 
@@ -350,27 +361,41 @@ mod tests {
     fn test_hashmap_symbol_matching() {
         use std::collections::HashMap;
 
-        // Simulate the symbol_to_feed HashMap
+        // Simulate the symbol_to_feed HashMap with REAL Pyth format
         let mut symbol_to_feed = HashMap::new();
 
-        // Simulate extracting "SOL" from "SOL/USD"
-        let pyth_feed_symbol = "SOL/USD";
-        let extracted_symbol = pyth_feed_symbol.split('/').next().unwrap().to_string();
-        symbol_to_feed.insert(extracted_symbol.clone(), "feed_id_123".to_string());
+        // Test 1: Crypto prefix (real Pyth format)
+        let pyth_feed_symbol = "Crypto.SOL/USD";
+        let base_part = pyth_feed_symbol.split('/').next().unwrap();
+        let extracted_symbol = base_part.split('.').last().unwrap().to_string();
+        symbol_to_feed.insert(extracted_symbol.clone(), "feed_id_sol".to_string());
 
-        // Simulate Jupiter returning "SOL" for the SOL mint
-        let jupiter_symbol = "SOL";
+        // Test 2: Another crypto prefix
+        let pyth_usdc = "Crypto.USDC/USD";
+        let usdc_base = pyth_usdc.split('/').next().unwrap();
+        let usdc_symbol = usdc_base.split('.').last().unwrap().to_string();
+        symbol_to_feed.insert(usdc_symbol.clone(), "feed_id_usdc".to_string());
 
-        // This should match
-        let result = symbol_to_feed.get(jupiter_symbol);
-        assert!(result.is_some(), "Failed to match symbol '{}' in HashMap. Keys: {:?}",
-            jupiter_symbol, symbol_to_feed.keys().collect::<Vec<_>>());
-        assert_eq!(result.unwrap(), "feed_id_123");
+        // Simulate Jupiter returning bare symbols
+        let jupiter_sol = "SOL";
+        let jupiter_usdc = "USDC";
 
-        println!("✓ Symbol matching logic works correctly");
+        // Both should match
+        let sol_result = symbol_to_feed.get(jupiter_sol);
+        let usdc_result = symbol_to_feed.get(jupiter_usdc);
+
+        assert!(sol_result.is_some(), "Failed to match SOL. Keys: {:?}",
+            symbol_to_feed.keys().collect::<Vec<_>>());
+        assert_eq!(sol_result.unwrap(), "feed_id_sol");
+
+        assert!(usdc_result.is_some(), "Failed to match USDC. Keys: {:?}",
+            symbol_to_feed.keys().collect::<Vec<_>>());
+        assert_eq!(usdc_result.unwrap(), "feed_id_usdc");
+
+        println!("✓ Symbol matching logic works correctly with Crypto prefix");
         println!("  Pyth feed: {} → extracted: {}", pyth_feed_symbol, extracted_symbol);
-        println!("  Jupiter symbol: {}", jupiter_symbol);
-        println!("  HashMap lookup: {:?}", result);
+        println!("  Jupiter symbol: {} → {:?}", jupiter_sol, sol_result);
+        println!("  Jupiter symbol: {} → {:?}", jupiter_usdc, usdc_result);
     }
 
     #[tokio::test]
