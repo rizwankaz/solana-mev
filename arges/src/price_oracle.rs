@@ -46,35 +46,54 @@ struct PythPrice {
     publish_time: i64,
 }
 
-/// Cached feed mapping (mint → Pyth feed ID)
-type FeedCache = Arc<RwLock<HashMap<String, String>>>;
-
-/// Pyth Network price oracle client with dynamic feed discovery
+/// Pyth Network price oracle client with preloaded token and feed data
 pub struct PriceOracle {
     client: reqwest::Client,
     pyth_base_url: String,
-    jupiter_token_list_url: String,
-    /// Cache: mint address → Pyth feed ID
-    feed_cache: FeedCache,
+    /// Preloaded mapping: mint address → symbol
+    mint_to_symbol: HashMap<String, String>,
+    /// Preloaded mapping: symbol → Pyth feed ID
+    symbol_to_feed: HashMap<String, String>,
 }
 
 impl PriceOracle {
-    /// Create a new Pyth price oracle client
-    pub fn new() -> Self {
-        Self {
-            client: reqwest::Client::new(),
-            pyth_base_url: "https://hermes.pyth.network".to_string(),
-            jupiter_token_list_url: "https://token.jup.ag/all".to_string(),
-            feed_cache: Arc::new(RwLock::new(HashMap::new())),
-        }
+    /// Create a new Pyth price oracle client (loads token and feed lists at startup)
+    pub async fn new() -> Result<Self> {
+        let client = reqwest::Client::new();
+        let pyth_base_url = "https://hermes.pyth.network".to_string();
+        let jupiter_token_list_url = "https://token.jup.ag/all".to_string();
+
+        tracing::info!("initializing price oracle (loading token and feed lists)...");
+
+        // Fetch both lists concurrently at startup
+        let (jupiter_result, pyth_result) = tokio::join!(
+            Self::fetch_jupiter_tokens_static(&client, &jupiter_token_list_url),
+            Self::fetch_pyth_feeds_static(&client, &pyth_base_url)
+        );
+
+        let mint_to_symbol = jupiter_result?;
+        let symbol_to_feed = pyth_result?;
+
+        tracing::info!(
+            "price oracle initialized: {} tokens, {} price feeds",
+            mint_to_symbol.len(),
+            symbol_to_feed.len()
+        );
+
+        Ok(Self {
+            client,
+            pyth_base_url,
+            mint_to_symbol,
+            symbol_to_feed,
+        })
     }
 
-    /// Fetch all available Pyth price feeds (symbol → feed ID mapping)
-    async fn fetch_pyth_feeds(&self) -> Result<HashMap<String, String>> {
+    /// Fetch all available Pyth price feeds (static method for initialization)
+    async fn fetch_pyth_feeds_static(client: &reqwest::Client, base_url: &str) -> Result<HashMap<String, String>> {
         tracing::debug!("fetching Pyth price feed list...");
 
-        let url = format!("{}/v2/price_feeds", self.pyth_base_url);
-        let response = self.client.get(&url).send().await
+        let url = format!("{}/v2/price_feeds", base_url);
+        let response = client.get(&url).send().await
             .context("failed to fetch Pyth feed list")?;
 
         if !response.status().is_success() {
@@ -84,7 +103,7 @@ impl PriceOracle {
         let feeds: Vec<PythFeedInfo> = response.json().await
             .context("failed to parse Pyth feed list")?;
 
-        // Build symbol → feed ID map (only USD price feeds for Solana)
+        // Build symbol → feed ID map (only USD price feeds)
         let mut symbol_to_feed = HashMap::new();
         for feed in feeds {
             // Only include USD price feeds (e.g., "SOL/USD", "USDC/USD")
@@ -100,11 +119,11 @@ impl PriceOracle {
         Ok(symbol_to_feed)
     }
 
-    /// Fetch Jupiter token list (mint → symbol mapping)
-    async fn fetch_jupiter_tokens(&self) -> Result<HashMap<String, String>> {
+    /// Fetch Jupiter token list (static method for initialization)
+    async fn fetch_jupiter_tokens_static(client: &reqwest::Client, url: &str) -> Result<HashMap<String, String>> {
         tracing::debug!("fetching Jupiter token list...");
 
-        let response = self.client.get(&self.jupiter_token_list_url).send().await
+        let response = client.get(url).send().await
             .context("failed to fetch Jupiter token list")?;
 
         if !response.status().is_success() {
@@ -124,61 +143,28 @@ impl PriceOracle {
         Ok(mint_to_symbol)
     }
 
-    /// Resolve mint addresses to Pyth feed IDs dynamically
-    async fn resolve_feed_ids(&self, mints: &[String]) -> Result<HashMap<String, String>> {
-        // Check cache first
-        {
-            let cache = self.feed_cache.read().unwrap();
-            if !cache.is_empty() {
-                // Return cached mappings for requested mints
-                let mut cached_feeds = HashMap::new();
-                for mint in mints {
-                    if let Some(feed_id) = cache.get(mint) {
-                        cached_feeds.insert(mint.clone(), feed_id.clone());
-                    }
-                }
-                if !cached_feeds.is_empty() {
-                    tracing::debug!("using {} cached feed IDs", cached_feeds.len());
-                    return Ok(cached_feeds);
-                }
-            }
-        }
-
-        // Cache miss - fetch fresh data
-        tracing::info!("resolving feed IDs for {} mints (cache miss)", mints.len());
-
-        // Fetch both lists concurrently
-        let (jupiter_result, pyth_result) = tokio::join!(
-            self.fetch_jupiter_tokens(),
-            self.fetch_pyth_feeds()
-        );
-
-        let mint_to_symbol = jupiter_result?;
-        let symbol_to_feed = pyth_result?;
-
-        // Resolve: mint → symbol → feed ID
+    /// Resolve mint addresses to Pyth feed IDs using preloaded data
+    fn resolve_feed_ids(&self, mints: &[String]) -> HashMap<String, String> {
         let mut mint_to_feed = HashMap::new();
+
         for mint in mints {
-            if let Some(symbol) = mint_to_symbol.get(mint) {
-                if let Some(feed_id) = symbol_to_feed.get(symbol) {
+            if let Some(symbol) = self.mint_to_symbol.get(mint) {
+                if let Some(feed_id) = self.symbol_to_feed.get(symbol) {
                     mint_to_feed.insert(mint.clone(), feed_id.clone());
                     tracing::debug!("resolved {} → {} → {}", mint, symbol, feed_id);
                 } else {
                     tracing::debug!("no Pyth feed for symbol: {}", symbol);
                 }
             } else {
-                tracing::debug!("token not found in Jupiter list: {}", mint);
+                tracing::debug!("token not in Jupiter list: {}", mint);
             }
         }
 
-        // Update cache
-        {
-            let mut cache = self.feed_cache.write().unwrap();
-            cache.extend(mint_to_feed.clone());
+        if !mint_to_feed.is_empty() {
+            tracing::debug!("resolved {} feed IDs from preloaded data", mint_to_feed.len());
         }
 
-        tracing::info!("resolved {} feed IDs", mint_to_feed.len());
-        Ok(mint_to_feed)
+        mint_to_feed
     }
 
     /// Fetch prices for multiple tokens at a specific timestamp
@@ -198,8 +184,8 @@ impl PriceOracle {
             tracing::info!("fetching current prices for {} tokens", mints.len());
         }
 
-        // Resolve mint addresses to Pyth feed IDs
-        let mint_to_feed = self.resolve_feed_ids(mints).await?;
+        // Resolve mint addresses to Pyth feed IDs using preloaded data
+        let mint_to_feed = self.resolve_feed_ids(mints);
 
         if mint_to_feed.is_empty() {
             tracing::warn!("no Pyth feeds available for requested tokens");
@@ -291,7 +277,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fetch_sol_price() {
-        let oracle = PriceOracle::new();
+        let oracle = PriceOracle::new().await.expect("failed to initialize oracle");
         let result = oracle
             .get_price("So11111111111111111111111111111111111111112", None)
             .await;
@@ -304,7 +290,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fetch_multiple_prices() {
-        let oracle = PriceOracle::new();
+        let oracle = PriceOracle::new().await.expect("failed to initialize oracle");
         let mints = vec![
             "So11111111111111111111111111111111111111112".to_string(), // SOL
             "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v".to_string(), // USDC
@@ -318,8 +304,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_dynamic_feed_resolution() {
-        let oracle = PriceOracle::new();
+    async fn test_preloaded_feed_resolution() {
+        let oracle = PriceOracle::new().await.expect("failed to initialize oracle");
+
+        // Verify preloaded data
+        assert!(!oracle.mint_to_symbol.is_empty(), "should have loaded tokens");
+        assert!(!oracle.symbol_to_feed.is_empty(), "should have loaded price feeds");
+
         // Test with various tokens
         let mints = vec![
             "So11111111111111111111111111111111111111112".to_string(), // SOL
@@ -329,7 +320,7 @@ mod tests {
         let result = oracle.fetch_prices(&mints, None).await;
         assert!(result.is_ok());
         if let Ok(prices) = result {
-            println!("Dynamic prices: {:?}", prices);
+            println!("Preloaded prices: {:?}", prices);
             // Should get at least SOL and USDC
             assert!(prices.len() >= 2);
         }

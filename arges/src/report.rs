@@ -139,8 +139,27 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
         }
     }
 
-    // Fetch prices for all unique tokens in MEV events
-    let oracle = PriceOracle::new();
+    // Initialize price oracle (loads token and feed lists at startup)
+    let oracle = match PriceOracle::new().await {
+        Ok(o) => o,
+        Err(e) => {
+            tracing::error!("Failed to initialize price oracle: {:?}", e);
+            tracing::warn!("Profitability analysis will be unavailable");
+            // Continue without profitability - still show MEV events
+            let report = MevValidationJson {
+                slot: block.slot,
+                blockhash: block.blockhash.clone(),
+                timestamp: block.timestamp().map(|t| t.format("%Y-%m-%d %H:%M:%S UTC").to_string()),
+                total_transactions: block.transactions.len(),
+                mev_count: 0,
+                mev_transactions: vec![],
+                sandwich_attacks: vec![],
+                jit_attacks: vec![],
+                total_net_profit_usd: 0.0,
+            };
+            return serde_json::to_string_pretty(&report);
+        }
+    };
     let mut all_mints: HashSet<String> = HashSet::new();
 
     // Add SOL mint for fee calculations
