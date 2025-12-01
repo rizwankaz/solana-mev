@@ -140,53 +140,42 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
     }
 
     // Initialize price oracle (loads token and feed lists at startup)
-    let oracle = match PriceOracle::new().await {
-        Ok(o) => o,
+    let prices = match PriceOracle::new().await {
+        Ok(oracle) => {
+            let mut all_mints: HashSet<String> = HashSet::new();
+
+            // Add SOL mint for fee calculations
+            all_mints.insert("So11111111111111111111111111111111111111112".to_string());
+
+            // Collect all token mints from token changes
+            for (event, _) in &mev_events_with_tx {
+                for token_change in &event.token_changes {
+                    all_mints.insert(token_change.mint.clone());
+                }
+            }
+
+            let mints_vec: Vec<String> = all_mints.into_iter().collect();
+
+            // Use historical prices from the block timestamp for accurate profitability analysis
+            match oracle.fetch_prices(&mints_vec, block.block_time).await {
+                Ok(p) => {
+                    if block.block_time.is_some() {
+                        tracing::info!("successfully fetched {} historical token prices from Pyth for block timestamp {}",
+                            p.len(), block.block_time.unwrap());
+                    } else {
+                        tracing::info!("successfully fetched {} current token prices from Pyth", p.len());
+                    }
+                    p
+                }
+                Err(e) => {
+                    tracing::error!("Failed to fetch prices from Pyth: {:?}", e);
+                    HashMap::new()
+                }
+            }
+        }
         Err(e) => {
             tracing::error!("Failed to initialize price oracle: {:?}", e);
-            tracing::warn!("Profitability analysis will be unavailable");
-            // Continue without profitability - still show MEV events
-            let report = MevValidationJson {
-                slot: block.slot,
-                blockhash: block.blockhash.clone(),
-                timestamp: block.timestamp().map(|t| t.format("%Y-%m-%d %H:%M:%S UTC").to_string()),
-                total_transactions: block.transactions.len(),
-                mev_count: 0,
-                mev_transactions: vec![],
-                sandwich_attacks: vec![],
-                jit_attacks: vec![],
-                total_net_profit_usd: 0.0,
-            };
-            return serde_json::to_string_pretty(&report);
-        }
-    };
-    let mut all_mints: HashSet<String> = HashSet::new();
-
-    // Add SOL mint for fee calculations
-    all_mints.insert("So11111111111111111111111111111111111111112".to_string());
-
-    // Collect all token mints from token changes
-    for (event, _) in &mev_events_with_tx {
-        for token_change in &event.token_changes {
-            all_mints.insert(token_change.mint.clone());
-        }
-    }
-
-    let mints_vec: Vec<String> = all_mints.into_iter().collect();
-
-    // Use historical prices from the block timestamp for accurate profitability analysis
-    let prices = match oracle.fetch_prices(&mints_vec, block.block_time).await {
-        Ok(p) => {
-            if block.block_time.is_some() {
-                tracing::info!("successfully fetched {} historical token prices from Pyth for block timestamp {}",
-                    p.len(), block.block_time.unwrap());
-            } else {
-                tracing::info!("successfully fetched {} current token prices from Pyth", p.len());
-            }
-            p
-        }
-        Err(e) => {
-            tracing::error!("Failed to fetch prices from Pyth: {:?}", e);
+            tracing::warn!("Profitability analysis will be unavailable - continuing without USD prices");
             HashMap::new()
         }
     };
@@ -211,14 +200,19 @@ pub async fn format_mev_validation_json(block: &FetchedBlock) -> Result<String, 
             None
         };
 
-        // Calculate profitability
+        // Calculate profitability (if prices available)
         let profitability = calculate_profitability(&event, tx, &prices);
 
-        // Only include successful and profitable trades
-        // Exclude failed transactions and unprofitable swaps
-        let should_include = event.success && profitability.as_ref()
-            .map(|p| p.net_profit_usd > 0.0)
-            .unwrap_or(false); // Exclude if we couldn't calculate profitability
+        // Include successful MEV events
+        // If profitability available, only include if profitable
+        // If profitability unavailable (no prices), include all successful events
+        let should_include = if event.success {
+            profitability.as_ref()
+                .map(|p| p.net_profit_usd > 0.0)
+                .unwrap_or(true)  // Include if we can't calculate profitability
+        } else {
+            false  // Always exclude failed transactions
+        };
 
         if should_include {
             mev_transactions.push(MevTransactionJson {
