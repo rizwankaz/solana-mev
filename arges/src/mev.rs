@@ -278,6 +278,18 @@ impl MevAnalyzer {
             return None;
         }
 
+        // Validate closed-loop arbitrage: first swap's from_token must equal last swap's to_token
+        // This filters out multi-hop swaps (e.g., SOL→JitoSOL→USDC) that aren't arbitrages
+        if category == MevCategory::Arbitrage && swap_count >= 2 {
+            if let (Some(first_swap), Some(last_swap)) = (swaps.first(), swaps.last()) {
+                // Check if tokens are equivalent (accounting for wrapped SOL)
+                let is_closed_loop = Self::tokens_equivalent(&first_swap.from_token, &last_swap.to_token);
+                if !is_closed_loop {
+                    return None; // Multi-hop swap, not a closed-loop arbitrage
+                }
+            }
+        }
+
         // Track both successful AND failed MEV events
         // Failed attempts still consume compute units and block space
         Some(MevEvent {
@@ -506,6 +518,24 @@ impl MevAnalyzer {
         }
 
         changes
+    }
+
+    /// Check if two token addresses are equivalent
+    /// Accounts for native SOL vs wrapped SOL (wSOL) equivalence
+    fn tokens_equivalent(token1: &str, token2: &str) -> bool {
+        const NATIVE_SOL: &str = "So11111111111111111111111111111111111111112";
+        const WSOL: &str = "So11111111111111111111111111111111111111112"; // Same as native SOL on Solana
+
+        // Direct match
+        if token1 == token2 {
+            return true;
+        }
+
+        // Check SOL/wSOL equivalence
+        let is_token1_sol = token1 == NATIVE_SOL || token1 == WSOL;
+        let is_token2_sol = token2 == NATIVE_SOL || token2 == WSOL;
+
+        is_token1_sol && is_token2_sol
     }
 
     /// Calculate SOL balance change (signed, in lamports)
