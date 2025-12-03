@@ -1,6 +1,6 @@
 use crate::types::FetchedTransaction;
 use crate::mev::parser::TokenTransfer;
-use solana_transaction_status::{UiInstruction, UiCompiledInstruction, UiParsedInstruction};
+use solana_transaction_status::{UiInstruction, UiParsedInstruction};
 use std::collections::HashSet;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 

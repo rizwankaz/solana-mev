@@ -1,7 +1,7 @@
 use crate::types::FetchedTransaction;
-use crate::mev::types::{SwapInfo, SwapDirection, TokenAmount};
+use crate::mev::types::SwapInfo;
 use solana_transaction_status::{
-    UiInstruction, UiParsedInstruction, UiCompiledInstruction,
+    UiInstruction, UiParsedInstruction,
     option_serializer::OptionSerializer,
 };
 use std::collections::HashMap;

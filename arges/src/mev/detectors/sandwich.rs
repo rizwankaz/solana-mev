@@ -1,7 +1,6 @@
 use crate::types::FetchedTransaction;
 use crate::mev::types::{Sandwich, SandwichTx, VictimTx, SwapInfo};
 use crate::mev::parser::{TransactionParser, TokenTransfer};
-use crate::mev::instruction_parser::InstructionClassifier;
 use std::collections::{HashMap, HashSet};
 
 /// Sandwich Attack Detector
@@ -80,8 +79,9 @@ impl SandwichDetector {
         // Look ahead for backrun from same signer
         // Sandwich attacks typically complete within 5-10 transactions
         let search_window = std::cmp::min(10, txs.len() - start_idx);
+        let max_end_idx = std::cmp::min(start_idx + search_window, txs.len() - 1);
 
-        for end_idx in (start_idx + 2)..=(start_idx + search_window) {
+        for end_idx in (start_idx + 2)..=max_end_idx {
             let potential_backrun = txs[end_idx];
             let backrun_signer = TransactionParser::get_signer(potential_backrun)?;
 

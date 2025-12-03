@@ -1,7 +1,6 @@
 use crate::types::FetchedTransaction;
 use crate::mev::types::{Liquidation, TokenAmount};
 use crate::mev::parser::{TransactionParser, KnownPrograms, TokenTransfer};
-use crate::mev::instruction_parser::InstructionClassifier;
 
 /// Liquidation Detector
 ///

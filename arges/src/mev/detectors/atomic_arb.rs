@@ -196,7 +196,7 @@ impl AtomicArbDetector {
     fn estimate_profit_lamports(
         profit_token: &str,
         ui_amount: f64,
-        transfers: &[crate::mev::parser::TokenTransfer],
+        _transfers: &[crate::mev::parser::TokenTransfer],
     ) -> i64 {
         // Native SOL token (represented by System Program or wrapped SOL)
         const WSOL_MINT: &str = "So11111111111111111111111111111111111111112";
