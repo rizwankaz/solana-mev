@@ -17,15 +17,54 @@ pub struct InstructionClassifier;
 impl InstructionClassifier {
     /// Detect if transaction contains a swap operation
     ///
-    /// Pure instruction-based detection - looks at instruction data only.
-    /// No hardcoded program IDs, no complex token transfer heuristics.
+    /// Instruction-based detection with validation fallback:
+    /// 1. Primary: Check if instructions have swap-related names/discriminators
+    /// 2. Fallback: If instructions have method data (8+ bytes) and tokens move bidirectionally
     ///
-    /// A transaction is a swap if its instructions indicate swapping:
-    /// 1. Instruction type/name contains swap-related keywords
-    /// 2. Instruction discriminator matches known swap patterns
-    /// 3. Program name suggests it's a DEX operation
-    pub fn is_swap(tx: &FetchedTransaction, _transfers: &[TokenTransfer]) -> bool {
-        Self::has_swap_instruction(tx)
+    /// This catches:
+    /// - Parsed swap instructions by name
+    /// - Unparsed swap instructions by discriminator
+    /// - Unknown DEX protocols (via instruction data + token movement pattern)
+    pub fn is_swap(tx: &FetchedTransaction, transfers: &[TokenTransfer]) -> bool {
+        // Primary: Explicit swap instruction detection
+        if Self::has_swap_instruction(tx) {
+            return true;
+        }
+
+        // Fallback for unparsed/unknown protocols:
+        // If transaction has instructions with method calls (8+ byte data)
+        // AND tokens are swapping (bidirectional movement), it's likely a swap
+        let has_method_calls = Self::has_substantial_instruction_data(tx);
+
+        if has_method_calls && transfers.len() >= 2 {
+            let inflows = transfers.iter().filter(|t| t.is_inflow()).count();
+            let outflows = transfers.iter().filter(|t| t.is_outflow()).count();
+            let unique_tokens: HashSet<_> = transfers.iter().map(|t| &t.mint).collect();
+
+            // Pattern: method call + tokens moving in both directions + multiple tokens
+            if inflows > 0 && outflows > 0 && unique_tokens.len() >= 2 {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    /// Check if transaction has substantial instruction data (method calls)
+    fn has_substantial_instruction_data(tx: &FetchedTransaction) -> bool {
+        let instructions = Self::get_all_instructions(tx);
+
+        for instruction in instructions {
+            if let Some(data) = Self::get_instruction_data(&instruction) {
+                // 8+ bytes indicates a discriminator (method call)
+                // Simple token transfers have minimal data (<8 bytes)
+                if data.len() >= 8 {
+                    return true;
+                }
+            }
+        }
+
+        false
     }
 
     /// Detect if transaction contains a liquidation operation
