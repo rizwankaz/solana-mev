@@ -81,8 +81,9 @@ impl JitLiquidityDetector {
         // Search for remove_liquidity within next few transactions
         // JIT typically completes within 5-10 transactions
         let search_window = std::cmp::min(10, txs.len() - start_idx);
+        let max_end_idx = std::cmp::min(start_idx + search_window, txs.len() - 1);
 
-        for end_idx in (start_idx + 2)..=(start_idx + search_window) {
+        for end_idx in (start_idx + 2)..=max_end_idx {
             let remove_liq_tx = txs[end_idx];
 
             // Check if this is remove liquidity by same searcher
