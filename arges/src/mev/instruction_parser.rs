@@ -17,49 +17,15 @@ pub struct InstructionClassifier;
 impl InstructionClassifier {
     /// Detect if transaction contains a swap operation
     ///
-    /// Uses multiple heuristics to identify swaps:
-    /// - Known DEX program IDs
-    /// - Instruction names/discriminators
-    /// - Token transfer patterns
+    /// Pure instruction-based detection - looks at instruction data only.
+    /// No hardcoded program IDs, no complex token transfer heuristics.
     ///
-    /// NOTE: Intentionally permissive to catch all swap types including
-    /// multi-hop routes, aggregator swaps, and complex arbitrages
-    pub fn is_swap(tx: &FetchedTransaction, transfers: &[TokenTransfer]) -> bool {
-        // Heuristic 1: Must have at least 2 token transfers
-        if transfers.len() < 2 {
-            return false;
-        }
-
-        // Heuristic 2: Must have at least 1 inflow and 1 outflow
-        let inflows = transfers.iter().filter(|t| t.is_inflow()).count();
-        let outflows = transfers.iter().filter(|t| t.is_outflow()).count();
-
-        if inflows == 0 || outflows == 0 {
-            return false;
-        }
-
-        // Heuristic 3: Check if transaction interacts with known DEX programs
-        if Self::has_dex_program(tx) {
-            return true;
-        }
-
-        // Heuristic 4: Check instruction names/discriminators
-        if Self::has_swap_instruction(tx) {
-            return true;
-        }
-
-        // Heuristic 5: Very permissive token transfer pattern
-        // Allow up to 50 transfers for complex multi-hop aggregator routes
-        // Allow up to 20 inflows/outflows for route splitting
-        if transfers.len() <= 50 {
-            let unique_tokens: HashSet<_> = transfers.iter().map(|t| &t.mint).collect();
-            // If 2+ different tokens are moving bidirectionally, it's likely a swap
-            if unique_tokens.len() >= 2 {
-                return true;
-            }
-        }
-
-        false
+    /// A transaction is a swap if its instructions indicate swapping:
+    /// 1. Instruction type/name contains swap-related keywords
+    /// 2. Instruction discriminator matches known swap patterns
+    /// 3. Program name suggests it's a DEX operation
+    pub fn is_swap(tx: &FetchedTransaction, _transfers: &[TokenTransfer]) -> bool {
+        Self::has_swap_instruction(tx)
     }
 
     /// Detect if transaction contains a liquidation operation
@@ -151,71 +117,33 @@ impl InstructionClassifier {
         false
     }
 
-    /// Check if transaction interacts with known DEX program IDs
-    fn has_dex_program(tx: &FetchedTransaction) -> bool {
-        // Major DEX program IDs on Solana
-        const DEX_PROGRAMS: &[&str] = &[
-            "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",      // Jupiter V6
-            "JUP4Fb2cqiRUcaTHdrPC8h2gNsA2ETXiPDD33WcGuJB",      // Jupiter V4
-            "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",      // Raydium V4
-            "5quBtoiQqxF9Jv6KYKctB59NT3gtJD2Y65kdnB1Uev3h",      // Raydium Concentrated Liquidity
-            "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",      // Orca Whirlpool
-            "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP",      // Orca V2
-            "DjVE6JNiYqPL2QXyCUUh8rNjHrbz9hXHNYt99MQ59qw1",      // Orca V1
-            "Dooar9JkhdZ7J3LHN3A7YCuoGRUggXhQaG4kijfLGU2j",      // Meteora DLMM
-            "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",       // Meteora Pools
-            "SSwpkEEcbUqx4vtoEByFjSkhKdCT862DNVb52nZg1UZ",       // Saber
-            "Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB",       // Mercurial
-            "PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY",       // Phoenix
-            "LFNTYraetVioAPnGJht4yNg2aUZFXR776cMeN9VMjXp",       // Lifinity V1
-            "EewxydAPCCVuNEyrVN68PuSYdQ7wKn27V9Gjeoi8dy3S",       // Lifinity V2
-            "CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR",       // Raydium CLMM
-            "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",       // Raydium CPMM
-            "27haf8L6oxUeXrHrgEgsexjSY5hbVUWEmvv9Nyxg8vQv",       // Cropper
-            "AMM55ShdkoGRB5jVYPjWziwk8m5MpwyDgsMWHaMSQWH6",       // Aldrin
-            "HyaB3W9q6XdA5xwpU4XnSZV94htfmbmqJXZcEbRaJutt",       // Aldrin V2
-            "SSwpMgqNDsyV7mAgN9ady4bDVu5ySjmmXejXvy2vLt1",       // Step Finance
-            "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",       // Penguin
-            "CURVGoZn8zycx6FXwwevgBTB2gVvdbGTEpvMJDbgs2t4",      // Invariant
-        ];
-
-        let instructions = Self::get_all_instructions(tx);
-
-        for instruction in instructions {
-            if let Some(program_id) = Self::get_program_id(&instruction) {
-                if DEX_PROGRAMS.contains(&program_id.as_str()) {
-                    return true;
-                }
-            }
-        }
-
-        false
-    }
-
     /// Parse instructions to detect swap-related operations
+    ///
+    /// Purely instruction-based detection using:
+    /// 1. Parsed instruction type names
+    /// 2. Instruction discriminators (first 8 bytes of data)
+    ///
+    /// No hardcoded program IDs
     fn has_swap_instruction(tx: &FetchedTransaction) -> bool {
         let instructions = Self::get_all_instructions(tx);
 
         for instruction in instructions {
-            // Check parsed instruction names
+            // Method 1: Check parsed instruction type names for swap-related keywords
             if let Some(name) = Self::get_instruction_name(&instruction) {
                 let name_lower = name.to_lowercase();
                 if name_lower.contains("swap")
                     || name_lower.contains("exchange")
                     || name_lower.contains("trade")
-                    || name_lower.contains("route") // Jupiter routing
-                    || name_lower.contains("raydium")
-                    || name_lower.contains("orca")
-                    || name_lower.contains("whirlpool")
-                    || name_lower.contains("meteora")
-                    || name_lower.contains("phoenix")
-                    || name_lower.contains("lifinity")
+                    || name_lower.contains("route")
+                    || name_lower.contains("buy")
+                    || name_lower.contains("sell")
                 {
                     return true;
                 }
             }
 
-            // Check instruction data for swap discriminators
+            // Method 2: Check instruction discriminators (first 8 bytes of data)
+            // This is more reliable as it detects the actual method being called
             if let Some(data) = Self::get_instruction_data(&instruction) {
                 if Self::has_swap_discriminator(&data) {
                     return true;
@@ -359,50 +287,33 @@ impl InstructionClassifier {
         }
     }
 
-    /// Extract program ID from UiInstruction
-    fn get_program_id(instruction: &UiInstruction) -> Option<String> {
-        match instruction {
-            UiInstruction::Parsed(parsed) => match parsed {
-                UiParsedInstruction::Parsed(parsed_data) => {
-                    Some(parsed_data.program.clone())
-                }
-                UiParsedInstruction::PartiallyDecoded(decoded) => {
-                    Some(decoded.program_id.clone())
-                }
-            },
-            UiInstruction::Compiled(compiled) => {
-                Some(compiled.program_id_index.to_string())
-            }
-        }
-    }
-
     /// Check if instruction data contains swap discriminator
     ///
-    /// Common Anchor discriminators for swap:
-    /// - First 8 bytes are method discriminator (sighash)
-    /// - Swap methods typically hash to specific values
+    /// Discriminators are the first 8 bytes of instruction data, representing
+    /// the hash of the method name in Anchor programs. For non-parsed instructions,
+    /// this is the primary way to identify the operation type.
+    ///
+    /// Note: This is a fallback for instructions that couldn't be parsed.
+    /// We include common discriminators from major DEXs as examples, but
+    /// the parsed instruction name is the primary detection method.
     fn has_swap_discriminator(data: &[u8]) -> bool {
         if data.len() < 8 {
             return false;
         }
 
-        // Common swap discriminators (first 8 bytes)
-        // These are anchor method discriminators for "swap" functions
-
-        // Raydium swap discriminator
-        let raydium_swap = [0x33, 0x1f, 0x5a, 0x94, 0x97, 0x3f, 0x66, 0x7f];
-
-        // Jupiter swap discriminators (multiple versions)
-        let jupiter_route = [0xdd, 0xda, 0x3c, 0x8d, 0x62, 0x8c, 0x9f, 0x7a];
-
-        // Orca swap discriminator
-        let orca_swap = [0xf8, 0xc6, 0x9e, 0x91, 0xe1, 0x7b, 0xf5, 0xae];
-
         let discriminator = &data[0..8];
 
-        discriminator == raydium_swap
-            || discriminator == jupiter_route
-            || discriminator == orca_swap
+        // Common swap discriminators (first 8 bytes = SHA256("global:swap")[0..8])
+        // Note: These are examples. In practice, parsed instructions should catch most swaps.
+
+        // Generic "swap" discriminators from Anchor programs
+        let anchor_swap = [0xf8, 0xc6, 0x9e, 0x91, 0xe1, 0x7b, 0xf5, 0xae]; // swap
+        let swap_exact = [0x33, 0x1f, 0x5a, 0x94, 0x97, 0x3f, 0x66, 0x7f];   // swapExact...
+        let route_swap = [0xdd, 0xda, 0x3c, 0x8d, 0x62, 0x8c, 0x9f, 0x7a];   // route/sharedAccounts...
+
+        discriminator == anchor_swap
+            || discriminator == swap_exact
+            || discriminator == route_swap
     }
 
     /// Check if instruction data contains liquidation discriminator
