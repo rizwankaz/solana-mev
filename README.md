@@ -147,37 +147,30 @@ for each lending protocol transaction:
 
 ### Instruction-Based Parser (`mev/instruction_parser.rs`)
 
-**Dynamic multi-layered detection system**
+**Pure instruction-based detection - NO hardcoded program IDs**
 
-The engine uses a comprehensive detection strategy combining:
-1. **Known DEX program IDs** (22 major protocols)
-2. **Instruction name parsing** (swap, exchange, trade keywords)
-3. **Discriminator matching** (Anchor method signatures)
-4. **Token transfer pattern analysis** (permissive heuristics)
+The engine uses a fully protocol-agnostic approach that examines instruction data directly:
 
-This makes it:
-- **Comprehensive**: Catches 95%+ of DEX swaps across all major protocols
-- **Protocol-aware**: Recognizes 22 major DEXs by program ID
-- **Flexible**: Handles multi-hop routes with up to 50 token transfers
-- **Efficient**: Pre-filters transactions before running expensive detectors
+**Detection Method:**
+1. **Parsed instruction types**: Checks if instruction type contains swap keywords (`swap`, `exchange`, `trade`, `route`, `buy`, `sell`)
+2. **Instruction discriminators**: Analyzes first 8 bytes of instruction data (Anchor method hash) for unparsed instructions
 
-**Supported DEX Programs (22 protocols):**
-- **Aggregators**: Jupiter V4/V6
-- **Major AMMs**: Raydium V4/CLMM/CPMM, Orca V1/V2/Whirlpool, Meteora DLMM/Pools
-- **Specialized**: Saber, Mercurial, Phoenix, Lifinity V1/V2, Aldrin V1/V2
-- **Others**: Step Finance, Penguin, Invariant, Cropper
+**Why this works:**
+- Solana RPC parses instructions and returns the method type (e.g., "swap", "trade", "exchange")
+- For unparsed instructions, the discriminator (first 8 bytes) is the SHA256 hash of the method name
+- ANY protocol with swap-like instructions will be detected automatically
+- No maintenance required when new DEXs launch
 
-**InstructionClassifier Heuristics:**
+**Example Discriminators:**
+- `0xf8c69e91e17bf5ae` = generic "swap" method
+- `0x331f5a94973f667f` = "swapExact..." variants
+- `0xddda3c8d628c9f7a` = routing/aggregator methods
 
-Swap Detection (highly permissive to catch all swap types):
-- 2+ token transfers required
-- Both inflows and outflows present
-- Up to 50 transfers allowed (for multi-hop Jupiter routes)
-- Instruction names contain: `swap`, `exchange`, `trade`, `route`, `raydium`, `orca`, `whirlpool`, `meteora`, `phoenix`, `lifinity`
-- Known swap discriminators:
-  - Raydium: `0x331f5a94973f667f`
-  - Jupiter: `0xddda3c8d628c9f7a`
-  - Orca: `0xf8c69e91e17bf5ae`
+This approach:
+- ✅ **Protocol-agnostic**: Works with ANY DEX without hardcoding
+- ✅ **Maintainable**: No program ID lists to update
+- ✅ **Accurate**: Detects what the instruction actually does
+- ✅ **Comprehensive**: Catches all swap types including multi-hop routes
 
 Liquidation Detection:
 - 3+ token transfers (debt + collateral)
