@@ -6,108 +6,26 @@ use solana_transaction_status::{
 };
 use std::collections::HashMap;
 
-/// Known Solana DEX program IDs
-/// These are the major AMMs/DEXs on Solana where MEV commonly occurs
-pub struct DexPrograms;
+/// Reference DEX and lending protocol program IDs (for informational purposes)
+///
+/// Note: The MEV detection engine now uses instruction-based detection
+/// and doesn't rely on hardcoded program IDs. These are kept for reference
+/// and potential future optimizations.
+pub struct KnownPrograms;
 
-impl DexPrograms {
-    // Raydium V4
+impl KnownPrograms {
+    // Major DEXs (for reference)
     pub const RAYDIUM_V4: &'static str = "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8";
-
-    // Raydium CLMM (Concentrated Liquidity)
     pub const RAYDIUM_CLMM: &'static str = "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK";
-
-    // Orca Whirlpool (CLMM)
     pub const ORCA_WHIRLPOOL: &'static str = "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc";
-
-    // Orca V1/V2
-    pub const ORCA_V1: &'static str = "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP";
-    pub const ORCA_V2: &'static str = "9qvG1zUp8xF1Bi4m6UdRNby1BAAuaDrUxSpv4CmRRMjL";
-
-    // Jupiter Aggregator (popular routing protocol)
-    pub const JUPITER_V4: &'static str = "JUP4Fb2cqiRUcaTHdrPC8h2gNsA2ETXiPDD33WcGuJB";
     pub const JUPITER_V6: &'static str = "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4";
-
-    // Meteora DLMM (Dynamic Liquidity Market Maker)
     pub const METEORA_DLMM: &'static str = "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo";
 
-    // Phoenix (order book DEX)
-    pub const PHOENIX: &'static str = "PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY";
-
-    // Lifinity (proactive market maker)
-    pub const LIFINITY: &'static str = "EewxydAPCCVuNEyrVN68PuSYdQ7wKn27V9Gjeoi8dy3S";
-
-    /// Check if program ID is a known DEX
-    pub fn is_dex_program(program_id: &str) -> bool {
-        matches!(
-            program_id,
-            Self::RAYDIUM_V4
-                | Self::RAYDIUM_CLMM
-                | Self::ORCA_WHIRLPOOL
-                | Self::ORCA_V1
-                | Self::ORCA_V2
-                | Self::JUPITER_V4
-                | Self::JUPITER_V6
-                | Self::METEORA_DLMM
-                | Self::PHOENIX
-                | Self::LIFINITY
-        )
-    }
-
-    /// Get DEX name from program ID
-    pub fn get_dex_name(program_id: &str) -> Option<&'static str> {
-        match program_id {
-            Self::RAYDIUM_V4 => Some("Raydium V4"),
-            Self::RAYDIUM_CLMM => Some("Raydium CLMM"),
-            Self::ORCA_WHIRLPOOL => Some("Orca Whirlpool"),
-            Self::ORCA_V1 => Some("Orca V1"),
-            Self::ORCA_V2 => Some("Orca V2"),
-            Self::JUPITER_V4 => Some("Jupiter V4"),
-            Self::JUPITER_V6 => Some("Jupiter V6"),
-            Self::METEORA_DLMM => Some("Meteora DLMM"),
-            Self::PHOENIX => Some("Phoenix"),
-            Self::LIFINITY => Some("Lifinity"),
-            _ => None,
-        }
-    }
-}
-
-/// Known lending protocols for liquidation detection
-pub struct LendingPrograms;
-
-impl LendingPrograms {
-    // Solend
+    // Major lending protocols (for reference)
     pub const SOLEND: &'static str = "So1endDq2YkqhipRh3WViPa8hdiSpxWy6z3Z6tMCpAo";
-
-    // Mango Markets
-    pub const MANGO_V3: &'static str = "mv3ekLzLbnVPNxjSKvqBpU3ZeZXPQdEC3bp5MDEBG68";
     pub const MANGO_V4: &'static str = "4MangoMjqJ2firMokCjjGgoK8d4MXcrgL7XJaL3w6fVg";
-
-    // Marginfi
     pub const MARGINFI: &'static str = "MFv2hWf31Z9kbCa1snEPYctwafyhdvnV7FZnsebVacA";
-
-    // Kamino Finance
     pub const KAMINO: &'static str = "KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD";
-
-    /// Check if program ID is a known lending protocol
-    pub fn is_lending_program(program_id: &str) -> bool {
-        matches!(
-            program_id,
-            Self::SOLEND | Self::MANGO_V3 | Self::MANGO_V4 | Self::MARGINFI | Self::KAMINO
-        )
-    }
-
-    /// Get lending protocol name
-    pub fn get_protocol_name(program_id: &str) -> Option<&'static str> {
-        match program_id {
-            Self::SOLEND => Some("Solend"),
-            Self::MANGO_V3 => Some("Mango V3"),
-            Self::MANGO_V4 => Some("Mango V4"),
-            Self::MARGINFI => Some("Marginfi"),
-            Self::KAMINO => Some("Kamino"),
-            _ => None,
-        }
-    }
 }
 
 /// Parser for extracting MEV-relevant data from transactions
@@ -267,31 +185,25 @@ impl TransactionParser {
         Self::extract_accounts(tx).contains(&program_id.to_string())
     }
 
-    /// Check if transaction is a DEX swap
+    /// Check if transaction is a DEX swap (legacy method - now uses instruction-based detection)
+    #[deprecated(note = "Use InstructionClassifier::is_swap instead")]
     pub fn is_dex_swap(tx: &FetchedTransaction) -> bool {
-        let accounts = Self::extract_accounts(tx);
-        accounts.iter().any(|acc| DexPrograms::is_dex_program(acc))
-    }
-
-    /// Check if transaction is a lending protocol interaction
-    pub fn is_lending_interaction(tx: &FetchedTransaction) -> bool {
-        let accounts = Self::extract_accounts(tx);
-        accounts.iter().any(|acc| LendingPrograms::is_lending_program(acc))
-    }
-
-    /// Detect potential liquidation by checking for lending program + large transfers
-    pub fn is_potential_liquidation(tx: &FetchedTransaction) -> bool {
-        if !Self::is_lending_interaction(tx) {
-            return false;
-        }
-
-        // Check for significant token transfers (debt repayment + collateral seizure)
         let transfers = Self::extract_token_transfers(tx);
+        crate::mev::instruction_parser::InstructionClassifier::is_swap(tx, &transfers)
+    }
 
-        // Liquidations typically have at least 2 significant transfers:
-        // 1. Debt token repayment
-        // 2. Collateral token seizure
-        transfers.len() >= 2
+    /// Check if transaction is a lending protocol interaction (legacy - uses instruction-based detection)
+    #[deprecated(note = "Use InstructionClassifier::is_liquidation instead")]
+    pub fn is_lending_interaction(tx: &FetchedTransaction) -> bool {
+        let transfers = Self::extract_token_transfers(tx);
+        crate::mev::instruction_parser::InstructionClassifier::is_liquidation(tx, &transfers)
+    }
+
+    /// Detect potential liquidation (legacy - uses instruction-based detection)
+    #[deprecated(note = "Use InstructionClassifier::is_liquidation instead")]
+    pub fn is_potential_liquidation(tx: &FetchedTransaction) -> bool {
+        let transfers = Self::extract_token_transfers(tx);
+        crate::mev::instruction_parser::InstructionClassifier::is_liquidation(tx, &transfers)
     }
 
     /// Extract the signer (fee payer) of the transaction

@@ -1,6 +1,7 @@
 use crate::types::FetchedTransaction;
 use crate::mev::types::{Liquidation, TokenAmount};
-use crate::mev::parser::{TransactionParser, LendingPrograms, TokenTransfer};
+use crate::mev::parser::{TransactionParser, KnownPrograms, TokenTransfer};
+use crate::mev::instruction_parser::InstructionClassifier;
 
 /// Liquidation Detector
 ///
@@ -38,14 +39,12 @@ impl LiquidationDetector {
 
     /// Detect liquidation in a single transaction
     fn detect_liquidation(tx: &FetchedTransaction, slot: u64) -> Option<Liquidation> {
-        // Criterion 1: Must interact with lending protocol
-        if !TransactionParser::is_lending_interaction(tx) {
-            return None;
-        }
+        // Transactions are already filtered as liquidations by caller
+        // Just validate the pattern
+        let transfers = TransactionParser::extract_token_transfers(tx);
 
-        // Criterion 2: Must have potential liquidation pattern
-        if !TransactionParser::is_potential_liquidation(tx) {
-            return None;
+        if transfers.len() < 3 {
+            return None; // Need debt + collateral transfers
         }
 
         // Extract protocol
@@ -98,17 +97,25 @@ impl LiquidationDetector {
         })
     }
 
-    /// Identify which lending protocol is being used
+    /// Identify which lending protocol is being used (best effort from known programs)
     fn identify_protocol(tx: &FetchedTransaction) -> Option<String> {
         let accounts = TransactionParser::extract_accounts(tx);
 
-        for account in accounts {
-            if let Some(protocol_name) = LendingPrograms::get_protocol_name(&account) {
-                return Some(protocol_name.to_string());
+        // Check against known protocols
+        for account in &accounts {
+            if account == KnownPrograms::SOLEND {
+                return Some("Solend".to_string());
+            } else if account == KnownPrograms::MANGO_V4 {
+                return Some("Mango V4".to_string());
+            } else if account == KnownPrograms::MARGINFI {
+                return Some("Marginfi".to_string());
+            } else if account == KnownPrograms::KAMINO {
+                return Some("Kamino".to_string());
             }
         }
 
-        None
+        // Fallback: extract from instruction if possible
+        Some("Unknown Lending Protocol".to_string())
     }
 
     /// Extract liquidator and liquidated user addresses

@@ -6,6 +6,7 @@ use crate::mev::detectors::{
     jit_liquidity::JitLiquidityDetector,
     liquidation::LiquidationDetector,
 };
+use crate::mev::instruction_parser::TransactionFilter;
 use tracing::{info, debug};
 
 /// MEV Analyzer
@@ -41,7 +42,7 @@ impl MevAnalyzer {
             block.successful_tx_count(),
         );
 
-        // Only analyze successful transactions
+        // Filter successful transactions
         let successful_txs: Vec<_> = block
             .transactions
             .iter()
@@ -60,12 +61,27 @@ impl MevAnalyzer {
             successful_txs.len()
         );
 
-        // Run all detectors
-        // Note: These could be run in parallel for better performance
+        // Step 1: Filter transactions by type using instruction analysis
+        debug!("Filtering transactions by instruction type...");
 
-        // 1. Detect atomic arbitrage
-        debug!("Running atomic arbitrage detector...");
-        let atomic_arbs = AtomicArbDetector::detect_batch(&successful_txs, block.slot);
+        let swap_txs = TransactionFilter::filter_swaps(&successful_txs);
+        let liquidation_txs = TransactionFilter::filter_liquidations(&successful_txs);
+        let liquidity_ops = TransactionFilter::filter_liquidity_ops(&successful_txs);
+
+        info!(
+            "Block {}: filtered to {} swaps, {} liquidations, {} liquidity ops",
+            block.slot,
+            swap_txs.len(),
+            liquidation_txs.len(),
+            liquidity_ops.len()
+        );
+
+        // Step 2: Run MEV detectors on filtered transactions
+        // This is much more efficient than scanning all transactions
+
+        // 1. Detect atomic arbitrage (from swap transactions)
+        debug!("Running atomic arbitrage detector on {} swap transactions...", swap_txs.len());
+        let atomic_arbs = AtomicArbDetector::detect_batch(&swap_txs, block.slot);
         info!(
             "Block {}: found {} atomic arbitrage transactions",
             block.slot,
@@ -76,11 +92,10 @@ impl MevAnalyzer {
             summary.add_mev_transaction(MevTransaction::AtomicArbitrage(arb));
         }
 
-        // 2. Detect sandwich attacks
-        debug!("Running sandwich detector...");
-        // Convert to references for sandwich detector
-        let successful_tx_refs: Vec<_> = successful_txs.iter().collect();
-        let sandwiches = SandwichDetector::detect_in_block(&successful_tx_refs, block.slot);
+        // 2. Detect sandwich attacks (from swap transactions)
+        debug!("Running sandwich detector on {} swap transactions...", swap_txs.len());
+        let swap_tx_refs: Vec<_> = swap_txs.iter().collect();
+        let sandwiches = SandwichDetector::detect_in_block(&swap_tx_refs, block.slot);
         info!(
             "Block {}: found {} sandwich attacks",
             block.slot,
@@ -91,9 +106,11 @@ impl MevAnalyzer {
             summary.add_mev_transaction(MevTransaction::Sandwich(sandwich));
         }
 
-        // 3. Detect JIT liquidity
-        debug!("Running JIT liquidity detector...");
-        let jit_attacks = JitLiquidityDetector::detect_in_block(&successful_tx_refs, block.slot);
+        // 3. Detect JIT liquidity (from liquidity operations)
+        debug!("Running JIT liquidity detector on {} liquidity ops...", liquidity_ops.len());
+        let liquidity_op_txs: Vec<_> = liquidity_ops.iter().map(|(tx, _)| tx).cloned().collect();
+        let liquidity_tx_refs: Vec<_> = liquidity_op_txs.iter().collect();
+        let jit_attacks = JitLiquidityDetector::detect_in_block(&liquidity_tx_refs, block.slot);
         info!(
             "Block {}: found {} JIT liquidity attacks",
             block.slot,
@@ -104,9 +121,9 @@ impl MevAnalyzer {
             summary.add_mev_transaction(MevTransaction::JitLiquidity(jit));
         }
 
-        // 4. Detect liquidations
-        debug!("Running liquidation detector...");
-        let liquidations = LiquidationDetector::detect_in_block(&successful_txs, block.slot);
+        // 4. Detect liquidations (from liquidation transactions)
+        debug!("Running liquidation detector on {} liquidation transactions...", liquidation_txs.len());
+        let liquidations = LiquidationDetector::detect_in_block(&liquidation_txs, block.slot);
         info!(
             "Block {}: found {} profitable liquidations",
             block.slot,

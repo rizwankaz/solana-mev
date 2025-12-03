@@ -1,6 +1,7 @@
 use crate::types::FetchedTransaction;
 use crate::mev::types::{Sandwich, SandwichTx, VictimTx, SwapInfo};
 use crate::mev::parser::{TransactionParser, TokenTransfer};
+use crate::mev::instruction_parser::InstructionClassifier;
 use std::collections::{HashMap, HashSet};
 
 /// Sandwich Attack Detector
@@ -33,10 +34,10 @@ impl SandwichDetector {
     ) -> Vec<Sandwich> {
         let mut sandwiches = Vec::new();
 
-        // Filter to successful DEX transactions only
+        // Filter to swap transactions only (already filtered by caller using instruction analysis)
         let dex_txs: Vec<_> = transactions
             .iter()
-            .filter(|tx| tx.is_success() && TransactionParser::is_dex_swap(tx))
+            .filter(|tx| tx.is_success())
             .map(|tx| *tx)
             .collect();
 

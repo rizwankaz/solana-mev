@@ -13,8 +13,14 @@ pub mod types;
 /// - Swap information
 /// - Token transfers
 /// - Pool interactions
-/// - DEX and lending protocol detection
 pub mod parser;
+
+/// Instruction-based parser
+///
+/// Dynamic detection of swaps, liquidations, and liquidity operations
+/// using instruction data and token transfer heuristics instead of
+/// hardcoded program IDs
+pub mod instruction_parser;
 
 /// MEV detection algorithms
 ///
@@ -29,3 +35,4 @@ pub mod analyzer;
 // Re-export main types for convenience
 pub use types::*;
 pub use analyzer::{MevAnalyzer, MevType};
+pub use instruction_parser::{InstructionClassifier, TransactionFilter};

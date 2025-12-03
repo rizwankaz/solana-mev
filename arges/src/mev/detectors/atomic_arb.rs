@@ -1,6 +1,7 @@
 use crate::types::FetchedTransaction;
 use crate::mev::types::{AtomicArbitrage, SwapInfo};
-use crate::mev::parser::{TransactionParser, DexPrograms};
+use crate::mev::parser::TransactionParser;
+use crate::mev::InstructionClassifier;
 use std::collections::HashSet;
 
 /// Atomic Arbitrage Detector
@@ -34,8 +35,8 @@ impl AtomicArbDetector {
             return None; // Need at least 2 tokens involved
         }
 
-        // Criterion 3: Must interact with DEX programs
-        if !TransactionParser::is_dex_swap(tx) {
+        // Criterion 3: Must be a swap transaction
+        if !InstructionClassifier::is_swap(tx, &transfers) {
             return None;
         }
 
@@ -70,13 +71,16 @@ impl AtomicArbDetector {
 
     /// Analyze token transfers to detect arbitrage pattern
     fn analyze_arbitrage(
-        transfers: &[crate::mev::parser::TokenTransfer],
+        _transfers: &[crate::mev::parser::TokenTransfer],
         tx: &FetchedTransaction,
     ) -> Option<ArbitrageAnalysis> {
+        // Get fresh transfers for this analysis
+        let transfers = TransactionParser::extract_token_transfers(tx);
+
         // Group transfers by token mint to find net changes
         let mut token_net_changes = std::collections::HashMap::new();
 
-        for transfer in transfers {
+        for transfer in &transfers {
             *token_net_changes.entry(transfer.mint.clone())
                 .or_insert(0.0) += transfer.net_change;
         }
@@ -98,7 +102,7 @@ impl AtomicArbDetector {
         }
 
         // Build token route from transfers
-        let token_route = Self::build_token_route(transfers);
+        let token_route = Self::build_token_route(&transfers);
 
         // Must have at least 3 tokens in route for arbitrage (A -> B -> C -> A)
         if token_route.len() < 3 {
@@ -116,9 +120,10 @@ impl AtomicArbDetector {
         let pools: Vec<String> = accounts
             .iter()
             .filter(|acc| {
-                // In production, you'd check if account is a known pool address
-                // For now, we'll include DEX program addresses
-                DexPrograms::is_dex_program(acc)
+                // Filter out system programs
+                !acc.starts_with("11111111111111") &&
+                acc.as_str() != "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" &&
+                acc.as_str() != "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
             })
             .cloned()
             .collect();
@@ -135,7 +140,7 @@ impl AtomicArbDetector {
         let net_profit = Self::estimate_profit_lamports(
             profit_token.as_ref()?,
             max_profit,
-            transfers,
+            &transfers,
         );
 
         // Subtract transaction fee
@@ -143,7 +148,7 @@ impl AtomicArbDetector {
         let net_profit = net_profit - fee_lamports as i64;
 
         // Build swap info (simplified - would need more detailed parsing)
-        let swaps = Self::reconstruct_swaps(transfers, &pools);
+        let swaps = Self::reconstruct_swaps(&transfers, &pools);
 
         Some(ArbitrageAnalysis {
             swaps,

@@ -1,6 +1,7 @@
 use crate::types::FetchedTransaction;
 use crate::mev::types::{JitLiquidity, LiquidityTx, VictimTx, SwapInfo};
 use crate::mev::parser::{TransactionParser, TokenTransfer};
+use crate::mev::instruction_parser::InstructionClassifier;
 
 /// JIT (Just-In-Time) Liquidity Detector
 ///
@@ -141,34 +142,14 @@ impl JitLiquidityDetector {
 
     /// Check if transaction is a liquidity add operation
     fn is_liquidity_add(tx: &FetchedTransaction) -> bool {
-        // Check for liquidity-related instructions
-        // In practice, you'd parse instruction data for specific add_liquidity calls
-
         let transfers = TransactionParser::extract_token_transfers(tx);
-
-        // Liquidity add typically has:
-        // - 2 token outflows (depositing both sides of the pair)
-        // - 1 LP token inflow (receiving LP tokens)
-        let outflows = transfers.iter().filter(|t| t.is_outflow()).count();
-        let inflows = transfers.iter().filter(|t| t.is_inflow()).count();
-
-        // Heuristic: 2 outflows (token deposits) and 1 inflow (LP tokens)
-        outflows >= 2 && inflows >= 1
+        InstructionClassifier::is_add_liquidity(tx, &transfers)
     }
 
     /// Check if transaction is a liquidity remove operation
     fn is_liquidity_remove(tx: &FetchedTransaction) -> bool {
         let transfers = TransactionParser::extract_token_transfers(tx);
-
-        // Liquidity remove typically has:
-        // - 1 LP token outflow (burning LP tokens)
-        // - 2 token inflows (withdrawing both sides of pair)
-        let outflows = transfers.iter().filter(|t| t.is_outflow()).count();
-        let inflows = transfers.iter().filter(|t| t.is_inflow()).count();
-
-        // Heuristic: 1 outflow (LP burn) and 2 inflows (token withdrawals)
-        // Note: could also be 2 outflows + 3 inflows if fees are collected separately
-        (outflows >= 1 && inflows >= 2) || (outflows >= 2 && inflows >= 3)
+        InstructionClassifier::is_remove_liquidity(tx, &transfers)
     }
 
     /// Extract pool addresses from transaction
@@ -205,8 +186,9 @@ impl JitLiquidityDetector {
                     continue;
                 }
 
-                // Check if this is a swap (DEX transaction)
-                if !TransactionParser::is_dex_swap(tx) {
+                // Check if this is a swap
+                let tx_transfers = TransactionParser::extract_token_transfers(tx);
+                if !InstructionClassifier::is_swap(tx, &tx_transfers) {
                     continue;
                 }
 
