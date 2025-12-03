@@ -1,10 +1,12 @@
 mod fetcher;
 mod stream;
 mod types;
+mod mev;
 
 use fetcher::BlockFetcher;
 use stream::BlockStream;
 use types::FetcherConfig;
+use mev::MevAnalyzer;
 use std::sync::Arc;
 use tracing::{info, error};
 
@@ -45,11 +47,11 @@ async fn main() -> anyhow::Result<()> {
             info!("  successful: {}", block.successful_tx_count());
             info!("  fees: {} lamports", block.total_fees());
             info!("  compute units: {}", block.total_compute_units());
-            
+
             if let Some(timestamp) = block.timestamp() {
                 info!("  time: {}", timestamp.format("%Y-%m-%d %H:%M:%S"));
             }
-            
+
             // txs
             if !block.transactions.is_empty() {
                 info!("  first 3 transactions:");
@@ -57,6 +59,78 @@ async fn main() -> anyhow::Result<()> {
                     let status = if tx.is_success() { "+" } else { "-" };
                     info!("    {} {}", status, &tx.signature);
                 }
+            }
+
+            // MEV Analysis
+            info!("\n=== MEV ANALYSIS ===");
+            let mev_summary = MevAnalyzer::analyze_block(&block);
+
+            // Print statistics
+            info!("\n{}", MevAnalyzer::get_stats_summary(&mev_summary));
+
+            // Print detailed MEV transactions if any found
+            if !mev_summary.mev_transactions.is_empty() {
+                info!("Top 5 most profitable MEV transactions:");
+                for (i, mev_tx) in MevAnalyzer::top_profitable(&mev_summary, 5).iter().enumerate() {
+                    match mev_tx {
+                        mev::MevTransaction::AtomicArbitrage(arb) => {
+                            info!(
+                                "  {}. Atomic Arb - Profit: {} SOL - Pools: {} - Sig: {}",
+                                i + 1,
+                                arb.profit_lamports as f64 / 1_000_000_000.0,
+                                arb.pools.len(),
+                                &arb.signature[..16]
+                            );
+                        },
+                        mev::MevTransaction::Sandwich(sw) => {
+                            info!(
+                                "  {}. Sandwich - Profit: {} SOL - Victims: {} - Sig: {}",
+                                i + 1,
+                                sw.profit_lamports as f64 / 1_000_000_000.0,
+                                sw.victims.len(),
+                                &sw.frontrun.signature[..16]
+                            );
+                        },
+                        mev::MevTransaction::JitLiquidity(jit) => {
+                            info!(
+                                "  {}. JIT Liquidity - Profit: {} SOL - Pool: {} - Sig: {}",
+                                i + 1,
+                                jit.profit_lamports as f64 / 1_000_000_000.0,
+                                &jit.pool[..16],
+                                &jit.add_liquidity.signature[..16]
+                            );
+                        },
+                        mev::MevTransaction::Liquidation(liq) => {
+                            info!(
+                                "  {}. Liquidation - Profit: {} SOL - Protocol: {} - Sig: {}",
+                                i + 1,
+                                liq.profit_lamports as f64 / 1_000_000_000.0,
+                                liq.protocol,
+                                &liq.signature[..16]
+                            );
+                        },
+                    }
+                }
+
+                // Output JSON
+                info!("\n=== JSON OUTPUT ===");
+                match MevAnalyzer::to_json(&mev_summary) {
+                    Ok(json) => {
+                        // Print first 500 chars of JSON as preview
+                        let preview = if json.len() > 500 {
+                            format!("{}...\n(JSON truncated for display)", &json[..500])
+                        } else {
+                            json.clone()
+                        };
+                        info!("MEV JSON Preview:\n{}", preview);
+
+                        // In production, you might want to save this to a file
+                        // std::fs::write("mev_output.json", json)?;
+                    },
+                    Err(e) => error!("Failed to serialize MEV summary to JSON: {:?}", e),
+                }
+            } else {
+                info!("No MEV transactions detected in this block.");
             }
         },
         Err(e) => error!("failed to fetch block: {:?}", e),
