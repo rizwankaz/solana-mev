@@ -17,11 +17,13 @@ pub struct InstructionClassifier;
 impl InstructionClassifier {
     /// Detect if transaction contains a swap operation
     ///
-    /// Heuristics:
-    /// 1. Has exactly 2 significant token transfers (input + output)
-    /// 2. One token decreases (sold), one increases (bought)
-    /// 3. Transfers are roughly balanced in value (not a pure transfer)
-    /// 4. Contains instruction names suggesting swap: "swap", "exchange", "trade"
+    /// Uses multiple heuristics to identify swaps:
+    /// - Known DEX program IDs
+    /// - Instruction names/discriminators
+    /// - Token transfer patterns
+    ///
+    /// NOTE: Intentionally permissive to catch all swap types including
+    /// multi-hop routes, aggregator swaps, and complex arbitrages
     pub fn is_swap(tx: &FetchedTransaction, transfers: &[TokenTransfer]) -> bool {
         // Heuristic 1: Must have at least 2 token transfers
         if transfers.len() < 2 {
@@ -36,16 +38,22 @@ impl InstructionClassifier {
             return false;
         }
 
-        // Heuristic 3: Check instruction data for swap-like patterns
+        // Heuristic 3: Check if transaction interacts with known DEX programs
+        if Self::has_dex_program(tx) {
+            return true;
+        }
+
+        // Heuristic 4: Check instruction names/discriminators
         if Self::has_swap_instruction(tx) {
             return true;
         }
 
-        // Heuristic 4: Token transfer pattern suggests swap
-        // Typical swap: 1-2 outflows, 1-2 inflows, limited total transfers
-        if transfers.len() <= 6 && inflows <= 2 && outflows <= 2 {
-            // Check if we have different tokens (not just SOL wrapping/unwrapping)
+        // Heuristic 5: Very permissive token transfer pattern
+        // Allow up to 50 transfers for complex multi-hop aggregator routes
+        // Allow up to 20 inflows/outflows for route splitting
+        if transfers.len() <= 50 {
             let unique_tokens: HashSet<_> = transfers.iter().map(|t| &t.mint).collect();
+            // If 2+ different tokens are moving bidirectionally, it's likely a swap
             if unique_tokens.len() >= 2 {
                 return true;
             }
@@ -143,6 +151,47 @@ impl InstructionClassifier {
         false
     }
 
+    /// Check if transaction interacts with known DEX program IDs
+    fn has_dex_program(tx: &FetchedTransaction) -> bool {
+        // Major DEX program IDs on Solana
+        const DEX_PROGRAMS: &[&str] = &[
+            "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",      // Jupiter V6
+            "JUP4Fb2cqiRUcaTHdrPC8h2gNsA2ETXiPDD33WcGuJB",      // Jupiter V4
+            "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",      // Raydium V4
+            "5quBtoiQqxF9Jv6KYKctB59NT3gtJD2Y65kdnB1Uev3h",      // Raydium Concentrated Liquidity
+            "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",      // Orca Whirlpool
+            "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP",      // Orca V2
+            "DjVE6JNiYqPL2QXyCUUh8rNjHrbz9hXHNYt99MQ59qw1",      // Orca V1
+            "Dooar9JkhdZ7J3LHN3A7YCuoGRUggXhQaG4kijfLGU2j",      // Meteora DLMM
+            "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",       // Meteora Pools
+            "SSwpkEEcbUqx4vtoEByFjSkhKdCT862DNVb52nZg1UZ",       // Saber
+            "Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB",       // Mercurial
+            "PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY",       // Phoenix
+            "LFNTYraetVioAPnGJht4yNg2aUZFXR776cMeN9VMjXp",       // Lifinity V1
+            "EewxydAPCCVuNEyrVN68PuSYdQ7wKn27V9Gjeoi8dy3S",       // Lifinity V2
+            "CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR",       // Raydium CLMM
+            "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",       // Raydium CPMM
+            "27haf8L6oxUeXrHrgEgsexjSY5hbVUWEmvv9Nyxg8vQv",       // Cropper
+            "AMM55ShdkoGRB5jVYPjWziwk8m5MpwyDgsMWHaMSQWH6",       // Aldrin
+            "HyaB3W9q6XdA5xwpU4XnSZV94htfmbmqJXZcEbRaJutt",       // Aldrin V2
+            "SSwpMgqNDsyV7mAgN9ady4bDVu5ySjmmXejXvy2vLt1",       // Step Finance
+            "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",       // Penguin
+            "CURVGoZn8zycx6FXwwevgBTB2gVvdbGTEpvMJDbgs2t4",      // Invariant
+        ];
+
+        let instructions = Self::get_all_instructions(tx);
+
+        for instruction in instructions {
+            if let Some(program_id) = Self::get_program_id(&instruction) {
+                if DEX_PROGRAMS.contains(&program_id.as_str()) {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+
     /// Parse instructions to detect swap-related operations
     fn has_swap_instruction(tx: &FetchedTransaction) -> bool {
         let instructions = Self::get_all_instructions(tx);
@@ -157,6 +206,10 @@ impl InstructionClassifier {
                     || name_lower.contains("route") // Jupiter routing
                     || name_lower.contains("raydium")
                     || name_lower.contains("orca")
+                    || name_lower.contains("whirlpool")
+                    || name_lower.contains("meteora")
+                    || name_lower.contains("phoenix")
+                    || name_lower.contains("lifinity")
                 {
                     return true;
                 }
@@ -303,6 +356,23 @@ impl InstructionClassifier {
                 BASE64.decode(decoded.data.as_str()).ok()
             }
             _ => None,
+        }
+    }
+
+    /// Extract program ID from UiInstruction
+    fn get_program_id(instruction: &UiInstruction) -> Option<String> {
+        match instruction {
+            UiInstruction::Parsed(parsed) => match parsed {
+                UiParsedInstruction::Parsed(parsed_data) => {
+                    Some(parsed_data.program.clone())
+                }
+                UiParsedInstruction::PartiallyDecoded(decoded) => {
+                    Some(decoded.program_id.clone())
+                }
+            },
+            UiInstruction::Compiled(compiled) => {
+                Some(compiled.program_id_index.to_string())
+            }
         }
     }
 
