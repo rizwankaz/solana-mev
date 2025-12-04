@@ -22,6 +22,12 @@ pub mod parser;
 /// hardcoded program IDs
 pub mod instruction_parser;
 
+/// Program ID registry
+///
+/// Registry of known DEX and lending protocol program IDs for supplemental
+/// detection when instruction-based analysis is insufficient
+pub mod registry;
+
 /// MEV detection algorithms
 ///
 /// Individual detectors for each MEV type
@@ -36,3 +42,4 @@ pub mod analyzer;
 pub use types::*;
 pub use analyzer::{MevAnalyzer, MevType};
 pub use instruction_parser::{InstructionClassifier, TransactionFilter};
+pub use registry::ProgramRegistry;

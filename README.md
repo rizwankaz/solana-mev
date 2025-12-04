@@ -42,6 +42,8 @@ arges/
 │   ├── mev/
 │   │   ├── types.rs        # MEV-specific type definitions
 │   │   ├── parser.rs       # Transaction parser for swap/pool extraction
+│   │   ├── instruction_parser.rs  # Instruction-based transaction classifier
+│   │   ├── registry.rs     # Program ID registry for DEXs and lending protocols
 │   │   ├── analyzer.rs     # Main MEV analyzer coordinator
 │   │   └── detectors/
 │   │       ├── atomic_arb.rs      # Atomic arbitrage detector
@@ -147,48 +149,126 @@ for each lending protocol transaction:
 
 ### Instruction-Based Parser (`mev/instruction_parser.rs`)
 
-**Pure instruction-based detection - NO hardcoded program IDs**
+**Three-tier detection strategy for maximum coverage**
 
-The engine uses a fully protocol-agnostic approach that examines instruction data directly:
+The engine uses a sophisticated multi-tier approach to detect swaps and other DeFi operations:
 
-**Detection Method:**
-1. **Parsed instruction types**: Checks if instruction type contains swap keywords (`swap`, `exchange`, `trade`, `route`, `buy`, `sell`)
-2. **Instruction discriminators**: Analyzes first 8 bytes of instruction data (Anchor method hash) for unparsed instructions
+#### Swap Detection (Three Tiers)
 
-**Why this works:**
-- Solana RPC parses instructions and returns the method type (e.g., "swap", "trade", "exchange")
-- For unparsed instructions, the discriminator (first 8 bytes) is the SHA256 hash of the method name
-- ANY protocol with swap-like instructions will be detected automatically
-- No maintenance required when new DEXs launch
+**Tier 1: Instruction-based detection (Primary)**
+- **Parsed instruction types**: Checks if instruction type contains swap keywords (`swap`, `exchange`, `trade`, `route`, `buy`, `sell`)
+- **Instruction discriminators**: Analyzes first 8 bytes of instruction data (Anchor method hash) for unparsed instructions
+- Most accurate and protocol-agnostic
+
+**Tier 2: Pattern-based fallback**
+- **Instruction data size**: Checks for substantial instruction data (8+ bytes = method call discriminator)
+- **Token movement validation**: Verifies bidirectional token transfers (inflows + outflows)
+- **Multi-token requirement**: Must involve 2+ different tokens
+- Catches unknown DEXs and protocols with unparsed instructions
+
+**Tier 3: Registry-based fallback (Final safety net)**
+- **Known program IDs**: Checks transaction against comprehensive DEX registry (50+ protocols)
+- **Transfer validation**: Still requires actual token movements to confirm swap
+- Ensures maximum detection coverage for known protocols
+
+**Why this three-tier approach:**
+- ✅ **Comprehensive**: Catches swaps via instruction analysis, pattern matching, OR known programs
+- ✅ **Accurate**: Each tier validates token movements to prevent false positives
+- ✅ **Maintainable**: Registry isolated in separate module for easy updates
+- ✅ **Future-proof**: Instruction-based tiers catch new protocols automatically
 
 **Example Discriminators:**
 - `0xf8c69e91e17bf5ae` = generic "swap" method
 - `0x331f5a94973f667f` = "swapExact..." variants
 - `0xddda3c8d628c9f7a` = routing/aggregator methods
 
-This approach:
-- ✅ **Protocol-agnostic**: Works with ANY DEX without hardcoding
-- ✅ **Maintainable**: No program ID lists to update
-- ✅ **Accurate**: Detects what the instruction actually does
-- ✅ **Comprehensive**: Catches all swap types including multi-hop routes
+#### Liquidation Detection (Three Tiers)
 
-Liquidation Detection:
-- 3+ token transfers (debt + collateral)
+**Tier 1: Instruction-based**
+- Instruction names contain: `liquidate`, `liquidateBorrow`, `liquidateAndRedeem`
+- Discriminators: Solend `0x59594abd3c7f8e4d`, Mango `0x1d9c40563a9f7e2c`
+
+**Tier 2: Pattern-based**
+- 3+ different tokens involved
+- 4+ token movements (complex multi-token transfers)
 - Both inflows and outflows present
-- Instruction names contain: `liquidate`, `liquidateBorrow`
-- Discriminators match lending protocols:
-  - Solend: `0x5959d4bd3c7f8e4d`
-  - Mango: `0x1d9c40563a9f7e2c`
 
-Liquidity Operations:
-- Add: 2+ outflows (deposits) + 1 inflow (LP token)
-- Remove: 1 outflow (LP burn) + 2+ inflows (withdrawals)
-- Instruction names: `addLiquidity`, `removeLiquidity`, `deposit`, `withdraw`
+**Tier 3: Registry-based**
+- Known lending protocol from registry
+- 2+ tokens, 3+ transfers
+- Validates actual debt/collateral pattern
+
+#### Liquidity Operations
+
+**Add Liquidity:**
+- 2+ outflows (depositing token pair)
+- 1+ inflow (receiving LP tokens)
+- Instruction names: `addLiquidity`, `deposit`, `mintLP`, `increasePosition`
+
+**Remove Liquidity:**
+- 1+ outflow (burning LP tokens)
+- 2+ inflows (withdrawing token pair)
+- Instruction names: `removeLiquidity`, `withdraw`, `burnLP`, `decreasePosition`
 
 **TransactionFilter:**
-- `filter_swaps()`: Returns only swap transactions
+- `filter_swaps()`: Returns only swap transactions (three-tier detection)
 - `filter_liquidations()`: Returns only liquidation transactions
 - `filter_liquidity_ops()`: Returns liquidity add/remove operations
+
+### Program Registry (`mev/registry.rs`)
+
+**Comprehensive registry of DEX and lending protocol program IDs**
+
+The registry module maintains curated lists of known Solana DeFi protocols to supplement instruction-based detection.
+
+#### DEX Registry (50+ protocols)
+
+**Major DEXs and Aggregators:**
+- **Jupiter**: V3, V4, V6 (aggregator)
+- **Raydium**: AMM V3, V4, CLMM (concentrated liquidity), CPMM
+- **Orca**: V1, V2, Whirlpools (CLMM)
+- **Meteora**: DLMM (dynamic liquidity), Pools
+- **Phoenix**: Order book DEX
+- **Serum/Openbook**: V2, V3 (order books)
+- **Lifinity**: V1, V2 (proactive market maker)
+- Plus 30+ additional DEXs (Aldrin, Saber, Cropper, FluxBeam, Saros, Crema, etc.)
+
+#### Lending Protocol Registry (25+ protocols)
+
+**Major Lending Platforms:**
+- **Solend**: Main pool, V2
+- **Mango Markets**: V3, V4 (perpetuals + lending)
+- **Marginfi**: V1, V2
+- **Kamino Finance**: Lending + liquidity vaults
+- **Port Finance**, **Apricot**, **Larix**, **Jet Protocol**, **Francium**
+- Plus 15+ additional protocols (Drift, Tulip, Hubble, Oxygen, Cypher, etc.)
+
+#### API
+
+```rust
+use arges::mev::ProgramRegistry;
+
+// Check if a program is a known DEX
+if ProgramRegistry::is_dex("JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4") {
+    println!("Jupiter V6 detected");
+}
+
+// Check if a program is a lending protocol
+if ProgramRegistry::is_lending_protocol("So1endDq2YkqhipRh3WViPa8hdiSpxWy6z3Z6tMCpAo") {
+    println!("Solend detected");
+}
+
+// Check if any DeFi protocol
+if ProgramRegistry::is_defi_protocol(program_id) {
+    println!("Known DeFi protocol");
+}
+```
+
+**Registry Maintenance:**
+- All program IDs are isolated in `registry.rs` for easy updates
+- Uses `lazy_static` for O(1) lookup performance via `HashSet`
+- New protocols can be added by appending to `DEX_PROGRAMS` or `LENDING_PROGRAMS` arrays
+- No duplicate program IDs (enforced by unit tests)
 
 ### Transaction Parser (`mev/parser.rs`)
 
@@ -199,12 +279,7 @@ Extracts token transfer metadata from transactions:
 - `extract_accounts()`: Gets all accounts involved in transaction
 - `get_signer()`: Identifies transaction fee payer
 
-**Reference Program IDs** (kept for protocol identification):
-- Raydium V4, CLMM
-- Orca Whirlpool
-- Jupiter V6
-- Meteora DLMM
-- Solend, Mango V4, Marginfi, Kamino
+**Note:** Program ID identification is now handled by the dedicated `ProgramRegistry` module for maintainability.
 
 ## Data Structures
 
@@ -467,6 +542,7 @@ Mango:          [0x1d, 0x9c, 0x40, 0x56, 0x3a, 0x9f, 0x7e, 0x2c]
 - `serde`/`serde_json`: Serialization/deserialization
 - `tracing`: Structured logging
 - `anyhow`/`thiserror`: Error handling
+- `lazy_static`: Static initialization for program registry HashSets
 
 ## References
 
