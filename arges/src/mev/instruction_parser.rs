@@ -1,5 +1,6 @@
 use crate::types::FetchedTransaction;
 use crate::mev::parser::TokenTransfer;
+use crate::mev::registry::ProgramRegistry;
 use solana_transaction_status::{UiInstruction, UiParsedInstruction};
 use std::collections::HashSet;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
@@ -17,23 +18,24 @@ pub struct InstructionClassifier;
 impl InstructionClassifier {
     /// Detect if transaction contains a swap operation
     ///
-    /// Instruction-based detection with validation fallback:
+    /// Three-tier detection strategy:
     /// 1. Primary: Check if instructions have swap-related names/discriminators
     /// 2. Fallback: If instructions have method data (8+ bytes) and tokens move bidirectionally
+    /// 3. Registry: Check if transaction interacts with known DEX program IDs
     ///
     /// This catches:
     /// - Parsed swap instructions by name
     /// - Unparsed swap instructions by discriminator
     /// - Unknown DEX protocols (via instruction data + token movement pattern)
+    /// - Known DEXs even when instruction parsing fails
     pub fn is_swap(tx: &FetchedTransaction, transfers: &[TokenTransfer]) -> bool {
-        // Primary: Explicit swap instruction detection
+        // Tier 1: Explicit swap instruction detection
         if Self::has_swap_instruction(tx) {
             return true;
         }
 
-        // Fallback for unparsed/unknown protocols:
-        // If transaction has instructions with method calls (8+ byte data)
-        // AND tokens are swapping (bidirectional movement), it's likely a swap
+        // Tier 2: Instruction data pattern + token movement validation
+        // For unparsed/unknown protocols
         let has_method_calls = Self::has_substantial_instruction_data(tx);
 
         if has_method_calls && transfers.len() >= 2 {
@@ -44,6 +46,21 @@ impl InstructionClassifier {
             // Pattern: method call + tokens moving in both directions + multiple tokens
             if inflows > 0 && outflows > 0 && unique_tokens.len() >= 2 {
                 return true;
+            }
+        }
+
+        // Tier 3: Registry-based detection (final fallback)
+        // Check if transaction interacts with any known DEX program
+        if Self::has_dex_program(tx) {
+            // Additional validation: must have token movements
+            if transfers.len() >= 2 {
+                let inflows = transfers.iter().filter(|t| t.is_inflow()).count();
+                let outflows = transfers.iter().filter(|t| t.is_outflow()).count();
+
+                // Only classify as swap if tokens actually moved
+                if inflows > 0 && outflows > 0 {
+                    return true;
+                }
             }
         }
 
@@ -69,19 +86,18 @@ impl InstructionClassifier {
 
     /// Detect if transaction contains a liquidation operation
     ///
-    /// Heuristics:
-    /// 1. Has multiple token transfers (3+) - debt repayment + collateral seizure
-    /// 2. Contains instruction names suggesting liquidation: "liquidate", "liquidateBorrow"
-    /// 3. Has both significant inflows and outflows
-    /// 4. More complex than a simple swap (4+ token movements)
+    /// Multi-tier detection:
+    /// 1. Instruction-based: Check for liquidation-related instruction names/discriminators
+    /// 2. Pattern-based: Complex multi-token transfers (3+ tokens, 4+ movements)
+    /// 3. Registry-based: Known lending protocol with appropriate token movement pattern
     pub fn is_liquidation(tx: &FetchedTransaction, transfers: &[TokenTransfer]) -> bool {
-        // Heuristic 1: Liquidations typically have 3+ token transfers
+        // Baseline: Liquidations typically have 3+ token transfers
         // (debt token out, collateral token in, sometimes multiple)
         if transfers.len() < 3 {
             return false;
         }
 
-        // Heuristic 2: Must have both inflows and outflows
+        // Must have both inflows and outflows
         let has_inflows = transfers.iter().any(|t| t.is_inflow());
         let has_outflows = transfers.iter().any(|t| t.is_outflow());
 
@@ -89,15 +105,21 @@ impl InstructionClassifier {
             return false;
         }
 
-        // Heuristic 3: Check instruction data for liquidation patterns
+        // Tier 1: Explicit liquidation instruction detection
         if Self::has_liquidation_instruction(tx) {
             return true;
         }
 
-        // Heuristic 4: Complex multi-token transfer pattern
+        // Tier 2: Complex multi-token transfer pattern
         // Liquidations often involve 3+ different tokens
         let unique_tokens: HashSet<_> = transfers.iter().map(|t| &t.mint).collect();
         if unique_tokens.len() >= 3 && transfers.len() >= 4 {
+            return true;
+        }
+
+        // Tier 3: Registry-based detection
+        // Known lending protocol with complex token movements
+        if Self::has_lending_program(tx) && unique_tokens.len() >= 2 && transfers.len() >= 3 {
             return true;
         }
 
@@ -371,6 +393,102 @@ impl InstructionClassifier {
         let discriminator = &data[0..8];
 
         discriminator == solend_liquidate || discriminator == mango_liquidate
+    }
+
+    /// Check if transaction interacts with any known DEX program
+    ///
+    /// Extracts all program IDs from the transaction and checks them against
+    /// the DEX registry.
+    fn has_dex_program(tx: &FetchedTransaction) -> bool {
+        let program_ids = Self::get_program_ids(tx);
+        program_ids.iter().any(|id| ProgramRegistry::is_dex(id))
+    }
+
+    /// Check if transaction interacts with any known lending protocol
+    ///
+    /// Extracts all program IDs from the transaction and checks them against
+    /// the lending protocol registry.
+    fn has_lending_program(tx: &FetchedTransaction) -> bool {
+        let program_ids = Self::get_program_ids(tx);
+        program_ids.iter().any(|id| ProgramRegistry::is_lending_protocol(id))
+    }
+
+    /// Extract all program IDs from transaction
+    ///
+    /// Returns a set of all program IDs that appear in the transaction's
+    /// account keys (both regular instructions and inner instructions).
+    fn get_program_ids(tx: &FetchedTransaction) -> HashSet<String> {
+        let mut program_ids = HashSet::new();
+
+        match &tx.transaction {
+            solana_transaction_status::EncodedTransaction::Json(ui_tx) => {
+                // Get account keys
+                let account_keys = match &ui_tx.message {
+                    solana_transaction_status::UiMessage::Parsed(parsed) => {
+                        parsed.account_keys.iter().map(|key| key.pubkey.clone()).collect::<Vec<_>>()
+                    }
+                    solana_transaction_status::UiMessage::Raw(raw) => {
+                        raw.account_keys.clone()
+                    }
+                };
+
+                // Add program IDs from instructions
+                match &ui_tx.message {
+                    solana_transaction_status::UiMessage::Parsed(parsed) => {
+                        for instruction in &parsed.instructions {
+                            if let Some(program_id) = Self::get_program_id_from_instruction(instruction, &account_keys) {
+                                program_ids.insert(program_id);
+                            }
+                        }
+                    }
+                    solana_transaction_status::UiMessage::Raw(raw) => {
+                        for instruction in &raw.instructions {
+                            let idx = instruction.program_id_index as usize;
+                            if idx < account_keys.len() {
+                                program_ids.insert(account_keys[idx].clone());
+                            }
+                        }
+                    }
+                }
+
+                // Add program IDs from inner instructions
+                if let Some(meta) = &tx.meta {
+                    if let solana_transaction_status::option_serializer::OptionSerializer::Some(inner) = &meta.inner_instructions {
+                        for inner_ix_list in inner {
+                            for instruction in &inner_ix_list.instructions {
+                                if let Some(program_id) = Self::get_program_id_from_instruction(instruction, &account_keys) {
+                                    program_ids.insert(program_id);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        program_ids
+    }
+
+    /// Extract program ID from an instruction
+    fn get_program_id_from_instruction(instruction: &UiInstruction, account_keys: &[String]) -> Option<String> {
+        match instruction {
+            UiInstruction::Parsed(parsed) => match parsed {
+                UiParsedInstruction::Parsed(parsed_data) => {
+                    Some(parsed_data.program.clone())
+                }
+                UiParsedInstruction::PartiallyDecoded(decoded) => {
+                    Some(decoded.program_id.clone())
+                }
+            },
+            UiInstruction::Compiled(compiled) => {
+                if (compiled.program_id_index as usize) < account_keys.len() {
+                    Some(account_keys[compiled.program_id_index as usize].clone())
+                } else {
+                    None
+                }
+            }
+        }
     }
 }
 
