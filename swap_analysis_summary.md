@@ -4,14 +4,25 @@
 
 - **Total transactions in block**: 1,381
 - **Total successful transactions**: 1,190 (no errors)
-- **Successful transactions with "Instruction: Swap"**: **50**
+- **Successful transactions with "Instruction: Swap"**: **71**
+- **Failed transactions with "Instruction: Swap"**: 65
+- **Total "Instruction: Swap" instances**: 251 (across all log messages)
 
-## Swap Instruction Breakdown
+## Detailed Breakdown
 
-From the block's log messages, here are all the swap-related instructions found:
+### Transaction Counts
+- **71** unique successful transactions contain at least one swap instruction
+- **136** total transactions (successful + failed) contain swap instructions
+- **251** total instances of "Instruction: Swap" appearing in log messages
 
-| Instruction Type | Count |
-|------------------|-------|
+### Why the numbers differ:
+- **251 instances** vs **71 transactions**: Many transactions contain multiple swap instructions
+- **71 successful** vs **136 total**: We filter out 65 failed transactions
+
+## Swap Instruction Types Found
+
+| Instruction Type | Instances |
+|------------------|-----------|
 | Instruction: Swap | 153 |
 | Instruction: SwapV2 | 77 |
 | Instruction: Swap2 | 13 |
@@ -20,11 +31,10 @@ From the block's log messages, here are all the swap-related instructions found:
 | Instruction: SwapRaydiumClmm | 1 |
 | Instruction: SwapRouteV2 | 1 |
 | Instruction: SwapTob | 1 |
-
-**Note**: The count of 50 successful transactions containing "Instruction: Swap" represents unique transactions. A single transaction may contain multiple swap instructions in its logs, which is why the total instruction count (153) is higher than the transaction count (50).
+| **Total** | **251** |
 
 ## Filter Criteria
 
 Transactions were filtered based on:
 1. **Success**: Transaction must have `meta.err === null` (no errors)
-2. **Swap Instruction**: Transaction logs must contain "Program log: Instruction: Swap" (exact match, excluding variants like SwapV2, Swap2, etc.)
+2. **Swap Instruction**: Transaction logs must contain "Instruction: Swap" (any variant including Swap, SwapV2, Swap2, etc.)

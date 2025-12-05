@@ -15,12 +15,10 @@ for idx, tx in enumerate(transactions):
     is_successful = meta.get('err') is None
 
     if is_successful:
-        # Check for "Instruction: Swap" (with one space after colon) in log messages
+        # Check for any "Instruction: Swap" variant in log messages
         log_messages = meta.get('logMessages', [])
-        # Look for exact "Instruction: Swap" not "SwapV2" etc
-        has_swap = any('Program log: Instruction: Swap' in msg and
-                      not any(suffix in msg for suffix in ['V2', '2', 'BaseInput', 'ExactOut', 'Raydium', 'Route', 'Tob'])
-                      for msg in log_messages)
+        # Look for any swap instruction (Swap, SwapV2, Swap2, etc.)
+        has_swap = any('Instruction: Swap' in msg for msg in log_messages)
 
         if has_swap:
             swap_count += 1
