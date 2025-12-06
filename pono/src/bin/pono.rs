@@ -9,44 +9,44 @@ async fn main() -> anyhow::Result<()> {
         .with_env_filter("pono=info")
         .init();
 
-    // Parse command line arguments
+    // cli
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 2 {
-        eprintln!("Usage: pono <slot>");
-        eprintln!("Example: pono 381165825");
-        eprintln!("Set PONO_JSON=1 for JSON output");
+        eprintln!("usage: pono <slot>");
+        eprintln!("example: pono 381165825");
+        eprintln!("PONO_JSON=1 for JSON output");
         std::process::exit(1);
     }
 
     let slot: u64 = args[1]
         .parse()
-        .map_err(|_| anyhow::anyhow!("Invalid slot number"))?;
+        .map_err(|_| anyhow::anyhow!("invalid slot number"))?;
 
-    info!("🔍 Analyzing slot {} for MEV", slot);
+    info!("analyzing slot {}", slot);
 
-    // Setup fetcher
+    // setup fetcher
     let config = FetcherConfig {
         rpc_url: std::env::var("SOLANA_RPC_URL")
             .unwrap_or_else(|_| "https://api.mainnet-beta.solana.com".to_string()),
         max_retries: 3,
-        retry_delay_ms: 1000,
+        retry_delay_ms: 500,
         rate_limit: 5,
         timeout_secs: 30,
     };
 
     let fetcher = Arc::new(BlockFetcher::new(config));
 
-    // Fetch block
-    info!("📦 Fetching block...");
+    // fetch block
+    info!("fetching block...");
     let block = match fetcher.fetch_block(slot).await {
         Ok(b) => b,
         Err(e) => {
-            error!("Failed to fetch block: {:?}", e);
+            error!("failed to fetch block: {:?}", e);
             std::process::exit(1);
         }
     };
 
-    info!("✅ Block fetched:");
+    info!("+ block fetched:");
     info!("   Slot: {}", block.slot);
     info!("   Blockhash: {}", &block.blockhash);
     info!("   Total transactions: {}", block.transactions.len());
