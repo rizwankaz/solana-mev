@@ -1,11 +1,11 @@
-use arges::{BlockFetcher, FetcherConfig, MevDetector, MevEvent};
+use pono::{BlockFetcher, FetcherConfig, MevDetector, MevEvent};
 use std::sync::Arc;
 use tracing::{info, error};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
-        .with_env_filter("pono=info,arges=warn")
+        .with_env_filter("pono=info")
         .init();
 
     // Parse command line arguments

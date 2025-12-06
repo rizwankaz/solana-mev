@@ -1,10 +1,10 @@
-# Arges - Solana Block Fetcher & Pono MEV Detector
+# Pono - Solana MEV Detector
 
 This Rust project provides tools for fetching and analyzing Solana blocks, with a focus on MEV (Maximal Extractable Value) detection.
 
 ## Components
 
-### 1. Arges Library
+### 1. Pono Library
 Core library for fetching Solana blocks with:
 - Block fetching with retry logic
 - Rate limiting
@@ -24,7 +24,7 @@ MEV detection tool that analyzes Solana blocks for:
 
 ### Build
 ```bash
-cd arges
+cd pono
 cargo build --release
 ```
 
@@ -136,10 +136,10 @@ Sandwich attacks are detected by finding sequences where:
 ## Project Structure
 
 ```
-arges/
+pono/
 ├── src/
 │   ├── lib.rs              # Library exports
-│   ├── main.rs             # Arges demo binary
+│   ├── main.rs             # Demo binary
 │   ├── bin/
 │   │   └── pono.rs         # Pono MEV detector binary
 │   ├── fetcher.rs          # Block fetching logic

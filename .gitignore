@@ -37,4 +37,4 @@ arges/target/doc/
 
 tmp/
 temp/
-*.tmp
+*.tmp/pono/target/
