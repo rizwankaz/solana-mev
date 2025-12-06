@@ -90,30 +90,20 @@ pub struct TokenTransfer {
 
 /// MEV detector for analyzing blocks
 pub struct MevDetector {
-    /// Minimum swap count for arbitrage
-    pub min_swap_count: usize,
-    /// Maximum block distance for sandwich detection
-    pub max_sandwich_distance: usize,
-    /// Swap parser
+    min_swap_count: usize,
+    max_sandwich_distance: usize,
     swap_parser: SwapParser,
-    /// Oracle client for prices
     oracle: OracleClient,
 }
 
-impl Default for MevDetector {
-    fn default() -> Self {
+impl MevDetector {
+    pub fn new(timestamp: i64) -> Self {
         Self {
             min_swap_count: 2,
             max_sandwich_distance: 5,
             swap_parser: SwapParser::new(),
-            oracle: OracleClient::new(),
+            oracle: OracleClient::new(timestamp),
         }
-    }
-}
-
-impl MevDetector {
-    pub fn new() -> Self {
-        Self::default()
     }
 
     /// Detect all MEV events in a block
@@ -132,12 +122,12 @@ impl MevDetector {
 
         // Detect arbitrage
         for tx in &candidates {
-            if let Some(arb) = self.detect_arbitrage(slot, tx).await {
+            if let Some(arb) = self.detect_arbitrage(tx).await {
                 events.push(MevEvent::Arbitrage(arb));
             }
         }
 
-        // Detect sandwich attacks (not async)
+        // Detect sandwich attacks
         for sandwich in self.detect_sandwiches(slot, &candidates) {
             events.push(MevEvent::Sandwich(sandwich));
         }
@@ -180,23 +170,6 @@ impl MevDetector {
         0
     }
 
-    /// Count transfer instructions
-    fn count_transfers(&self, tx: &FetchedTransaction) -> usize {
-        use solana_transaction_status::option_serializer::OptionSerializer;
-
-        if let Some(meta) = &tx.meta {
-            let logs = match &meta.log_messages {
-                OptionSerializer::Some(logs) => logs,
-                _ => return 0,
-            };
-
-            return logs
-                .iter()
-                .filter(|msg| msg.contains("Instruction: Transfer"))
-                .count();
-        }
-        0
-    }
 
     /// Extract token transfers from transaction
     fn extract_transfers(&self, tx: &FetchedTransaction) -> Vec<TokenTransfer> {
@@ -307,7 +280,6 @@ impl MevDetector {
     /// Detect arbitrage in a transaction with profitability analysis
     async fn detect_arbitrage(
         &mut self,
-        _slot: u64,
         tx: &FetchedTransaction,
     ) -> Option<ArbitrageEvent> {
         let swap_count = self.count_swaps(tx);
