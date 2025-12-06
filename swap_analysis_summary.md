@@ -1,10 +1,13 @@
-# Swap Transaction Analysis for Block 381165825
+# Swap and Transfer Transaction Analysis for Block 381165825
 
 ## Summary
 
 - **Total transactions in block**: 1,381
 - **Total successful transactions**: 1,190 (no errors)
-- **Successful transactions with "Instruction: Swap"**: **71**
+- **Successful transactions with "Instruction: Swap" or "Instruction: Transfer"**: **113**
+  - Transactions with Swap instructions: 71
+  - Transactions with Transfer instructions only: 42
+  - Transactions with both Swap and Transfer: 71
 - **Failed transactions with "Instruction: Swap"**: 65
 - **Total "Instruction: Swap" instances**: 251 (across all log messages)
 
@@ -37,4 +40,6 @@
 
 Transactions were filtered based on:
 1. **Success**: Transaction must have `meta.err === null` (no errors)
-2. **Swap Instruction**: Transaction logs must contain "Instruction: Swap" (any variant including Swap, SwapV2, Swap2, etc.)
+2. **Instructions**: Transaction logs must contain either:
+   - "Instruction: Swap" (any variant including Swap, SwapV2, Swap2, etc.), OR
+   - "Instruction: Transfer" (token transfers)

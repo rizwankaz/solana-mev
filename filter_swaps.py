@@ -15,12 +15,12 @@ for idx, tx in enumerate(transactions):
     is_successful = meta.get('err') is None
 
     if is_successful:
-        # Check for any "Instruction: Swap" variant in log messages
+        # Check for "Instruction: Swap" or "Instruction: Transfer" in log messages
         log_messages = meta.get('logMessages', [])
-        # Look for any swap instruction (Swap, SwapV2, Swap2, etc.)
         has_swap = any('Instruction: Swap' in msg for msg in log_messages)
+        has_transfer = any('Instruction: Transfer' in msg for msg in log_messages)
 
-        if has_swap:
+        if has_swap or has_transfer:
             swap_count += 1
             swap_transactions.append({
                 'index': idx,
@@ -28,7 +28,7 @@ for idx, tx in enumerate(transactions):
                 'logs': log_messages
             })
 
-print(f"Total successful transactions with 'Instruction: Swap': {swap_count}")
+print(f"Total successful transactions with 'Instruction: Swap' or 'Instruction: Transfer': {swap_count}")
 print(f"\nFirst 5 transaction details:")
 for tx in swap_transactions[:5]:
     print(f"\n--- Transaction {tx['index']} ---")

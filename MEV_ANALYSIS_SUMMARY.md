@@ -2,16 +2,16 @@
 
 ## Overview
 
-This analysis examines **successful, non-vote swap transactions** in block 381165825 to identify MEV (Maximal Extractable Value) instances, specifically:
+This analysis examines **successful transactions containing Swap or Transfer instructions** in block 381165825 to identify MEV (Maximal Extractable Value) instances, specifically:
 - **Arbitrage transactions**
 - **Sandwich attacks**
 
 ## Results
 
 ### Summary Statistics
-- **Total swap transactions analyzed**: 71
-- **Arbitrage candidates detected**: 30 (42.3%)
-- **Sandwich attack candidates detected**: 0
+- **Total transactions analyzed**: 113 (71 with Swap, 42 with Transfer only, 71 with both)
+- **Arbitrage candidates detected**: 30 (26.5% of analyzed transactions)
+- **Sandwich attack candidates detected**: 1
 
 ## Arbitrage Detection
 
@@ -64,13 +64,23 @@ Detection criteria:
 - Different signer for position 2 (victim)
 
 ### Results
-**0 sandwich attacks detected** in this block.
+**1 sandwich attack detected** in this block.
 
-This could indicate:
-- Low sandwich attack activity in this specific block
-- Attacks span across multiple blocks (harder to detect in single-block analysis)
-- Different attack patterns used by MEV searchers
-- Effective MEV protection mechanisms in place
+#### Detected Sandwich Attack:
+
+**Sandwich Pattern:**
+- **Front-run** (block index 746): `5sKCnzzdhBrX4qYLMa66...`
+- **Victim** (block index 747): `59uDahHQU7b2E9zLx6qz...`
+- **Back-run** (block index 748): `6gvoR1FWg1P7Jw7ibz2F...`
+- **Attacker**: `RaVenxw8kykBbW7KGBaB...`
+
+This sandwich attack was detected by:
+1. Identifying three consecutive transactions within 5 positions
+2. Same signer for front-run and back-run transactions (the attacker)
+3. Different signer for the middle transaction (the victim)
+4. All three transactions contain swap/transfer instructions
+
+The detection of this sandwich attack demonstrates the value of including "Instruction: Transfer" in the analysis, as MEV attackers often use transfers in addition to swaps.
 
 ## Data Files
 
@@ -92,10 +102,12 @@ This could indicate:
 
 ## MEV Extraction Rate
 
-- **MEV transactions**: 30 out of 71 swap transactions (42.3%)
-- **Block-level MEV rate**: 30 out of 1,381 total transactions (2.17%)
+- **Arbitrage transactions**: 30 out of 113 analyzed transactions (26.5%)
+- **Sandwich attacks**: 1 detected
+- **Total MEV transactions**: 31 out of 113 analyzed transactions (27.4%)
+- **Block-level MEV rate**: 31 out of 1,381 total transactions (2.25%)
 
-This suggests significant MEV activity in DeFi swaps on Solana, with nearly half of all swap transactions showing arbitrage characteristics.
+This suggests significant MEV activity in DeFi transactions on Solana, with over a quarter of swap/transfer transactions showing MEV extraction patterns.
 
 ## Limitations & Future Improvements
 
@@ -136,10 +148,14 @@ cat mev_analysis.json | jq '.arbitrages[] | .swap_count' | sort | uniq -c
 
 ## Conclusion
 
-This block shows significant MEV activity with **30 arbitrage opportunities** successfully extracted by searchers. The absence of detected sandwich attacks may indicate:
+This block shows significant MEV activity with:
+- **30 arbitrage opportunities** successfully extracted by searchers
+- **1 sandwich attack** detected when including Transfer instructions
 
-- Different MEV extraction strategies preferred on Solana
-- Effective user protection mechanisms
-- Need for cross-block analysis to detect sandwich patterns
+Key insights:
+- **27.4% MEV rate** among swap/transfer transactions demonstrates prevalence of MEV extraction
+- Including "Instruction: Transfer" in the analysis was crucial for detecting the sandwich attack
+- The sandwich attack occurred at block indices 746-748, showing tight transaction sequencing
+- Most MEV is extracted through arbitrage (26.5%) rather than sandwich attacks (0.9%)
 
-The 42.3% MEV rate among swap transactions demonstrates the prevalence of automated arbitrage strategies in Solana DeFi markets.
+The detection of 1 sandwich attack validates the importance of comprehensive transaction filtering including both swaps and transfers for accurate MEV measurement on Solana.
