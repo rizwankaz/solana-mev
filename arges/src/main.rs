@@ -1,6 +1,7 @@
 mod fetcher;
 mod stream;
 mod types;
+pub mod mev;
 
 use fetcher::BlockFetcher;
 use stream::BlockStream;

@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
 
+[[bin]]
+name = "pono"
+path = "src/bin/pono.rs"
+
 [dependencies]
 solana-client = "2.1"
 solana-sdk = "2.1"
