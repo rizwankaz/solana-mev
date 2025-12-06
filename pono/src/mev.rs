@@ -233,22 +233,28 @@ impl MevDetector {
 
     /// Extract program IDs from transaction
     fn extract_programs(&self, tx: &FetchedTransaction) -> Vec<String> {
-        use solana_transaction_status::{EncodedTransaction, UiMessage};
+        use solana_transaction_status::{EncodedTransaction, UiMessage, UiInstruction, UiParsedInstruction};
 
         match &tx.transaction {
             EncodedTransaction::Json(ui_tx) => {
                 match &ui_tx.message {
                     UiMessage::Parsed(parsed) => {
                         // Extract from instructions
-                        parsed.instructions.iter()
+                        let mut programs: Vec<String> = parsed.instructions.iter()
                             .filter_map(|inst| {
                                 match inst {
-                                    solana_transaction_status::UiInstruction::Parsed(_) => {
-                                        // UiParsedInstruction has different structure
-                                        // We'll just use the account keys instead
-                                        None
+                                    UiInstruction::Parsed(parsed_inst) => {
+                                        // UiParsedInstruction is an enum, extract program based on variant
+                                        match parsed_inst {
+                                            UiParsedInstruction::Parsed(info) => {
+                                                Some(info.program.clone())
+                                            }
+                                            UiParsedInstruction::PartiallyDecoded(partial) => {
+                                                Some(partial.program_id.clone())
+                                            }
+                                        }
                                     }
-                                    solana_transaction_status::UiInstruction::Compiled(compiled) => {
+                                    UiInstruction::Compiled(compiled) => {
                                         // Get program id from account keys
                                         let program_id_index = compiled.program_id_index as usize;
                                         parsed.account_keys.get(program_id_index)
@@ -256,7 +262,10 @@ impl MevDetector {
                                     }
                                 }
                             })
-                            .collect()
+                            .collect();
+                        programs.sort();
+                        programs.dedup();
+                        programs
                     }
                     UiMessage::Raw(raw) => {
                         // Get unique programs from instructions
