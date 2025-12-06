@@ -1,0 +1,444 @@
+2025-12-06T03:27:31.859370Z  INFO pono: 🔍 Analyzing slot 381165825 for MEV
+2025-12-06T03:27:31.860055Z  INFO pono: 📦 Fetching block...
+2025-12-06T03:27:35.977292Z  INFO pono: ✅ Block fetched:
+2025-12-06T03:27:35.977314Z  INFO pono:    Slot: 381165825
+2025-12-06T03:27:35.977317Z  INFO pono:    Blockhash: HyxzaYPx3n2BzmC2HJWH8Z7PwKYg4uUeH1pXU3BqapUj
+2025-12-06T03:27:35.977341Z  INFO pono:    Total transactions: 1381
+2025-12-06T03:27:35.977347Z  INFO pono:    Successful transactions: 1190
+2025-12-06T03:27:35.977352Z  INFO pono:    Total fees: 1341052689 lamports
+2025-12-06T03:27:35.977355Z  INFO pono:    Total compute units: 55103915
+2025-12-06T03:27:35.977358Z  INFO pono:    Timestamp: 2025-11-19 18:42:37 UTC
+2025-12-06T03:27:35.977378Z  INFO pono:
+🔎 Detecting MEV...
+2025-12-06T03:27:35.981919Z  INFO pono:
+📊 MEV Summary:
+2025-12-06T03:27:35.981924Z  INFO pono:    Total MEV events: 31
+2025-12-06T03:27:35.981926Z  INFO pono:    Arbitrage: 30
+2025-12-06T03:27:35.981928Z  INFO pono:    Sandwich attacks: 1
+
+================================================================================
+🔄 ARBITRAGE EVENTS (30 found)
+================================================================================
+
+1. Arbitrage #1
+   Signature: 1WdpJzEBEmsB7MPuEbHa7jE7kQtaCp7VvsowLQLRanSxDScTXNrtbWSpzAC8yGx4pu7fc1yXCuVwhnyuqWCypbg
+   Signer: AaaA2FSj1FyMEPhdpoF7PJrjsovB6yVv7YZFLn6MSiEQ
+   Swaps: 5
+   Transfers: 10
+   Compute units: 380123
+   Fee: 5000 lamports (0.000005 SOL)
+   Profits:
+     • 0.0003499 tokens
+       Mint: So11111111111111111111111111111111111111112
+       Raw delta: 349900
+
+2. Arbitrage #2
+   Signature: 2RipZvE4CK5KCZenQFqJ5JvPU6FH6bFSwj4SAgC38qFsiPydLBUqKY6RerMbgukrjHYtmqstjCdzYrh4uy7587w
+   Signer: LvjCuiYEvNiHiXNAMUPUDbuCrmaMTUyubLypXwn22Fm
+   Swaps: 2
+   Transfers: 5
+   Compute units: 167864
+   Fee: 5191 lamports (0.000005 SOL)
+   Profits:
+     • 0.000023144 tokens
+       Mint: So11111111111111111111111111111111111111112
+       Raw delta: 23144
+     • 0.005982594 tokens
+       Mint: G1VhWSAhYXRRzokGqxs4aQ8u5DSuP69ki2bN7hnapjzZ
+       Raw delta: 5982594
+
+3. Arbitrage #3
+   Signature: 2ondd7y51qYPL7XL9dCBkWDBGwmck5kroCXHW2auLEGahxeJ1YQd8Nzh89CYJeVne1sNtmWLZ5QPsWXCL51fLec8
+   Signer: GFB2DeNtacxA4fePj73NSMT4Nk14eau11bu5oXqb3ZBQ
+   Swaps: 2
+   Transfers: 11
+   Compute units: 548433
+   Fee: 1211000 lamports (0.001211 SOL)
+   Profits:
+     • 14660.782366 tokens
+       Mint: EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
+       Raw delta: 14660782366
+
+4. Arbitrage #4
+   Signature: 66nC9Z8VG7ScJoUVimYGyRi34hQiEYE98sgxnaVkE8QQNu51jRqTwthvefyeHc6TGeGgEcUzDQ8nJdZsFAXpi7bY
+   Signer: G871yu8BBerq3gN1CVz1piQSyFkoKWBuWLNpwww7vDcy
+   Swaps: 2
+   Transfers: 4
+   Compute units: 118401
+   Fee: 5000 lamports (0.000005 SOL)
+   Profits:
+     • 7.66041952 tokens
+       Mint: XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB
+       Raw delta: 766041952
+
+5. Arbitrage #5
+   Signature: 2j4ayWc4JFTCY4Mkuo596RNPjNCndUKpjMZfThMVmJE6WiKAL9YRHDESt8kw1FkwPrBKZdoSdRxfxMHXJexBqR2t
+   Signer: 3nMNd89AxwHUa1AFvQGqohRkxFEQsTsgiEyEyqXFHyyH
+   Swaps: 4
+   Transfers: 10
+   Compute units: 278958
+   Fee: 5000 lamports (0.000005 SOL)
+   Profits:
+     • 0.000091675 tokens
+       Mint: So11111111111111111111111111111111111111112
+       Raw delta: 91675
+
+6. Arbitrage #6
+   Signature: JLvQfLFFsqKdMpANaDpdHPdkETvt4HHH1f9iZK3eKbn9ehgJobi3rDRRAd8iDJio6PWcXfH4Vo6bstTpjB23QAh
+   Signer: 3nMNd89AxwHUa1AFvQGqohRkxFEQsTsgiEyEyqXFHyyH
+   Swaps: 5
+   Transfers: 10
+   Compute units: 323405
+   Fee: 5000 lamports (0.000005 SOL)
+   Profits:
+     • 0.000014397 tokens
+       Mint: So11111111111111111111111111111111111111112
+       Raw delta: 14397
+
+7. Arbitrage #7
+   Signature: 6gvoR1FWg1P7Jw7ibz2FUTRL4x5xfKx9yKMNxpEC9moePhFbdzs7KwcR4bsY7tReynTZUTstWw5CtCCf5Q1hTbG
+   Signer: RaVenxw8kykBbW7KGBaBsb7fDkkBYK4uJVDSFun6ZxR
+   Swaps: 2
+   Transfers: 4
+   Compute units: 368616
+   Fee: 2081682 lamports (0.002082 SOL)
+   Profits:
+     • 5.207243819 tokens
+       Mint: So11111111111111111111111111111111111111112
+       Raw delta: 5207243819
+
+8. Arbitrage #8
+   Signature: 4xavPLhDmn3xcykLkwUHd2cd7JEdSCBiLktbU82Qe4nxNPxPVJ3qyku8uNT3XVFz1pMKAijtfTFDe3ALgQ6Mmcon
+   Signer: RaVenxw8kykBbW7KGBaBsb7fDkkBYK4uJVDSFun6ZxR
+   Swaps: 3
+   Transfers: 6
+   Compute units: 325693
+   Fee: 17290793 lamports (0.017291 SOL)
+   Profits:
+     • 1.741622269 tokens
+       Mint: So11111111111111111111111111111111111111112
+       Raw delta: 1741622269
+
+9. Arbitrage #9
+   Signature: p171XzDcESADvc3PJzhBrozi6nAGrrbXq17hhuvnxJ1EdWXvPjKRzvbSwkKaxfPkfXiGyrFgXg9HJMsacupj4s8
+   Signer: CwHFgfaUd4AiQqc9cGZF6gjnuWQnayDHp7dEam5DAtXf
+   Swaps: 2
+   Transfers: 4
+   Compute units: 186872
+   Fee: 1625976 lamports (0.001626 SOL)
+   Profits:
+     • 0.022764998 tokens
+       Mint: So11111111111111111111111111111111111111112
+       Raw delta: 22764998
+
+10. Arbitrage #10
+   Signature: 65HvHpxPBwG4RG5fpf87rJWWCUKyAZXNbN6wJRNSncBuSBN3KxoYknwWzLw3x3BdsASZy65S2K2AHgy3iAq2dRPw
+   Signer: K1tChn2NETQd9cCHe1UmUyWP3rDA92gP1dH4nNyEJrx
+   Swaps: 2
+   Transfers: 6
+   Compute units: 294037
+   Fee: 21022 lamports (0.000021 SOL)
+   Profits:
+     • 66.675635133 tokens
+       Mint: So11111111111111111111111111111111111111112
+       Raw delta: 66675635133
+
+11. Arbitrage #11
+   Signature: 5PQynpgXaumfx4dNqhFL4afzRcU98Z2qsMdrDujQP8U8L5FdFs1sF3vEH2VURkKftiWPZG6HvvwAnaMXcPrQjGFd
+   Signer: CQwT1byuHgjKnL6vzmuNaAywKfDBVxDmFVgsQDBWxcWt
+   Swaps: 2
+   Transfers: 4
+   Compute units: 183012
+   Fee: 613813 lamports (0.000614 SOL)
+   Profits:
+     • 0.209235626 tokens
+       Mint: So11111111111111111111111111111111111111112
+       Raw delta: 209235626
+
+12. Arbitrage #12
+   Signature: 4hT9ARq82FH8Sk5CrVzWS66Zve4bcK8rXSSAtFoWuepVf7vNrnSpmsFzcZRLcQD8cUdkAE69FdFtuPrpLiSeHA82
+   Signer: 2QfBNK2WDwSLoUQRb1zAnp3KM12N9hQ8q6ApwUMnWW2T
+   Swaps: 2
+   Transfers: 5
+   Compute units: 349472
+   Fee: 85240 lamports (0.000085 SOL)
+   Profits:
+     • 2.716435 tokens
+       Mint: ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU
+       Raw delta: 2716435
+     • 0.0313452 tokens
+       Mint: So11111111111111111111111111111111111111112
+       Raw delta: 31345200
+
+13. Arbitrage #13
+   Signature: 4BmnxMAJUeBPu5bwvdcg1terdxYPS4MutNeumNrzEtwBhy9DEDwxyTLWCvYkhpim73Mxv46iK4sThQRaPECB6MpC
+   Signer: 2QfBNK2WDwSLoUQRb1zAnp3KM12N9hQ8q6ApwUMnWW2T
+   Swaps: 2
+   Transfers: 5
+   Compute units: 463731
+   Fee: 95000 lamports (0.000095 SOL)
+   Profits:
+     • 1.051262033 tokens
+       Mint: So11111111111111111111111111111111111111112
+       Raw delta: 1051262033
+     • 16.120539 tokens
+       Mint: ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU
+       Raw delta: 16120539
+
+14. Arbitrage #14
+   Signature: 5Shyxs3AovVyJuoozSTdesEMCeGa2Lcrx96VSRxqviuGFzrpNJoRDyqWfPsE8B3WFVw98p6HkGvpkcBAVrKu8n4s
+   Signer: 2QfBNK2WDwSLoUQRb1zAnp3KM12N9hQ8q6ApwUMnWW2T
+   Swaps: 2
+   Transfers: 5
+   Compute units: 458778
+   Fee: 108600 lamports (0.000109 SOL)
+   Profits:
+     • 57.013468 tokens
+       Mint: ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU
+       Raw delta: 57013468
+     • 0.32156371 tokens
+       Mint: So11111111111111111111111111111111111111112
+       Raw delta: 321563710
+
+15. Arbitrage #15
+   Signature: H5HecxYLMpVnzoiJ1ecHEwcvkKTVSndZ3dpJ1gSnqBxC5VpYfyzWK22c3vK4P4K5SFWogYgezymg8bxvJyPBAqu
+   Signer: 3nMNd89AxwHUa1AFvQGqohRkxFEQsTsgiEyEyqXFHyyH
+   Swaps: 5
+   Transfers: 10
+   Compute units: 332708
+   Fee: 5000 lamports (0.000005 SOL)
+   Profits:
+     • 0.000022701 tokens
+       Mint: So11111111111111111111111111111111111111112
+       Raw delta: 22701
+
+16. Arbitrage #16
+   Signature: 3UUa9VWV6AsAAtGL1iTb4YtkGWbCH3QG6QtEawVssfTdWgPHQccCd6JQ8yhXCEbt9JCitK7RhEJBkuBxzxS8omnZ
+   Signer: HxjwdF326ZunmUwC1iXhfgL3ku78YsksN6n7Rfxzwr6b
+   Swaps: 3
+   Transfers: 9
+   Compute units: 284541
+   Fee: 69128000 lamports (0.069128 SOL)
+   Profits:
+     • 827.900149 tokens
+       Mint: EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
+       Raw delta: 827900149
+     • 40.505418 tokens
+       Mint: ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU
+       Raw delta: 40505418
+
+17. Arbitrage #17
+   Signature: 63sk4dPmYQd1vfwqjBjPoYn7xaXYKq2kp9QX7SAxVkfTuvtuqL4ZpD9Kz9uXYkhTPAjoLL4soAWaV38wHS8757oa
+   Signer: HxjwdF326ZunmUwC1iXhfgL3ku78YsksN6n7Rfxzwr6b
+   Swaps: 2
+   Transfers: 9
+   Compute units: 208968
+   Fee: 9879715 lamports (0.009880 SOL)
+   Profits:
+     • 394.973012 tokens
+       Mint: EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
+       Raw delta: 394973012
+     • 20.104612 tokens
+       Mint: ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU
+       Raw delta: 20104612
+
+18. Arbitrage #18
+   Signature: 61EvGy3TjPZ5N8Rdqbhd17Jj1DBuM6u95iSDiC77SUPuB3Yrs1RMfA48iJLHuCG3pwCoRcRmTAHgVkMjFsGH7SWX
+   Signer: bobCPc5nqVoX7r8gKzCMPLrKjFidjnSCrAdcYGCH2Ye
+   Swaps: 2
+   Transfers: 6
+   Compute units: 147918
+   Fee: 305000 lamports (0.000305 SOL)
+   Profits:
+     • 63.028465 tokens
+       Mint: EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
+       Raw delta: 63028465
+
+19. Arbitrage #19
+   Signature: 4DpGrvU6gTjk2rviMpQM9LLCxW1Uaz2EMNDJzX2fKDhPNEjKfdCxDiMr3FaU6FCKiRnjQfqrrqjwEERQvqQS78Rx
+   Signer: HxjwdF326ZunmUwC1iXhfgL3ku78YsksN6n7Rfxzwr6b
+   Swaps: 4
+   Transfers: 10
+   Compute units: 448357
+   Fee: 3708108 lamports (0.003708 SOL)
+   Profits:
+     • 0.023173 tokens
+       Mint: METvsvVRapdj9cFLzq4Tr43xK4tAjQfwX76z3n6mWQL
+       Raw delta: 23173
+     • 0.190687219 tokens
+       Mint: So11111111111111111111111111111111111111112
+       Raw delta: 190687219
+     • 22.675547 tokens
+       Mint: ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU
+       Raw delta: 22675547
+
+20. Arbitrage #20
+   Signature: 3KtvJt59gUepuHVsmDj8xhRQNu9EqNBEwPwMHBdjVqjZCGRG9vVQGwqNEsWJKPjpRHX3Uc5XJsKMRNYNgwybAVaV
+   Signer: bobCPc5nqVoX7r8gKzCMPLrKjFidjnSCrAdcYGCH2Ye
+   Swaps: 3
+   Transfers: 6
+   Compute units: 202377
+   Fee: 305000 lamports (0.000305 SOL)
+   Profits:
+     • 74.619462 tokens
+       Mint: EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
+       Raw delta: 74619462
+
+21. Arbitrage #21
+   Signature: 3wPJw1wRfHpmVHSn3xgtdLUaaqhH7xfUpago9XcqseYnvs69EdRgn52bh5KRUcuRT2tKhw7UVvEAVGa1oASDMmPN
+   Signer: 2QfBNK2WDwSLoUQRb1zAnp3KM12N9hQ8q6ApwUMnWW2T
+   Swaps: 2
+   Transfers: 4
+   Compute units: 444389
+   Fee: 98760 lamports (0.000099 SOL)
+   Profits:
+     • 0.083054308 tokens
+       Mint: So11111111111111111111111111111111111111112
+       Raw delta: 83054308
+
+22. Arbitrage #22
+   Signature: 2DkfuJzb9yzv9LpUiHqNS4hgEsiPGCmSUa9shGLSy784Yh5ki8dPduy6zYCKy2L489j56w2m86umL5wiEiCRZVNx
+   Signer: K1tChn2NETQd9cCHe1UmUyWP3rDA92gP1dH4nNyEJrx
+   Swaps: 2
+   Transfers: 6
+   Compute units: 167552
+   Fee: 24352 lamports (0.000024 SOL)
+   Profits:
+     • 0.001387159 tokens
+       Mint: So11111111111111111111111111111111111111112
+       Raw delta: 1387159
+
+23. Arbitrage #23
+   Signature: yyztSNEkaFVDhe3m3DrqryiCQ6Zq12WVG1sqAMsdD5w4ZRqMkuZ6t4e1RCAJLKBAQtxyqyp1VyAQaZh3r1BNgiN
+   Signer: K1tChn2NETQd9cCHe1UmUyWP3rDA92gP1dH4nNyEJrx
+   Swaps: 2
+   Transfers: 6
+   Compute units: 167307
+   Fee: 24352 lamports (0.000024 SOL)
+   Profits:
+     • 0.000668304 tokens
+       Mint: So11111111111111111111111111111111111111112
+       Raw delta: 668304
+
+24. Arbitrage #24
+   Signature: 5pYZAab7d8pCCExJgrZjgtLQNWRBd6sXoNnbctGecmq7gwGvo1YVgYnp4Qek548MSwdQ2pfzaBETTWEdrMQeqW2J
+   Signer: 55NQkFDwwW8noThkL9Rd5ngbgUU36fYZeos1k5ZwjGdn
+   Swaps: 2
+   Transfers: 6
+   Compute units: 188380
+   Fee: 100000000 lamports (0.100000 SOL)
+   Profits:
+     • 0.000075484 tokens
+       Mint: So11111111111111111111111111111111111111112
+       Raw delta: 75484
+
+25. Arbitrage #25
+   Signature: 3MfKLEyUnfRyHRiMVGNGsJrfkLQ93ERzfmY5FKb7RGq7UhrLsMNy3pD4g7WRpeCWCbCu3UEUZqFAExMf8jDgsq7n
+   Signer: HuTshmtwcQkWBLzgW3m4uwcmik7Lmz4YFpYcTqMJpXiP
+   Swaps: 2
+   Transfers: 6
+   Compute units: 183584
+   Fee: 1395000 lamports (0.001395 SOL)
+   Profits:
+     • 0.000002022 tokens
+       Mint: So11111111111111111111111111111111111111112
+       Raw delta: 2022
+
+26. Arbitrage #26
+   Signature: 2RU86y7KFyEVvqyXMiFbyfpVv1Mpbt3fNkuXvMfRf1Zedo61L3mUyefYFaohAahnfJgmD2uFPXDAMnCxL3KERoMu
+   Signer: 7dGrdJRYtsNR8UYxZ3TnifXGjGc9eRYLq9sELwYpuuUu
+   Swaps: 2
+   Transfers: 6
+   Compute units: 345686
+   Fee: 5150 lamports (0.000005 SOL)
+   Profits:
+     • 6.780159 tokens
+       Mint: ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU
+       Raw delta: 6780159
+     • 0.019986954 tokens
+       Mint: So11111111111111111111111111111111111111112
+       Raw delta: 19986954
+
+27. Arbitrage #27
+   Signature: rwwKtgtp6GMcv4duhHUZez154rZz95VdBMfRxuxR7cRTPBKVS1J9WYn35ZBKzPManZnPiQeKTyZHF454L7c3TkT
+   Signer: 7dGrdJRYtsNR8UYxZ3TnifXGjGc9eRYLq9sELwYpuuUu
+   Swaps: 2
+   Transfers: 6
+   Compute units: 280428
+   Fee: 5150 lamports (0.000005 SOL)
+   Profits:
+     • 0.002411973 tokens
+       Mint: So11111111111111111111111111111111111111112
+       Raw delta: 2411973
+     • 1.686225 tokens
+       Mint: ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU
+       Raw delta: 1686225
+
+28. Arbitrage #28
+   Signature: KkYBoGbhkDChQTB2Cqh91nEaS5u93BzqhRzr7WJWgHGHXHuCw8m1hYiduhBurVonnjhMxkt2aaQJGbTgC3jaUc3
+   Signer: 3nMNd89AxwHUa1AFvQGqohRkxFEQsTsgiEyEyqXFHyyH
+   Swaps: 6
+   Transfers: 12
+   Compute units: 479420
+   Fee: 5000 lamports (0.000005 SOL)
+   Profits:
+     • 0.005152 tokens
+       Mint: EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
+       Raw delta: 5152
+
+29. Arbitrage #29
+   Signature: 5kJNjbhbWqwDGSUVMrUNbcHWy1FSSuBY5MYEhHLGPDVEEr3ZJ9abZAis2qgXTcF9A8sFv2NszjYYdcSmG4jS6LeZ
+   Signer: 3rnVJzSEcV1wnStkX15qS5pX43U4ENHv2me6LwEjp9bc
+   Swaps: 4
+   Transfers: 10
+   Compute units: 367095
+   Fee: 5000 lamports (0.000005 SOL)
+   Profits:
+     • 0.000205442 tokens
+       Mint: So11111111111111111111111111111111111111112
+       Raw delta: 205442
+
+30. Arbitrage #30
+   Signature: 4yYZkrtL7BmzwdsLebZc7NLjKZTkapNhxg8x3y5qtgYyW7p7wYs2Lxj25g5h8qzFWw5B1cMqoanHgcGwgtyRhGz4
+   Signer: 3nMNd89AxwHUa1AFvQGqohRkxFEQsTsgiEyEyqXFHyyH
+   Swaps: 4
+   Transfers: 10
+   Compute units: 283484
+   Fee: 5000 lamports (0.000005 SOL)
+   Profits:
+     • 0.000037826 tokens
+       Mint: So11111111111111111111111111111111111111112
+       Raw delta: 37826
+
+================================================================================
+🥪 SANDWICH ATTACK EVENTS (1 found)
+================================================================================
+
+1. Sandwich Attack #1
+   Attacker: RaVenxw8kykBbW7KGBaBsb7fDkkBYK4uJVDSFun6ZxR
+   Victim signature: 59uDahHQU7b2E9zLx6qzpeTadSoXfv6Tz2k3vPSHFk5QP2ZXozgkt9U1F5efkreygGvehUYzbkVeTpFoSi41TAqy
+   Total compute units: 509755
+   Total fees: 6598996 lamports (0.006599 SOL)
+
+   Front-run:
+     Signature: 5sKCnzzdhBrX4qYLMa66eEKefnXjxgZ7MPwc7fB34xbHb2F7Qu2SNAS465VBnRHce5PubVmqjMphPAoDq4VcbJbj
+     Index: 746
+     Compute units: 128854
+     Fee: 4506950 lamports
+
+   Victim:
+     Signature: 59uDahHQU7b2E9zLx6qzpeTadSoXfv6Tz2k3vPSHFk5QP2ZXozgkt9U1F5efkreygGvehUYzbkVeTpFoSi41TAqy
+     Index: 747
+     Signer: 6LY1JzAFVZsP2a2xKrtU6znQMQ5h4i7tocWdgrkZzkzF
+     Compute units: 12285
+     Fee: 10364 lamports
+
+   Back-run:
+     Signature: 6gvoR1FWg1P7Jw7ibz2FUTRL4x5xfKx9yKMNxpEC9moePhFbdzs7KwcR4bsY7tReynTZUTstWw5CtCCf5Q1hTbG
+     Index: 748
+     Compute units: 368616
+     Fee: 2081682 lamports
+
+================================================================================
+✅ Analysis complete
+================================================================================
