@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 use crate::types::FetchedTransaction;
+use crate::swap::{SwapInfo, SwapParser};
+use crate::oracle::OracleClient;
 
 /// MEV event type
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -9,18 +11,38 @@ pub enum MevEvent {
     Sandwich(SandwichEvent),
 }
 
+/// Profitability information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Profitability {
+    pub profit_usd: f64,
+    pub fees_usd: f64,
+    pub net_profit_usd: f64,
+}
+
+/// Token change information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TokenChange {
+    pub token_address: String,
+    pub token_name: Option<String>,
+    pub amount: f64,
+    pub decimals: u8,
+}
+
 /// Arbitrage MEV event
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArbitrageEvent {
     pub signature: String,
-    pub slot: u64,
-    pub signer: String,
-    pub swap_count: usize,
-    pub transfer_count: usize,
-    pub compute_units: u64,
+    pub attacker_signer: String,
+    pub category: String,
+    pub success: bool,
+    pub program_addresses: Vec<String>,
+    pub token_changes: Vec<TokenChange>,
     pub fee: u64,
-    pub profit_tokens: Vec<TokenProfit>,
-    pub programs: Vec<String>,
+    pub priority_fee: Option<u64>,
+    pub compute_units_consumed: u64,
+    pub swaps: Vec<SwapInfo>,
+    pub swap_count: usize,
+    pub profitability: Profitability,
 }
 
 /// Sandwich attack MEV event
@@ -72,6 +94,10 @@ pub struct MevDetector {
     pub min_swap_count: usize,
     /// Maximum block distance for sandwich detection
     pub max_sandwich_distance: usize,
+    /// Swap parser
+    swap_parser: SwapParser,
+    /// Oracle client for prices
+    oracle: OracleClient,
 }
 
 impl Default for MevDetector {
@@ -79,6 +105,8 @@ impl Default for MevDetector {
         Self {
             min_swap_count: 2,
             max_sandwich_distance: 5,
+            swap_parser: SwapParser::new(),
+            oracle: OracleClient::new(),
         }
     }
 }
@@ -89,8 +117,8 @@ impl MevDetector {
     }
 
     /// Detect all MEV events in a block
-    pub fn detect_mev(
-        &self,
+    pub async fn detect_mev(
+        &mut self,
         slot: u64,
         transactions: &[FetchedTransaction],
     ) -> Vec<MevEvent> {
@@ -104,12 +132,12 @@ impl MevDetector {
 
         // Detect arbitrage
         for tx in &candidates {
-            if let Some(arb) = self.detect_arbitrage(slot, tx) {
+            if let Some(arb) = self.detect_arbitrage(slot, tx).await {
                 events.push(MevEvent::Arbitrage(arb));
             }
         }
 
-        // Detect sandwich attacks
+        // Detect sandwich attacks (not async)
         for sandwich in self.detect_sandwiches(slot, &candidates) {
             events.push(MevEvent::Sandwich(sandwich));
         }
@@ -276,10 +304,10 @@ impl MevDetector {
         }
     }
 
-    /// Detect arbitrage in a transaction
-    fn detect_arbitrage(
-        &self,
-        slot: u64,
+    /// Detect arbitrage in a transaction with profitability analysis
+    async fn detect_arbitrage(
+        &mut self,
+        _slot: u64,
         tx: &FetchedTransaction,
     ) -> Option<ArbitrageEvent> {
         let swap_count = self.count_swaps(tx);
@@ -292,33 +320,84 @@ impl MevDetector {
         let transfers = self.extract_transfers(tx);
         let signer = tx.signer()?;
 
-        // Check for profit (any token with positive delta owned by signer)
-        let mut profit_tokens = Vec::new();
+        // Extract swaps
+        let swaps = self.swap_parser.extract_swaps(tx);
+
+        // Calculate token changes
+        let mut token_changes = Vec::new();
+        let mut profit_usd = 0.0;
+
         for transfer in &transfers {
             if transfer.delta > 0 && transfer.owner == signer {
-                profit_tokens.push(TokenProfit {
-                    mint: transfer.mint.clone(),
-                    delta: transfer.delta,
+                let amount = transfer.delta as f64 / 10_f64.powi(transfer.decimals as i32);
+
+                // Calculate USD value
+                let value = self.oracle
+                    .calculate_usd_value(&transfer.mint, transfer.delta as f64, transfer.decimals)
+                    .await
+                    .unwrap_or(0.0);
+
+                profit_usd += value;
+
+                token_changes.push(TokenChange {
+                    token_address: transfer.mint.clone(),
+                    token_name: crate::tokens::TokenRegistry::new().get_symbol(&transfer.mint).map(|s| s.to_string()),
+                    amount,
                     decimals: transfer.decimals,
                 });
             }
         }
 
-        // Must have some profit
-        if profit_tokens.is_empty() {
+        // Calculate fee in USD (assuming SOL price)
+        let fee = tx.fee().unwrap_or(0);
+        let fees_usd = self.oracle
+            .calculate_usd_value("So11111111111111111111111111111111111111112", fee as f64, 9)
+            .await
+            .unwrap_or(0.0);
+
+        let net_profit_usd = profit_usd - fees_usd;
+
+        // Only return if profitable
+        if net_profit_usd <= 0.0 {
             return None;
         }
 
+        // Extract priority fee
+        let priority_fee = if let Some(meta) = &tx.meta {
+            use solana_transaction_status::option_serializer::OptionSerializer;
+            match &meta.compute_units_consumed {
+                OptionSerializer::Some(cu) => {
+                    // Priority fee = (total fee - base fee) / compute units * 1M
+                    // This is a simplification; actual calculation may vary
+                    if *cu > 0 {
+                        Some((fee - 5000).max(0))
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            }
+        } else {
+            None
+        };
+
         Some(ArbitrageEvent {
             signature: tx.signature.clone(),
-            slot,
-            signer,
+            attacker_signer: signer,
+            category: "ARBITRAGE".to_string(),
+            success: true,
+            program_addresses: self.extract_programs(tx),
+            token_changes,
+            fee,
+            priority_fee,
+            compute_units_consumed: tx.compute_units_consumed().unwrap_or(0),
+            swaps,
             swap_count,
-            transfer_count: self.count_transfers(tx),
-            compute_units: tx.compute_units_consumed().unwrap_or(0),
-            fee: tx.fee().unwrap_or(0),
-            profit_tokens,
-            programs: self.extract_programs(tx),
+            profitability: Profitability {
+                profit_usd,
+                fees_usd,
+                net_profit_usd,
+            },
         })
     }
 
