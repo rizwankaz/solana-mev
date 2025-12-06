@@ -1,0 +1,1490 @@
+{
+  "slot": 381165825,
+  "blockhash": "HyxzaYPx3n2BzmC2HJWH8Z7PwKYg4uUeH1pXU3BqapUj",
+  "timestamp": "2025-11-19 18:42:37 UTC",
+  "total_transactions": 1381,
+  "mev_transactions": [
+    {
+      "signature": "1WdpJzEBEmsB7MPuEbHa7jE7kQtaCp7VvsowLQLRanSxDScTXNrtbWSpzAC8yGx4pu7fc1yXCuVwhnyuqWCypbg",
+      "attacker_signer": "AaaA2FSj1FyMEPhdpoF7PJrjsovB6yVv7YZFLn6MSiEQ",
+      "category": "ARBITRAGE",
+      "success": true,
+      "program_addresses": [
+        "ComputeBudget111111111111111111111111111111",
+        "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+        "11111111111111111111111111111111",
+        "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+        "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+        "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
+        "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+      ],
+      "token_changes": [
+        {
+          "token_address": "So11111111111111111111111111111111111111112",
+          "token_name": "SOL",
+          "amount": 0.00034989999999979204,
+          "decimals": 9
+        }
+      ],
+      "fee": 5000,
+      "priority_fee": null,
+      "compute_units_consumed": 380123,
+      "swaps": [
+        {
+          "from_token": "So11111111111111111111111111111111111111112",
+          "from_token_name": "SOL",
+          "from_amount": 0.00034989999999979204,
+          "to_token": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "to_token_name": "USDC",
+          "to_amount": 6.981619999976829,
+          "dex_program": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+          "dex_name": "PancakeSwap",
+          "from_decimals": 9,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "from_token_name": "USDC",
+          "from_amount": 6.981620000000476,
+          "to_token": "9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump",
+          "to_amount": 29.256680999998935,
+          "dex_program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "dex_name": "Orca Whirlpool",
+          "from_decimals": 6,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump",
+          "from_amount": 29.256680999999844,
+          "to_token": "26s3UGB9hund1qspApy1zYgCritxAooGg7o63BMn89Yq",
+          "to_amount": 158882.16708726808,
+          "dex_program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "dex_name": "Raydium CLMM",
+          "from_decimals": 6,
+          "to_decimals": 8
+        },
+        {
+          "from_token": "26s3UGB9hund1qspApy1zYgCritxAooGg7o63BMn89Yq",
+          "from_amount": 158882.1670872718,
+          "to_token": "XsvNBAYkrDRNhA7wPHQfX3ZUXZyZLdnCQDfHZ56bzpg",
+          "to_amount": 0.06225620999999992,
+          "dex_program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "dex_name": "Raydium CLMM",
+          "from_decimals": 8,
+          "to_decimals": 8
+        },
+        {
+          "from_token": "XsvNBAYkrDRNhA7wPHQfX3ZUXZyZLdnCQDfHZ56bzpg",
+          "from_amount": 0.06225621000000103,
+          "to_token": "So11111111111111111111111111111111111111112",
+          "to_token_name": "SOL",
+          "to_amount": 0.05365989999999954,
+          "dex_program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "dex_name": "Raydium CLMM",
+          "from_decimals": 8,
+          "to_decimals": 9
+        }
+      ],
+      "swap_count": 5,
+      "profitability": {
+        "profit_usd": 0.017496232436841667,
+        "fees_usd": 0.0006547158085,
+        "net_profit_usd": 0.016841516628341668
+      }
+    },
+    {
+      "signature": "2RipZvE4CK5KCZenQFqJ5JvPU6FH6bFSwj4SAgC38qFsiPydLBUqKY6RerMbgukrjHYtmqstjCdzYrh4uy7587w",
+      "attacker_signer": "LvjCuiYEvNiHiXNAMUPUDbuCrmaMTUyubLypXwn22Fm",
+      "category": "ARBITRAGE",
+      "success": true,
+      "program_addresses": [
+        "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+        "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+        "LVJFnvzw4jDzjdhJ9onG8H7R27ph8bqhU1aN4bBj6pP",
+        "ComputeBudget111111111111111111111111111111",
+        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+      ],
+      "token_changes": [
+        {
+          "token_address": "G1VhWSAhYXRRzokGqxs4aQ8u5DSuP69ki2bN7hnapjzZ",
+          "amount": 0.005982594000000008,
+          "decimals": 9
+        },
+        {
+          "token_address": "So11111111111111111111111111111111111111112",
+          "token_name": "SOL",
+          "amount": 0.000023144000000030474,
+          "decimals": 9
+        }
+      ],
+      "fee": 5191,
+      "priority_fee": 99,
+      "compute_units_consumed": 167864,
+      "swaps": [
+        {
+          "from_token": "So11111111111111111111111111111111111111112",
+          "from_token_name": "SOL",
+          "from_amount": 0.000023144000000030474,
+          "to_token": "G1VhWSAhYXRRzokGqxs4aQ8u5DSuP69ki2bN7hnapjzZ",
+          "to_amount": 56.207834327000455,
+          "dex_program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "dex_name": "Orca Whirlpool",
+          "from_decimals": 9,
+          "to_decimals": 9
+        },
+        {
+          "from_token": "G1VhWSAhYXRRzokGqxs4aQ8u5DSuP69ki2bN7hnapjzZ",
+          "from_amount": 0.005982594000000008,
+          "to_token": "So11111111111111111111111111111111111111112",
+          "to_token_name": "SOL",
+          "to_amount": 0.002587849000008191,
+          "dex_program": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "dex_name": "Meteora DLMM",
+          "from_decimals": 9,
+          "to_decimals": 9
+        }
+      ],
+      "swap_count": 2,
+      "profitability": {
+        "profit_usd": 0.0030438344699312216,
+        "fees_usd": 0.000692689325393,
+        "net_profit_usd": 0.0023511451445382215
+      }
+    },
+    {
+      "signature": "agwGcDcLZfrJMV6utGVzma3s5yyFyxQsYd36YbjFuS3ddxJXCzMyeaYkf72djeSviMDYTzes6bZRiMVRadAWGvF",
+      "attacker_signer": "RaVenxw8kykBbW7KGBaBsb7fDkkBYK4uJVDSFun6ZxR",
+      "category": "ARBITRAGE",
+      "success": true,
+      "program_addresses": [
+        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "ComputeBudget111111111111111111111111111111",
+        "CroWg74XNDF8UMnAZVbXx49iVj7iJ7b4CsqTCVWF7aK",
+        "11111111111111111111111111111111",
+        "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+        "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8"
+      ],
+      "token_changes": [
+        {
+          "token_address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "token_name": "USDC",
+          "amount": 5164.182790999999,
+          "decimals": 6
+        }
+      ],
+      "fee": 67510850,
+      "priority_fee": 49472304,
+      "compute_units_consumed": 307801,
+      "swaps": [
+        {
+          "from_token": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "from_token_name": "USDC",
+          "from_amount": 0.16436100006103516,
+          "to_token": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+          "to_token_name": "RAY",
+          "to_amount": 0.14395499997772276,
+          "dex_program": "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
+          "dex_name": "Raydium V4",
+          "from_decimals": 6,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+          "from_token_name": "RAY",
+          "from_amount": 0.14395500000000006,
+          "to_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "to_token_name": "ZBCN",
+          "to_amount": 2098286.326347,
+          "dex_program": "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
+          "dex_name": "Raydium V4",
+          "from_decimals": 6,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "from_token_name": "USDC",
+          "from_amount": 5164.182790999999,
+          "to_token": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "to_token_name": "USDC",
+          "to_amount": 5164.347152,
+          "dex_program": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "dex_name": "Meteora DLMM",
+          "from_decimals": 6,
+          "to_decimals": 6
+        }
+      ],
+      "swap_count": 3,
+      "profitability": {
+        "profit_usd": 5169.661374964973,
+        "fees_usd": 15.318144050398,
+        "net_profit_usd": 5154.3432309145755
+      }
+    },
+    {
+      "signature": "5sKCnzzdhBrX4qYLMa66eEKefnXjxgZ7MPwc7fB34xbHb2F7Qu2SNAS465VBnRHce5PubVmqjMphPAoDq4VcbJbj",
+      "attacker_signer": "RaVenxw8kykBbW7KGBaBsb7fDkkBYK4uJVDSFun6ZxR",
+      "category": "ARBITRAGE",
+      "success": true,
+      "program_addresses": [
+        "CroWg74XNDF8UMnAZVbXx49iVj7iJ7b4CsqTCVWF7aK",
+        "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
+        "ComputeBudget111111111111111111111111111111",
+        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "11111111111111111111111111111111",
+        "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc"
+      ],
+      "token_changes": [
+        {
+          "token_address": "So11111111111111111111111111111111111111112",
+          "token_name": "SOL",
+          "amount": 2.2120379640000465,
+          "decimals": 9
+        }
+      ],
+      "fee": 4506950,
+      "priority_fee": 913534,
+      "compute_units_consumed": 128854,
+      "swaps": [
+        {
+          "from_token": "So11111111111111111111111111111111111111112",
+          "from_token_name": "SOL",
+          "from_amount": 0.00014029399972059764,
+          "to_token": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+          "to_token_name": "RAY",
+          "to_amount": 0.016112999990582466,
+          "dex_program": "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
+          "dex_name": "Raydium V4",
+          "from_decimals": 9,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+          "from_token_name": "RAY",
+          "from_amount": 0.016113000000000044,
+          "to_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "to_token_name": "ZBCN",
+          "to_amount": 167149.45506699942,
+          "dex_program": "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
+          "dex_name": "Raydium V4",
+          "from_decimals": 6,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "So11111111111111111111111111111111111111112",
+          "from_token_name": "SOL",
+          "from_amount": 2.2120379640000465,
+          "to_token": "So11111111111111111111111111111111111111112",
+          "to_token_name": "SOL",
+          "to_amount": 2.212178258,
+          "dex_program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "dex_name": "Orca Whirlpool",
+          "from_decimals": 9,
+          "to_decimals": 9
+        }
+      ],
+      "swap_count": 3,
+      "profitability": {
+        "profit_usd": 289.77086583687725,
+        "fees_usd": 0.7097753129042627,
+        "net_profit_usd": 289.061090523973
+      }
+    },
+    {
+      "signature": "6gvoR1FWg1P7Jw7ibz2FUTRL4x5xfKx9yKMNxpEC9moePhFbdzs7KwcR4bsY7tReynTZUTstWw5CtCCf5Q1hTbG",
+      "attacker_signer": "RaVenxw8kykBbW7KGBaBsb7fDkkBYK4uJVDSFun6ZxR",
+      "category": "ARBITRAGE",
+      "success": true,
+      "program_addresses": [
+        "11111111111111111111111111111111",
+        "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+        "CroWg74XNDF8UMnAZVbXx49iVj7iJ7b4CsqTCVWF7aK",
+        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+        "ComputeBudget111111111111111111111111111111"
+      ],
+      "token_changes": [
+        {
+          "token_address": "So11111111111111111111111111111111111111112",
+          "token_name": "SOL",
+          "amount": 5.207243818999814,
+          "decimals": 9
+        }
+      ],
+      "fee": 2081682,
+      "priority_fee": 546784,
+      "compute_units_consumed": 368616,
+      "swaps": [
+        {
+          "from_token": "So11111111111111111111111111111111111111112",
+          "from_token_name": "SOL",
+          "from_amount": 5.207243818999814,
+          "to_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "to_token_name": "ZBCN",
+          "to_amount": 1827591.856892001,
+          "dex_program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "dex_name": "Orca Whirlpool",
+          "from_decimals": 9,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "from_token_name": "ZBCN",
+          "from_amount": 1827591.8568919995,
+          "to_token": "So11111111111111111111111111111111111111112",
+          "to_token_name": "SOL",
+          "to_amount": 35.157922106,
+          "dex_program": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "dex_name": "Meteora DLMM",
+          "from_decimals": 6,
+          "to_decimals": 9
+        }
+      ],
+      "swap_count": 2,
+      "profitability": {
+        "profit_usd": 681.924567028345,
+        "fees_usd": 0.3441796484609522,
+        "net_profit_usd": 681.5803873798841
+      }
+    },
+    {
+      "signature": "4xavPLhDmn3xcykLkwUHd2cd7JEdSCBiLktbU82Qe4nxNPxPVJ3qyku8uNT3XVFz1pMKAijtfTFDe3ALgQ6Mmcon",
+      "attacker_signer": "RaVenxw8kykBbW7KGBaBsb7fDkkBYK4uJVDSFun6ZxR",
+      "category": "ARBITRAGE",
+      "success": true,
+      "program_addresses": [
+        "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+        "CroWg74XNDF8UMnAZVbXx49iVj7iJ7b4CsqTCVWF7aK",
+        "11111111111111111111111111111111",
+        "ComputeBudget111111111111111111111111111111",
+        "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+      ],
+      "token_changes": [
+        {
+          "token_address": "So11111111111111111111111111111111111111112",
+          "token_name": "SOL",
+          "amount": 1.7416222690003451,
+          "decimals": 9
+        }
+      ],
+      "fee": 17290793,
+      "priority_fee": 4021329,
+      "compute_units_consumed": 325693,
+      "swaps": [
+        {
+          "from_token": "So11111111111111111111111111111111111111112",
+          "from_token_name": "SOL",
+          "from_amount": 1.7416222690003451,
+          "to_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "to_token_name": "ZBCN",
+          "to_amount": 1993415.8646919988,
+          "dex_program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "dex_name": "Orca Whirlpool",
+          "from_decimals": 9,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "from_token_name": "ZBCN",
+          "from_amount": 1993415.8646919988,
+          "to_token": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "to_token_name": "USDC",
+          "to_amount": 5109.712847000001,
+          "dex_program": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "dex_name": "Meteora DLMM",
+          "from_decimals": 6,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "from_token_name": "USDC",
+          "from_amount": 5109.712846999988,
+          "to_token": "So11111111111111111111111111111111111111112",
+          "to_token_name": "SOL",
+          "to_amount": 39.001865904952865,
+          "dex_program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "dex_name": "Orca Whirlpool",
+          "from_decimals": 6,
+          "to_decimals": 9
+        }
+      ],
+      "swap_count": 3,
+      "profitability": {
+        "profit_usd": 228.58009192352898,
+        "fees_usd": 2.790676637216127,
+        "net_profit_usd": 225.78941528631285
+      }
+    },
+    {
+      "signature": "p171XzDcESADvc3PJzhBrozi6nAGrrbXq17hhuvnxJ1EdWXvPjKRzvbSwkKaxfPkfXiGyrFgXg9HJMsacupj4s8",
+      "attacker_signer": "CwHFgfaUd4AiQqc9cGZF6gjnuWQnayDHp7dEam5DAtXf",
+      "category": "ARBITRAGE",
+      "success": true,
+      "program_addresses": [
+        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "CctXvztEB5nqHsdxu1MWnMjAXs53xJ2KPYMD6xabER4B",
+        "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+        "ComputeBudget111111111111111111111111111111",
+        "11111111111111111111111111111111",
+        "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
+      ],
+      "token_changes": [
+        {
+          "token_address": "So11111111111111111111111111111111111111112",
+          "token_name": "SOL",
+          "amount": 0.022764998000184278,
+          "decimals": 9
+        }
+      ],
+      "fee": 1625976,
+      "priority_fee": 896986,
+      "compute_units_consumed": 186872,
+      "swaps": [
+        {
+          "from_token": "So11111111111111111111111111111111111111112",
+          "from_token_name": "SOL",
+          "from_amount": 0.022764998000184278,
+          "to_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "to_token_name": "ZBCN",
+          "to_amount": 233366.8894889988,
+          "dex_program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "dex_name": "Orca Whirlpool",
+          "from_decimals": 9,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "from_token_name": "ZBCN",
+          "from_amount": 233366.8894890002,
+          "to_token": "So11111111111111111111111111111111111111112",
+          "to_token_name": "SOL",
+          "to_amount": 4.543281468000001,
+          "dex_program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "dex_name": "Raydium CLMM",
+          "from_decimals": 6,
+          "to_decimals": 9
+        }
+      ],
+      "swap_count": 2,
+      "profitability": {
+        "profit_usd": 3.0983749970789423,
+        "fees_usd": 0.33036462112895537,
+        "net_profit_usd": 2.768010375949987
+      }
+    },
+    {
+      "signature": "65HvHpxPBwG4RG5fpf87rJWWCUKyAZXNbN6wJRNSncBuSBN3KxoYknwWzLw3x3BdsASZy65S2K2AHgy3iAq2dRPw",
+      "attacker_signer": "K1tChn2NETQd9cCHe1UmUyWP3rDA92gP1dH4nNyEJrx",
+      "category": "ARBITRAGE",
+      "success": true,
+      "program_addresses": [
+        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+        "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+        "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
+        "ComputeBudget111111111111111111111111111111",
+        "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
+        "11111111111111111111111111111111"
+      ],
+      "token_changes": [
+        {
+          "token_address": "So11111111111111111111111111111111111111112",
+          "token_name": "SOL",
+          "amount": 66.675635133,
+          "decimals": 9
+        }
+      ],
+      "fee": 21022,
+      "priority_fee": 14701,
+      "compute_units_consumed": 294037,
+      "swaps": [
+        {
+          "from_token": "So11111111111111111111111111111111111111112",
+          "from_token_name": "SOL",
+          "from_amount": 0.009999999999990905,
+          "to_token": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+          "to_token_name": "RAY",
+          "to_amount": 1.1514089999254793,
+          "dex_program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "dex_name": "Raydium CLMM",
+          "from_decimals": 9,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+          "from_token_name": "RAY",
+          "from_amount": 1.1514090000000001,
+          "to_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "to_token_name": "ZBCN",
+          "to_amount": 3779279.7278630002,
+          "dex_program": "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
+          "dex_name": "Raydium V4",
+          "from_decimals": 6,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "from_token_name": "ZBCN",
+          "from_amount": 3779279.727862999,
+          "to_token": "So11111111111111111111111111111111111111112",
+          "to_token_name": "SOL",
+          "to_amount": 66.685635133,
+          "dex_program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "dex_name": "Orca Whirlpool",
+          "from_decimals": 6,
+          "to_decimals": 9
+        }
+      ],
+      "swap_count": 3,
+      "profitability": {
+        "profit_usd": 8730.72039766604,
+        "fees_usd": 0.0046776825654091,
+        "net_profit_usd": 8730.715719983475
+      }
+    },
+    {
+      "signature": "5PQynpgXaumfx4dNqhFL4afzRcU98Z2qsMdrDujQP8U8L5FdFs1sF3vEH2VURkKftiWPZG6HvvwAnaMXcPrQjGFd",
+      "attacker_signer": "CQwT1byuHgjKnL6vzmuNaAywKfDBVxDmFVgsQDBWxcWt",
+      "category": "ARBITRAGE",
+      "success": true,
+      "program_addresses": [
+        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+        "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+        "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+        "2A6m4MBgk3xL6a8SBMdKmAmFc85tTLh4Ds6wy7dBxBxb",
+        "11111111111111111111111111111111",
+        "ComputeBudget111111111111111111111111111111"
+      ],
+      "token_changes": [
+        {
+          "token_address": "So11111111111111111111111111111111111111112",
+          "token_name": "SOL",
+          "amount": 0.20923562600000878,
+          "decimals": 9
+        }
+      ],
+      "fee": 613813,
+      "priority_fee": 406814,
+      "compute_units_consumed": 183012,
+      "swaps": [
+        {
+          "from_token": "So11111111111111111111111111111111111111112",
+          "from_token_name": "SOL",
+          "from_amount": 0.20923562600000878,
+          "to_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "to_token_name": "ZBCN",
+          "to_amount": 57644.37219100073,
+          "dex_program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "dex_name": "Orca Whirlpool",
+          "from_decimals": 9,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "from_token_name": "ZBCN",
+          "from_amount": 57644.372191,
+          "to_token": "So11111111111111111111111111111111111111112",
+          "to_token_name": "SOL",
+          "to_amount": 1.079402924,
+          "dex_program": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "dex_name": "Meteora DLMM",
+          "from_decimals": 6,
+          "to_decimals": 9
+        }
+      ],
+      "swap_count": 2,
+      "profitability": {
+        "profit_usd": 19.620958997028122,
+        "fees_usd": 0.1336441262963859,
+        "net_profit_usd": 19.487314870731737
+      }
+    },
+    {
+      "signature": "4hT9ARq82FH8Sk5CrVzWS66Zve4bcK8rXSSAtFoWuepVf7vNrnSpmsFzcZRLcQD8cUdkAE69FdFtuPrpLiSeHA82",
+      "attacker_signer": "2QfBNK2WDwSLoUQRb1zAnp3KM12N9hQ8q6ApwUMnWW2T",
+      "category": "ARBITRAGE",
+      "success": true,
+      "program_addresses": [
+        "11111111111111111111111111111111",
+        "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "ComputeBudget111111111111111111111111111111",
+        "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+        "sattCHvHkM4XHLyadnU4KQtuNWZbWVDKzuPhmJBXCkq"
+      ],
+      "token_changes": [
+        {
+          "token_address": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "token_name": "ZBCN",
+          "amount": 2.716434999999933,
+          "decimals": 6
+        },
+        {
+          "token_address": "So11111111111111111111111111111111111111112",
+          "token_name": "SOL",
+          "amount": 0.03134520000003249,
+          "decimals": 9
+        }
+      ],
+      "fee": 85240,
+      "priority_fee": 55915,
+      "compute_units_consumed": 349472,
+      "swaps": [
+        {
+          "from_token": "So11111111111111111111111111111111111111112",
+          "from_token_name": "SOL",
+          "from_amount": 0.03134520000003249,
+          "to_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "to_token_name": "ZBCN",
+          "to_amount": 16169.281392998993,
+          "dex_program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "dex_name": "Orca Whirlpool",
+          "from_decimals": 9,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "from_token_name": "ZBCN",
+          "from_amount": 2.716434999999933,
+          "to_token": "So11111111111111111111111111111111111111112",
+          "to_token_name": "SOL",
+          "to_amount": 0.278523549,
+          "dex_program": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "dex_name": "Meteora DLMM",
+          "from_decimals": 6,
+          "to_decimals": 9
+        }
+      ],
+      "swap_count": 2,
+      "profitability": {
+        "profit_usd": 2.4489264590353494,
+        "fees_usd": 0.0184832819897635,
+        "net_profit_usd": 2.430443177045586
+      }
+    },
+    {
+      "signature": "4BmnxMAJUeBPu5bwvdcg1terdxYPS4MutNeumNrzEtwBhy9DEDwxyTLWCvYkhpim73Mxv46iK4sThQRaPECB6MpC",
+      "attacker_signer": "2QfBNK2WDwSLoUQRb1zAnp3KM12N9hQ8q6ApwUMnWW2T",
+      "category": "ARBITRAGE",
+      "success": true,
+      "program_addresses": [
+        "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+        "ComputeBudget111111111111111111111111111111",
+        "sattCHvHkM4XHLyadnU4KQtuNWZbWVDKzuPhmJBXCkq",
+        "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "11111111111111111111111111111111"
+      ],
+      "token_changes": [
+        {
+          "token_address": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "token_name": "ZBCN",
+          "amount": 16.120539000000008,
+          "decimals": 6
+        },
+        {
+          "token_address": "So11111111111111111111111111111111111111112",
+          "token_name": "SOL",
+          "amount": 1.0512620330000573,
+          "decimals": 9
+        }
+      ],
+      "fee": 95000,
+      "priority_fee": 74196,
+      "compute_units_consumed": 463731,
+      "swaps": [
+        {
+          "from_token": "So11111111111111111111111111111111111111112",
+          "from_token_name": "SOL",
+          "from_amount": 1.0512620330000573,
+          "to_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "to_token_name": "ZBCN",
+          "to_amount": 283879.31999599934,
+          "dex_program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "dex_name": "Orca Whirlpool",
+          "from_decimals": 9,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "from_token_name": "ZBCN",
+          "from_amount": 16.120539000000008,
+          "to_token": "So11111111111111111111111111111111111111112",
+          "to_token_name": "SOL",
+          "to_amount": 5.512833238,
+          "dex_program": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "dex_name": "Meteora DLMM",
+          "from_decimals": 6,
+          "to_decimals": 9
+        }
+      ],
+      "swap_count": 2,
+      "profitability": {
+        "profit_usd": 126.99566765381567,
+        "fees_usd": 0.0221550591869932,
+        "net_profit_usd": 126.97351259462867
+      }
+    },
+    {
+      "signature": "5Shyxs3AovVyJuoozSTdesEMCeGa2Lcrx96VSRxqviuGFzrpNJoRDyqWfPsE8B3WFVw98p6HkGvpkcBAVrKu8n4s",
+      "attacker_signer": "2QfBNK2WDwSLoUQRb1zAnp3KM12N9hQ8q6ApwUMnWW2T",
+      "category": "ARBITRAGE",
+      "success": true,
+      "program_addresses": [
+        "sattCHvHkM4XHLyadnU4KQtuNWZbWVDKzuPhmJBXCkq",
+        "11111111111111111111111111111111",
+        "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "ComputeBudget111111111111111111111111111111",
+        "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc"
+      ],
+      "token_changes": [
+        {
+          "token_address": "So11111111111111111111111111111111111111112",
+          "token_name": "SOL",
+          "amount": 0.3215637099997366,
+          "decimals": 9
+        },
+        {
+          "token_address": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "token_name": "ZBCN",
+          "amount": 57.01346799999999,
+          "decimals": 6
+        }
+      ],
+      "fee": 108600,
+      "priority_fee": 73404,
+      "compute_units_consumed": 458778,
+      "swaps": [
+        {
+          "from_token": "So11111111111111111111111111111111111111112",
+          "from_token_name": "SOL",
+          "from_amount": 0.3215637099997366,
+          "to_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "to_token_name": "ZBCN",
+          "to_amount": 293761.24613299966,
+          "dex_program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "dex_name": "Orca Whirlpool",
+          "from_decimals": 9,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "from_token_name": "ZBCN",
+          "from_amount": 57.01346799999999,
+          "to_token": "So11111111111111111111111111111111111111112",
+          "to_token_name": "SOL",
+          "to_amount": 5.151762243000001,
+          "dex_program": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "dex_name": "Meteora DLMM",
+          "from_decimals": 6,
+          "to_decimals": 9
+        }
+      ],
+      "swap_count": 2,
+      "profitability": {
+        "profit_usd": 5.183525701809438,
+        "fees_usd": 0.023832179202046798,
+        "net_profit_usd": 5.159693522607391
+      }
+    },
+    {
+      "signature": "3UUa9VWV6AsAAtGL1iTb4YtkGWbCH3QG6QtEawVssfTdWgPHQccCd6JQ8yhXCEbt9JCitK7RhEJBkuBxzxS8omnZ",
+      "attacker_signer": "HxjwdF326ZunmUwC1iXhfgL3ku78YsksN6n7Rfxzwr6b",
+      "category": "ARBITRAGE",
+      "success": true,
+      "program_addresses": [
+        "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
+        "9GCBb4NsSDRuEkkGfQkN37oppmMVPops5sXDWhAKAvQQ",
+        "ComputeBudget111111111111111111111111111111",
+        "11111111111111111111111111111111",
+        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+        "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
+      ],
+      "token_changes": [
+        {
+          "token_address": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "token_name": "ZBCN",
+          "amount": 40.50541800000019,
+          "decimals": 6
+        },
+        {
+          "token_address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "token_name": "USDC",
+          "amount": 827.9001489999937,
+          "decimals": 6
+        }
+      ],
+      "fee": 69128000,
+      "priority_fee": 20112080,
+      "compute_units_consumed": 284541,
+      "swaps": [
+        {
+          "from_token": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "from_token_name": "USDC",
+          "from_amount": 0.45118400000501424,
+          "to_token": "So11111111111111111111111111111111111111112",
+          "to_token_name": "SOL",
+          "to_amount": 0.003445006000220019,
+          "dex_program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "dex_name": "Raydium CLMM",
+          "from_decimals": 6,
+          "to_decimals": 9
+        },
+        {
+          "from_token": "So11111111111111111111111111111111111111112",
+          "from_token_name": "SOL",
+          "from_amount": 0.0034450059999926452,
+          "to_token": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+          "to_token_name": "RAY",
+          "to_amount": 0.3966610000934452,
+          "dex_program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "dex_name": "Raydium CLMM",
+          "from_decimals": 9,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+          "from_token_name": "RAY",
+          "from_amount": 0.39666099999999993,
+          "to_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "to_token_name": "ZBCN",
+          "to_amount": 343819.416558,
+          "dex_program": "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
+          "dex_name": "Raydium V4",
+          "from_decimals": 6,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "from_token_name": "ZBCN",
+          "from_amount": 40.50541800000019,
+          "to_token": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "to_token_name": "USDC",
+          "to_amount": 828.3513329999987,
+          "dex_program": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "dex_name": "Meteora DLMM",
+          "from_decimals": 6,
+          "to_decimals": 6
+        }
+      ],
+      "swap_count": 4,
+      "profitability": {
+        "profit_usd": 830.2425165592381,
+        "fees_usd": 11.685378225560935,
+        "net_profit_usd": 818.5571383336771
+      }
+    },
+    {
+      "signature": "2V8HKV25PGwWppkwLGKGvFZ9ca54fxh4Qu6q9dYinsXfnVc4P4JSE37WHd8BjKcC62UyMBaM1Fcf96Rtza7y4Rhg",
+      "attacker_signer": "HxjwdF326ZunmUwC1iXhfgL3ku78YsksN6n7Rfxzwr6b",
+      "category": "ARBITRAGE",
+      "success": true,
+      "program_addresses": [
+        "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
+        "11111111111111111111111111111111",
+        "ComputeBudget111111111111111111111111111111",
+        "9GCBb4NsSDRuEkkGfQkN37oppmMVPops5sXDWhAKAvQQ",
+        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo"
+      ],
+      "token_changes": [
+        {
+          "token_address": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "token_name": "ZBCN",
+          "amount": 27.619137000000137,
+          "decimals": 6
+        },
+        {
+          "token_address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "token_name": "USDC",
+          "amount": 551.0405230000615,
+          "decimals": 6
+        }
+      ],
+      "fee": 9879715,
+      "priority_fee": 1931112,
+      "compute_units_consumed": 152232,
+      "swaps": [
+        {
+          "from_token": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "from_token_name": "USDC",
+          "from_amount": 0.4511840003542602,
+          "to_token": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+          "to_token_name": "RAY",
+          "to_amount": 0.39516999991610646,
+          "dex_program": "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
+          "dex_name": "Raydium V4",
+          "from_decimals": 6,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+          "from_token_name": "RAY",
+          "from_amount": 0.3951699999999998,
+          "to_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "to_token_name": "ZBCN",
+          "to_amount": 234060.52555799996,
+          "dex_program": "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
+          "dex_name": "Raydium V4",
+          "from_decimals": 6,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "from_token_name": "ZBCN",
+          "from_amount": 27.619137000000137,
+          "to_token": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "to_token_name": "USDC",
+          "to_amount": 551.491707000001,
+          "dex_program": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "dex_name": "Meteora DLMM",
+          "from_decimals": 6,
+          "to_decimals": 6
+        }
+      ],
+      "swap_count": 3,
+      "profitability": {
+        "profit_usd": 551.0557995294347,
+        "fees_usd": 1.5465470296717259,
+        "net_profit_usd": 549.509252499763
+      }
+    },
+    {
+      "signature": "63sk4dPmYQd1vfwqjBjPoYn7xaXYKq2kp9QX7SAxVkfTuvtuqL4ZpD9Kz9uXYkhTPAjoLL4soAWaV38wHS8757oa",
+      "attacker_signer": "HxjwdF326ZunmUwC1iXhfgL3ku78YsksN6n7Rfxzwr6b",
+      "category": "ARBITRAGE",
+      "success": true,
+      "program_addresses": [
+        "9GCBb4NsSDRuEkkGfQkN37oppmMVPops5sXDWhAKAvQQ",
+        "ComputeBudget111111111111111111111111111111",
+        "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
+        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+        "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+        "11111111111111111111111111111111"
+      ],
+      "token_changes": [
+        {
+          "token_address": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "token_name": "ZBCN",
+          "amount": 20.104611999999634,
+          "decimals": 6
+        },
+        {
+          "token_address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "token_name": "USDC",
+          "amount": 394.9730119999731,
+          "decimals": 6
+        }
+      ],
+      "fee": 9879715,
+      "priority_fee": 2314803,
+      "compute_units_consumed": 208968,
+      "swaps": [
+        {
+          "from_token": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "from_token_name": "USDC",
+          "from_amount": 0.45118400000501424,
+          "to_token": "So11111111111111111111111111111111111111112",
+          "to_token_name": "SOL",
+          "to_amount": 0.0034450029997969978,
+          "dex_program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "dex_name": "Raydium CLMM",
+          "from_decimals": 6,
+          "to_decimals": 9
+        },
+        {
+          "from_token": "So11111111111111111111111111111111111111112",
+          "from_token_name": "SOL",
+          "from_amount": 0.0034450029997969978,
+          "to_token": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+          "to_token_name": "RAY",
+          "to_amount": 0.39568200008943677,
+          "dex_program": "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
+          "dex_name": "Raydium V4",
+          "from_decimals": 9,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+          "from_token_name": "RAY",
+          "from_amount": 0.3956820000000003,
+          "to_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "to_token_name": "ZBCN",
+          "to_amount": 170378.10492700012,
+          "dex_program": "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
+          "dex_name": "Raydium V4",
+          "from_decimals": 6,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "from_token_name": "ZBCN",
+          "from_amount": 20.104611999999634,
+          "to_token": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "to_token_name": "USDC",
+          "to_amount": 395.42419599999903,
+          "dex_program": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "dex_name": "Meteora DLMM",
+          "from_decimals": 6,
+          "to_decimals": 6
+        }
+      ],
+      "swap_count": 4,
+      "profitability": {
+        "profit_usd": 395.0687349595741,
+        "fees_usd": 1.5967887423275606,
+        "net_profit_usd": 393.47194621724657
+      }
+    },
+    {
+      "signature": "4DpGrvU6gTjk2rviMpQM9LLCxW1Uaz2EMNDJzX2fKDhPNEjKfdCxDiMr3FaU6FCKiRnjQfqrrqjwEERQvqQS78Rx",
+      "attacker_signer": "HxjwdF326ZunmUwC1iXhfgL3ku78YsksN6n7Rfxzwr6b",
+      "category": "ARBITRAGE",
+      "success": true,
+      "program_addresses": [
+        "11111111111111111111111111111111",
+        "9GCBb4NsSDRuEkkGfQkN37oppmMVPops5sXDWhAKAvQQ",
+        "ComputeBudget111111111111111111111111111111",
+        "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+        "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo"
+      ],
+      "token_changes": [
+        {
+          "token_address": "So11111111111111111111111111111111111111112",
+          "token_name": "SOL",
+          "amount": 0.19068721899975571,
+          "decimals": 9
+        },
+        {
+          "token_address": "METvsvVRapdj9cFLzq4Tr43xK4tAjQfwX76z3n6mWQL",
+          "amount": 0.023172999999928834,
+          "decimals": 6
+        },
+        {
+          "token_address": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "token_name": "ZBCN",
+          "amount": 22.67554700000028,
+          "decimals": 6
+        }
+      ],
+      "fee": 3708108,
+      "priority_fee": 2331456,
+      "compute_units_consumed": 448357,
+      "swaps": [
+        {
+          "from_token": "So11111111111111111111111111111111111111112",
+          "from_token_name": "SOL",
+          "from_amount": 0.19068721899975571,
+          "to_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "to_token_name": "ZBCN",
+          "to_amount": 170067.07032600045,
+          "dex_program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "dex_name": "Orca Whirlpool",
+          "from_decimals": 9,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "METvsvVRapdj9cFLzq4Tr43xK4tAjQfwX76z3n6mWQL",
+          "from_amount": 0.023172999999928834,
+          "to_token": "METvsvVRapdj9cFLzq4Tr43xK4tAjQfwX76z3n6mWQL",
+          "to_amount": 1151.4942369999999,
+          "dex_program": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "dex_name": "Meteora DLMM",
+          "from_decimals": 6,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "METvsvVRapdj9cFLzq4Tr43xK4tAjQfwX76z3n6mWQL",
+          "from_amount": 1151.4710640003905,
+          "to_token": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "to_token_name": "USDC",
+          "to_amount": 403.3673920000001,
+          "dex_program": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "dex_name": "Meteora DLMM",
+          "from_decimals": 6,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "from_token_name": "USDC",
+          "from_amount": 403.3673920000001,
+          "to_token": "So11111111111111111111111111111111111111112",
+          "to_token_name": "SOL",
+          "to_amount": 3.078814899000463,
+          "dex_program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "dex_name": "Raydium CLMM",
+          "from_decimals": 6,
+          "to_decimals": 9
+        }
+      ],
+      "swap_count": 4,
+      "profitability": {
+        "profit_usd": 16.991365129642496,
+        "fees_usd": 0.7908396054494987,
+        "net_profit_usd": 16.200525524192997
+      }
+    },
+    {
+      "signature": "4gHirJwvrPyM9U4oiexx5oaHArtrwmQgRaL2rws16TuuSDvm9pYJCWmUH7dkg3Y613BTjyaTFX4n3x7n8PD58Ypt",
+      "attacker_signer": "7dGrdJRYtsNR8UYxZ3TnifXGjGc9eRYLq9sELwYpuuUu",
+      "category": "ARBITRAGE",
+      "success": true,
+      "program_addresses": [
+        "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
+        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+        "11111111111111111111111111111111",
+        "King7ki4SKMBPb3iupnQwTyjsq294jaXsgLmJo8cb7T",
+        "ComputeBudget111111111111111111111111111111"
+      ],
+      "token_changes": [
+        {
+          "token_address": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "token_name": "ZBCN",
+          "amount": 119.506628,
+          "decimals": 6
+        },
+        {
+          "token_address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "token_name": "USDC",
+          "amount": 2166.1989760000724,
+          "decimals": 6
+        }
+      ],
+      "fee": 204909,
+      "priority_fee": 99187,
+      "compute_units_consumed": 495935,
+      "swaps": [
+        {
+          "from_token": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "from_token_name": "USDC",
+          "from_amount": 82.54505599988624,
+          "to_token": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+          "to_token_name": "RAY",
+          "to_amount": 72.29467700002715,
+          "dex_program": "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
+          "dex_name": "Raydium V4",
+          "from_decimals": 6,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+          "from_token_name": "RAY",
+          "from_amount": 72.294677,
+          "to_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "to_token_name": "ZBCN",
+          "to_amount": 1012768.2861339999,
+          "dex_program": "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
+          "dex_name": "Raydium V4",
+          "from_decimals": 6,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "from_token_name": "ZBCN",
+          "from_amount": 119.506628,
+          "to_token": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "to_token_name": "USDC",
+          "to_amount": 2248.7440320000005,
+          "dex_program": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "dex_name": "Meteora DLMM",
+          "from_decimals": 6,
+          "to_decimals": 6
+        }
+      ],
+      "swap_count": 3,
+      "profitability": {
+        "profit_usd": 2165.7927270689065,
+        "fees_usd": 0.039819291700323195,
+        "net_profit_usd": 2165.752907777206
+      }
+    },
+    {
+      "signature": "3wPJw1wRfHpmVHSn3xgtdLUaaqhH7xfUpago9XcqseYnvs69EdRgn52bh5KRUcuRT2tKhw7UVvEAVGa1oASDMmPN",
+      "attacker_signer": "2QfBNK2WDwSLoUQRb1zAnp3KM12N9hQ8q6ApwUMnWW2T",
+      "category": "ARBITRAGE",
+      "success": true,
+      "program_addresses": [
+        "sattCHvHkM4XHLyadnU4KQtuNWZbWVDKzuPhmJBXCkq",
+        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "ComputeBudget111111111111111111111111111111",
+        "11111111111111111111111111111111",
+        "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+        "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
+      ],
+      "token_changes": [
+        {
+          "token_address": "So11111111111111111111111111111111111111112",
+          "token_name": "SOL",
+          "amount": 0.08305430800010072,
+          "decimals": 9
+        }
+      ],
+      "fee": 98760,
+      "priority_fee": 71102,
+      "compute_units_consumed": 444389,
+      "swaps": [
+        {
+          "from_token": "So11111111111111111111111111111111111111112",
+          "from_token_name": "SOL",
+          "from_amount": 0.08305430800010072,
+          "to_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "to_token_name": "ZBCN",
+          "to_amount": 124252.70466200262,
+          "dex_program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "dex_name": "Orca Whirlpool",
+          "from_decimals": 9,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "from_token_name": "ZBCN",
+          "from_amount": 124252.70466199983,
+          "to_token": "So11111111111111111111111111111111111111112",
+          "to_token_name": "SOL",
+          "to_amount": 2.310008366,
+          "dex_program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "dex_name": "Raydium CLMM",
+          "from_decimals": 6,
+          "to_decimals": 9
+        }
+      ],
+      "swap_count": 2,
+      "profitability": {
+        "profit_usd": 0.9624758425810331,
+        "fees_usd": 0.0222422673326854,
+        "net_profit_usd": 0.9402335752483477
+      }
+    },
+    {
+      "signature": "2DkfuJzb9yzv9LpUiHqNS4hgEsiPGCmSUa9shGLSy784Yh5ki8dPduy6zYCKy2L489j56w2m86umL5wiEiCRZVNx",
+      "attacker_signer": "K1tChn2NETQd9cCHe1UmUyWP3rDA92gP1dH4nNyEJrx",
+      "category": "ARBITRAGE",
+      "success": true,
+      "program_addresses": [
+        "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+        "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
+        "ComputeBudget111111111111111111111111111111",
+        "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+        "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
+        "11111111111111111111111111111111",
+        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+      ],
+      "token_changes": [
+        {
+          "token_address": "So11111111111111111111111111111111111111112",
+          "token_name": "SOL",
+          "amount": 0.001387159000003635,
+          "decimals": 9
+        }
+      ],
+      "fee": 24352,
+      "priority_fee": 8377,
+      "compute_units_consumed": 167552,
+      "swaps": [
+        {
+          "from_token": "So11111111111111111111111111111111111111112",
+          "from_token_name": "SOL",
+          "from_amount": 0.001387159000003635,
+          "to_token": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+          "to_token_name": "RAY",
+          "to_amount": 1.7271129998844117,
+          "dex_program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "dex_name": "Raydium CLMM",
+          "from_decimals": 9,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+          "from_token_name": "RAY",
+          "from_amount": 1.7271130000000028,
+          "to_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "to_token_name": "ZBCN",
+          "to_amount": 930.5185740000015,
+          "dex_program": "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
+          "dex_name": "Raydium V4",
+          "from_decimals": 6,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "from_token_name": "ZBCN",
+          "from_amount": 930.5185739994049,
+          "to_token": "So11111111111111111111111111111111111111112",
+          "to_token_name": "SOL",
+          "to_amount": 0.016387159000004203,
+          "dex_program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "dex_name": "Orca Whirlpool",
+          "from_decimals": 6,
+          "to_decimals": 9
+        }
+      ],
+      "swap_count": 3,
+      "profitability": {
+        "profit_usd": 0.18273589610664717,
+        "fees_usd": 0.0042856387392793,
+        "net_profit_usd": 0.17845025736736786
+      }
+    },
+    {
+      "signature": "yyztSNEkaFVDhe3m3DrqryiCQ6Zq12WVG1sqAMsdD5w4ZRqMkuZ6t4e1RCAJLKBAQtxyqyp1VyAQaZh3r1BNgiN",
+      "attacker_signer": "K1tChn2NETQd9cCHe1UmUyWP3rDA92gP1dH4nNyEJrx",
+      "category": "ARBITRAGE",
+      "success": true,
+      "program_addresses": [
+        "11111111111111111111111111111111",
+        "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
+        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+        "ComputeBudget111111111111111111111111111111",
+        "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
+        "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc"
+      ],
+      "token_changes": [
+        {
+          "token_address": "So11111111111111111111111111111111111111112",
+          "token_name": "SOL",
+          "amount": 0.0006683040000012852,
+          "decimals": 9
+        }
+      ],
+      "fee": 24352,
+      "priority_fee": 8365,
+      "compute_units_consumed": 167307,
+      "swaps": [
+        {
+          "from_token": "So11111111111111111111111111111111111111112",
+          "from_token_name": "SOL",
+          "from_amount": 0.0006683040000012852,
+          "to_token": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+          "to_token_name": "RAY",
+          "to_amount": 1.7271120001096278,
+          "dex_program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "dex_name": "Raydium CLMM",
+          "from_decimals": 9,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+          "from_token_name": "RAY",
+          "from_amount": 1.7271120000000053,
+          "to_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "to_token_name": "ZBCN",
+          "to_amount": 889.7303240000037,
+          "dex_program": "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
+          "dex_name": "Raydium V4",
+          "from_decimals": 6,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "from_token_name": "ZBCN",
+          "from_amount": 889.7303240001202,
+          "to_token": "So11111111111111111111111111111111111111112",
+          "to_token_name": "SOL",
+          "to_amount": 0.015668303999994748,
+          "dex_program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "dex_name": "Orca Whirlpool",
+          "from_decimals": 6,
+          "to_decimals": 9
+        }
+      ],
+      "swap_count": 3,
+      "profitability": {
+        "profit_usd": 0.08860517828454557,
+        "fees_usd": 0.0042840674213388994,
+        "net_profit_usd": 0.08432111086320668
+      }
+    },
+    {
+      "signature": "5kJNjbhbWqwDGSUVMrUNbcHWy1FSSuBY5MYEhHLGPDVEEr3ZJ9abZAis2qgXTcF9A8sFv2NszjYYdcSmG4jS6LeZ",
+      "attacker_signer": "3rnVJzSEcV1wnStkX15qS5pX43U4ENHv2me6LwEjp9bc",
+      "category": "ARBITRAGE",
+      "success": true,
+      "program_addresses": [
+        "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
+        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "ComputeBudget111111111111111111111111111111",
+        "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+        "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+        "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+        "11111111111111111111111111111111",
+        "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+        "ZERor4xhbUycZ6gb9ntrhqscUcZmAbQDjEAtCf4hbZY"
+      ],
+      "token_changes": [
+        {
+          "token_address": "So11111111111111111111111111111111111111112",
+          "token_name": "SOL",
+          "amount": 0.0002054420000003887,
+          "decimals": 9
+        }
+      ],
+      "fee": 5000,
+      "priority_fee": null,
+      "compute_units_consumed": 367095,
+      "swaps": [
+        {
+          "from_token": "So11111111111111111111111111111111111111112",
+          "from_token_name": "SOL",
+          "from_amount": 0.0002054420000003887,
+          "to_token": "26s3UGB9hund1qspApy1zYgCritxAooGg7o63BMn89Yq",
+          "to_amount": 197092.73558187485,
+          "dex_program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "dex_name": "Raydium CLMM",
+          "from_decimals": 9,
+          "to_decimals": 8
+        },
+        {
+          "from_token": "26s3UGB9hund1qspApy1zYgCritxAooGg7o63BMn89Yq",
+          "from_amount": 197092.73558185995,
+          "to_token": "CTgiaZUK12kCcB8sosn4Nt2NZtzLgtPqDwyQyr2syATC",
+          "to_amount": 193.09836381999776,
+          "dex_program": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+          "dex_name": "Raydium CLMM",
+          "from_decimals": 8,
+          "to_decimals": 8
+        },
+        {
+          "from_token": "CTgiaZUK12kCcB8sosn4Nt2NZtzLgtPqDwyQyr2syATC",
+          "from_amount": 193.09836381999776,
+          "to_token": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "to_token_name": "USDC",
+          "to_amount": 8.74984300000142,
+          "dex_program": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "dex_name": "Meteora DLMM",
+          "from_decimals": 8,
+          "to_decimals": 6
+        },
+        {
+          "from_token": "7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr",
+          "from_token_name": "POPCAT",
+          "from_amount": 87.14634088700404,
+          "to_token": "So11111111111111111111111111111111111111112",
+          "to_token_name": "SOL",
+          "to_amount": 0.06680544199999972,
+          "dex_program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "dex_name": "Orca Whirlpool",
+          "from_decimals": 9,
+          "to_decimals": 9
+        }
+      ],
+      "swap_count": 4,
+      "profitability": {
+        "profit_usd": 0.025591793409022297,
+        "fees_usd": 0.0006547158085,
+        "net_profit_usd": 0.024937077600522297
+      }
+    }
+  ],
+  "sandwich_attacks": [],
+  "jit_attacks": [],
+  "total_net_profit_usd": 19183.04772366412
+}
