@@ -156,21 +156,24 @@ fn calculate_profitability(
         return None;
     }
 
-    // Calculate total fees in USD (tx_fee + priority_fee) - for reporting only
-    // Note: sol_change_lamports already includes the effect of fees (pre_balance to post_balance)
-    // so we don't subtract fees again to avoid double-counting
+    // Calculate total fees in USD (tx_fee + priority_fee)
     let tx_fee_sol = tx.fee().map(PriceOracle::lamports_to_sol).unwrap_or(0.0);
     let priority_fee_sol = tx.priority_fee().map(PriceOracle::lamports_to_sol).unwrap_or(0.0);
     let total_fees_sol = tx_fee_sol + priority_fee_sol;
     let fees_usd = total_fees_sol * sol_price;
 
-    // Net profit is just profit_usd (which already includes sol_change_lamports with fees)
-    let net_profit_usd = profit_usd;
+    // Note: sol_change_lamports = post_balance - pre_balance, which already has fees deducted
+    // To show gross profit (before fees), we need to add fees back
+    // This gives users visibility into both gross and net profit
+    profit_usd += fees_usd;
+
+    // Calculate net profit after fees
+    let net_profit_usd = profit_usd - fees_usd;
 
     Some(crate::mev::Profitability {
-        profit_usd,
-        fees_usd,
-        net_profit_usd,
+        profit_usd,        // Gross profit (before fees)
+        fees_usd,          // Total fees paid
+        net_profit_usd,    // Net profit (after fees)
     })
 }
 
