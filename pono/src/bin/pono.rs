@@ -15,8 +15,6 @@ async fn main() -> anyhow::Result<()> {
         .parse()
         .map_err(|_| anyhow::anyhow!("Invalid slot number"))?;
 
-    info!("🔍 Analyzing slot {} for MEV", slot);
-
     // Setup fetcher
     let config = FetcherConfig {
         rpc_url: std::env::var("SOLANA_RPC_URL")

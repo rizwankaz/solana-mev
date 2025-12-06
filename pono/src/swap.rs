@@ -4,13 +4,13 @@ use crate::types::FetchedTransaction;
 /// Individual swap within a transaction
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SwapInfo {
-    pub from_token: String,
-    pub from_amount: f64,
-    pub to_token: String,
-    pub to_amount: f64,
-    pub dex_program: String,
-    pub from_decimals: u8,
-    pub to_decimals: u8,
+    pub token0: String,
+    pub amount0: f64,
+    pub token1: String,
+    pub amount1: f64,
+    pub dex: String,
+    pub decimals0: u8,
+    pub decimals1: u8,
 }
 
 /// Swap parser for extracting swap details from transactions
@@ -50,16 +50,16 @@ impl SwapParser {
             // Try to pair negative and positive changes as swaps
             for (i, from_change) in negative_changes.iter().enumerate() {
                 if let Some(to_change) = positive_changes.get(i) {
-                    let dex_program = programs.first().unwrap_or(&"Unknown".to_string()).clone();
+                    let dex = programs.first().unwrap_or(&"Unknown".to_string()).clone();
 
                     swaps.push(SwapInfo {
-                        from_token: from_change.mint.clone(),
-                        from_amount: from_change.delta.abs() as f64 / 10_f64.powi(from_change.decimals as i32),
-                        to_token: to_change.mint.clone(),
-                        to_amount: to_change.delta as f64 / 10_f64.powi(to_change.decimals as i32),
-                        dex_program,
-                        from_decimals: from_change.decimals,
-                        to_decimals: to_change.decimals,
+                        token0: from_change.mint.clone(),
+                        amount0: from_change.delta.abs() as f64 / 10_f64.powi(from_change.decimals as i32),
+                        token1: to_change.mint.clone(),
+                        amount1: to_change.delta as f64 / 10_f64.powi(to_change.decimals as i32),
+                        dex,
+                        decimals0: from_change.decimals,
+                        decimals1: to_change.decimals,
                     });
                 }
             }
