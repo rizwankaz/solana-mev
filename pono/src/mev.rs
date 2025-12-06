@@ -23,7 +23,6 @@ pub struct Profitability {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenChange {
     pub token_address: String,
-    pub token_name: Option<String>,
     pub amount: f64,
     pub decimals: u8,
 }
@@ -313,7 +312,6 @@ impl MevDetector {
 
                 token_changes.push(TokenChange {
                     token_address: transfer.mint.clone(),
-                    token_name: crate::tokens::TokenRegistry::new().get_symbol(&transfer.mint).map(|s| s.to_string()),
                     amount,
                     decimals: transfer.decimals,
                 });

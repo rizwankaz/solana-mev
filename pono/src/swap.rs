@@ -1,35 +1,24 @@
 use serde::{Deserialize, Serialize};
 use crate::types::FetchedTransaction;
-use crate::dex::DexRegistry;
-use crate::tokens::TokenRegistry;
 
 /// Individual swap within a transaction
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SwapInfo {
     pub from_token: String,
-    pub from_token_name: Option<String>,
     pub from_amount: f64,
     pub to_token: String,
-    pub to_token_name: Option<String>,
     pub to_amount: f64,
     pub dex_program: String,
-    pub dex_name: String,
     pub from_decimals: u8,
     pub to_decimals: u8,
 }
 
 /// Swap parser for extracting swap details from transactions
-pub struct SwapParser {
-    dex_registry: DexRegistry,
-    token_registry: TokenRegistry,
-}
+pub struct SwapParser;
 
 impl SwapParser {
     pub fn new() -> Self {
-        Self {
-            dex_registry: DexRegistry::new(),
-            token_registry: TokenRegistry::new(),
-        }
+        Self
     }
 
     /// Extract all swaps from a transaction
@@ -62,20 +51,13 @@ impl SwapParser {
             for (i, from_change) in negative_changes.iter().enumerate() {
                 if let Some(to_change) = positive_changes.get(i) {
                     let dex_program = programs.first().unwrap_or(&"Unknown".to_string()).clone();
-                    let dex_name = self.dex_registry
-                        .get_dex_name(&dex_program)
-                        .unwrap_or("Unknown DEX")
-                        .to_string();
 
                     swaps.push(SwapInfo {
                         from_token: from_change.mint.clone(),
-                        from_token_name: self.token_registry.get_symbol(&from_change.mint).map(|s| s.to_string()),
                         from_amount: from_change.delta.abs() as f64 / 10_f64.powi(from_change.decimals as i32),
                         to_token: to_change.mint.clone(),
-                        to_token_name: self.token_registry.get_symbol(&to_change.mint).map(|s| s.to_string()),
                         to_amount: to_change.delta as f64 / 10_f64.powi(to_change.decimals as i32),
                         dex_program,
-                        dex_name,
                         from_decimals: from_change.decimals,
                         to_decimals: to_change.decimals,
                     });
@@ -139,11 +121,11 @@ impl SwapParser {
         changes
     }
 
-    /// Extract DEX programs from transaction
+    /// Extract programs from transaction
     fn extract_dex_programs(&self, tx: &FetchedTransaction) -> Vec<String> {
         use solana_transaction_status::{EncodedTransaction, UiMessage};
 
-        let all_programs = match &tx.transaction {
+        match &tx.transaction {
             EncodedTransaction::Json(ui_tx) => {
                 match &ui_tx.message {
                     UiMessage::Parsed(parsed) => {
@@ -171,12 +153,7 @@ impl SwapParser {
                 }
             }
             _ => Vec::new(),
-        };
-
-        // Filter to only DEX programs
-        all_programs.into_iter()
-            .filter(|program| self.dex_registry.is_dex(program))
-            .collect()
+        }
     }
 }
 
