@@ -1,164 +1,162 @@
-use pono::{BlockFetcher, FetcherConfig, MevDetector, MevEvent};
+use clap::{Parser, Subcommand};
+use pono::{BlockFetcher, FetcherConfig, MevDetector};
+use serde_json::json;
 use std::sync::Arc;
-use tracing::{info, error};
+
+#[derive(Parser)]
+#[command(name = "pono")]
+#[command(about = "Solana MEV detection tool", long_about = None)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Run MEV detection on a specific slot
+    Run {
+        /// Slot number to analyze
+        #[arg(short, long)]
+        slot: u64,
+    },
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter("pono=info")
-        .init();
+    let cli = Cli::parse();
 
-    // Parse command line arguments
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() < 2 {
-        eprintln!("Usage: pono <slot>");
-        eprintln!("Example: pono 381165825");
-        std::process::exit(1);
-    }
-
-    let slot: u64 = args[1]
-        .parse()
-        .map_err(|_| anyhow::anyhow!("Invalid slot number"))?;
-
-    info!("🔍 Analyzing slot {} for MEV", slot);
+    let slot = match cli.command {
+        Commands::Run { slot } => slot,
+    };
 
     // Setup fetcher
     let config = FetcherConfig {
         rpc_url: std::env::var("SOLANA_RPC_URL")
             .unwrap_or_else(|_| "https://api.mainnet-beta.solana.com".to_string()),
         max_retries: 3,
-        retry_delay_ms: 1000,
+        retry_delay_ms: 500,
         rate_limit: 5,
         timeout_secs: 30,
     };
 
     let fetcher = Arc::new(BlockFetcher::new(config));
+    let block = fetcher.fetch_block(slot).await.map_err(|e| {
+        anyhow::anyhow!("Failed to fetch block: {:?}", e)
+    })?;
 
-    // Fetch block
-    info!("📦 Fetching block...");
-    let block = match fetcher.fetch_block(slot).await {
-        Ok(b) => b,
-        Err(e) => {
-            error!("Failed to fetch block: {:?}", e);
-            std::process::exit(1);
-        }
-    };
+    // Get block timestamp
+    let timestamp = block.timestamp().map(|t| t.timestamp()).unwrap_or(0);
 
-    info!("✅ Block fetched:");
-    info!("   Slot: {}", block.slot);
-    info!("   Blockhash: {}", &block.blockhash);
-    info!("   Total transactions: {}", block.transactions.len());
-    info!("   Successful transactions: {}", block.successful_tx_count());
-    info!("   Total fees: {} lamports", block.total_fees());
-    info!("   Total compute units: {}", block.total_compute_units());
+    // Detect MEV with historical prices
+    let mut detector = MevDetector::new(timestamp);
+    let mev_events = detector.detect_mev(slot, &block.transactions).await;
 
-    if let Some(timestamp) = block.timestamp() {
-        info!("   Timestamp: {}", timestamp.format("%Y-%m-%d %H:%M:%S UTC"));
-    }
-
-    // Detect MEV
-    info!("\n🔎 Detecting MEV...");
-    let detector = MevDetector::new();
-    let mev_events = detector.detect_mev(slot, &block.transactions);
-
-    // Separate events by type
+    // Separate events by type and calculate totals
     let mut arbitrages = Vec::new();
     let mut sandwiches = Vec::new();
+    let mut total_net_profit = 0.0;
+    let mut mev_compute_units = 0u64;
 
     for event in &mev_events {
         match event {
-            MevEvent::Arbitrage(arb) => arbitrages.push(arb),
-            MevEvent::Sandwich(sand) => sandwiches.push(sand),
-        }
-    }
-
-    info!("\n📊 MEV Summary:");
-    info!("   Total MEV events: {}", mev_events.len());
-    info!("   Arbitrage: {}", arbitrages.len());
-    info!("   Sandwich attacks: {}", sandwiches.len());
-
-    // Output arbitrage events
-    if !arbitrages.is_empty() {
-        println!("\n{}", "=".repeat(80));
-        println!("🔄 ARBITRAGE EVENTS ({} found)", arbitrages.len());
-        println!("{}", "=".repeat(80));
-
-        for (i, arb) in arbitrages.iter().enumerate() {
-            println!("\n{}. Arbitrage #{}", i + 1, i + 1);
-            println!("   Signature: {}", arb.signature);
-            println!("   Signer: {}", arb.signer);
-            println!("   Swaps: {}", arb.swap_count);
-            println!("   Transfers: {}", arb.transfer_count);
-            println!("   Compute units: {}", arb.compute_units);
-            println!("   Fee: {} lamports ({:.6} SOL)", arb.fee, arb.fee as f64 / 1e9);
-
-            if !arb.programs.is_empty() {
-                println!("   Programs:");
-                for (j, program) in arb.programs.iter().take(5).enumerate() {
-                    println!("     {}. {}", j + 1, program);
-                }
-                if arb.programs.len() > 5 {
-                    println!("     ... and {} more", arb.programs.len() - 5);
-                }
+            pono::MevEvent::Arbitrage(arb) => {
+                total_net_profit += arb.profitability.net_profit_usd;
+                mev_compute_units += arb.compute_units_consumed;
+                arbitrages.push(json!({
+                    "signature": arb.signature,
+                    "signer": arb.signer,
+                    "category": "ARBITRAGE",
+                    "success": arb.success,
+                    "compute_units_consumed": arb.compute_units_consumed,
+                    "fee": arb.fee,
+                    "priority_fee": arb.priority_fee,
+                    "swap_count": arb.swaps.len(),
+                    "swaps": arb.swaps,
+                    "program_addresses": arb.program_addresses,
+                    "token_changes": arb.token_changes,
+                    "profitability": {
+                        "profit_usd": arb.profitability.profit_usd,
+                        "fees_usd": arb.profitability.fees_usd,
+                        "net_profit_usd": arb.profitability.net_profit_usd,
+                    }
+                }));
             }
-
-            if !arb.profit_tokens.is_empty() {
-                println!("   Profits:");
-                for profit in &arb.profit_tokens {
-                    let amount = profit.delta as f64 / 10_f64.powi(profit.decimals as i32);
-                    println!("     • {} tokens", amount);
-                    println!("       Mint: {}", profit.mint);
-                    println!("       Raw delta: {}", profit.delta);
-                }
+            pono::MevEvent::Sandwich(sand) => {
+                total_net_profit += sand.profitability.net_profit_usd;
+                mev_compute_units += sand.total_compute_units;
+                sandwiches.push(json!({
+                    "slot": sand.slot,
+                    "signer": sand.attacker,
+                    "victim_signature": sand.victim_signature,
+                    "category": "SANDWICH",
+                    "total_compute_units": sand.total_compute_units,
+                    "total_fees": sand.total_fees,
+                    "swap_count": sand.swaps.len(),
+                    "swaps": sand.swaps,
+                    "program_addresses": sand.program_addresses,
+                    "token_changes": sand.token_changes,
+                    "profitability": {
+                        "profit_usd": sand.profitability.profit_usd,
+                        "fees_usd": sand.profitability.fees_usd,
+                        "net_profit_usd": sand.profitability.net_profit_usd,
+                    },
+                    "front_run": {
+                        "signature": sand.front_run.signature,
+                        "index": sand.front_run.index,
+                        "signer": sand.front_run.signer,
+                        "compute_units": sand.front_run.compute_units,
+                        "fee": sand.front_run.fee,
+                    },
+                    "victim": {
+                        "signature": sand.victim.signature,
+                        "index": sand.victim.index,
+                        "signer": sand.victim.signer,
+                        "compute_units": sand.victim.compute_units,
+                        "fee": sand.victim.fee,
+                    },
+                    "back_run": {
+                        "signature": sand.back_run.signature,
+                        "index": sand.back_run.index,
+                        "signer": sand.back_run.signer,
+                        "compute_units": sand.back_run.compute_units,
+                        "fee": sand.back_run.fee,
+                    }
+                }));
             }
         }
     }
 
-    // Output sandwich events
-    if !sandwiches.is_empty() {
-        println!("\n{}", "=".repeat(80));
-        println!("🥪 SANDWICH ATTACK EVENTS ({} found)", sandwiches.len());
-        println!("{}", "=".repeat(80));
+    // Count non-vote transactions
+    let nonvote_transactions = block.transactions.iter()
+        .filter(|tx| {
+            // A simple heuristic: vote transactions typically have the vote program
+            if let Some(signer) = tx.signer() {
+                !signer.contains("Vote")
+            } else {
+                true
+            }
+        })
+        .count();
 
-        for (i, sand) in sandwiches.iter().enumerate() {
-            println!("\n{}. Sandwich Attack #{}", i + 1, i + 1);
-            println!("   Attacker: {}", sand.attacker);
-            println!("   Victim signature: {}", sand.victim_signature);
-            println!("   Total compute units: {}", sand.total_compute_units);
-            println!("   Total fees: {} lamports ({:.6} SOL)", sand.total_fees, sand.total_fees as f64 / 1e9);
-
-            println!("\n   Front-run:");
-            println!("     Signature: {}", sand.front_run.signature);
-            println!("     Index: {}", sand.front_run.index);
-            println!("     Compute units: {}", sand.front_run.compute_units);
-            println!("     Fee: {} lamports", sand.front_run.fee);
-
-            println!("\n   Victim:");
-            println!("     Signature: {}", sand.victim.signature);
-            println!("     Index: {}", sand.victim.index);
-            println!("     Signer: {}", sand.victim.signer);
-            println!("     Compute units: {}", sand.victim.compute_units);
-            println!("     Fee: {} lamports", sand.victim.fee);
-
-            println!("\n   Back-run:");
-            println!("     Signature: {}", sand.back_run.signature);
-            println!("     Index: {}", sand.back_run.index);
-            println!("     Compute units: {}", sand.back_run.compute_units);
-            println!("     Fee: {} lamports", sand.back_run.fee);
+    // Output JSON
+    let output = json!({
+        "slot": block.slot,
+        "blockhash": block.blockhash,
+        "timestamp": block.timestamp().map(|t| t.format("%Y-%m-%d %H:%M:%S UTC").to_string()),
+        "total_transactions": block.transactions.len(),
+        "successful_transactions": block.successful_tx_count(),
+        "nonvote_transactions": nonvote_transactions,
+        "total_compute_units": block.total_compute_units(),
+        "mev_transaction_count": mev_events.len(),
+        "mev_compute_units": mev_compute_units,
+        "total_net_profit_usd": total_net_profit,
+        "mev": {
+            "arbitrage": arbitrages,
+            "sandwich": sandwiches,
         }
-    }
+    });
 
-    // Output as JSON if requested
-    if std::env::var("PONO_JSON").is_ok() {
-        println!("\n{}", "=".repeat(80));
-        println!("JSON OUTPUT");
-        println!("{}", "=".repeat(80));
-        println!("{}", serde_json::to_string_pretty(&mev_events)?);
-    }
-
-    println!("\n{}", "=".repeat(80));
-    println!("✅ Analysis complete");
-    println!("{}", "=".repeat(80));
+    println!("{}", serde_json::to_string_pretty(&output)?);
 
     Ok(())
 }

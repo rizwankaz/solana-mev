@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 use crate::types::FetchedTransaction;
+use crate::swap::{SwapParser, SwapInfo};
+use crate::oracle::OracleClient;
 
 /// MEV event type
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -13,14 +15,15 @@ pub enum MevEvent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArbitrageEvent {
     pub signature: String,
-    pub slot: u64,
     pub signer: String,
-    pub swap_count: usize,
-    pub transfer_count: usize,
-    pub compute_units: u64,
+    pub success: bool,
+    pub compute_units_consumed: u64,
     pub fee: u64,
-    pub profit_tokens: Vec<TokenProfit>,
-    pub programs: Vec<String>,
+    pub priority_fee: u64,
+    pub swaps: Vec<SwapInfo>,
+    pub program_addresses: Vec<String>,
+    pub token_changes: Vec<TokenChange>,
+    pub profitability: Profitability,
 }
 
 /// Sandwich attack MEV event
@@ -34,6 +37,10 @@ pub struct SandwichEvent {
     pub back_run: SandwichTransaction,
     pub total_compute_units: u64,
     pub total_fees: u64,
+    pub swaps: Vec<SwapInfo>,
+    pub program_addresses: Vec<String>,
+    pub token_changes: Vec<TokenChange>,
+    pub profitability: Profitability,
 }
 
 /// Transaction in sandwich pattern
@@ -46,9 +53,17 @@ pub struct SandwichTransaction {
     pub fee: u64,
 }
 
-/// Token profit info
+/// Profitability information
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TokenProfit {
+pub struct Profitability {
+    pub profit_usd: f64,
+    pub fees_usd: f64,
+    pub net_profit_usd: f64,
+}
+
+/// Token balance change
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TokenChange {
     pub mint: String,
     pub delta: i64,
     pub decimals: u8,
@@ -72,25 +87,25 @@ pub struct MevDetector {
     pub min_swap_count: usize,
     /// Maximum block distance for sandwich detection
     pub max_sandwich_distance: usize,
-}
-
-impl Default for MevDetector {
-    fn default() -> Self {
-        Self {
-            min_swap_count: 2,
-            max_sandwich_distance: 5,
-        }
-    }
+    /// Swap parser for extracting swap information
+    swap_parser: SwapParser,
+    /// Oracle client for price data
+    oracle: OracleClient,
 }
 
 impl MevDetector {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(timestamp: i64) -> Self {
+        Self {
+            min_swap_count: 2,
+            max_sandwich_distance: 5,
+            swap_parser: SwapParser::new(),
+            oracle: OracleClient::new(timestamp),
+        }
     }
 
     /// Detect all MEV events in a block
-    pub fn detect_mev(
-        &self,
+    pub async fn detect_mev(
+        &mut self,
         slot: u64,
         transactions: &[FetchedTransaction],
     ) -> Vec<MevEvent> {
@@ -104,13 +119,13 @@ impl MevDetector {
 
         // Detect arbitrage
         for tx in &candidates {
-            if let Some(arb) = self.detect_arbitrage(slot, tx) {
+            if let Some(arb) = self.detect_arbitrage(tx).await {
                 events.push(MevEvent::Arbitrage(arb));
             }
         }
 
         // Detect sandwich attacks
-        for sandwich in self.detect_sandwiches(slot, &candidates) {
+        for sandwich in self.detect_sandwiches(slot, &candidates).await {
             events.push(MevEvent::Sandwich(sandwich));
         }
 
@@ -277,54 +292,82 @@ impl MevDetector {
     }
 
     /// Detect arbitrage in a transaction
-    fn detect_arbitrage(
-        &self,
-        slot: u64,
+    async fn detect_arbitrage(
+        &mut self,
         tx: &FetchedTransaction,
     ) -> Option<ArbitrageEvent> {
-        let swap_count = self.count_swaps(tx);
+        let signer = tx.signer()?;
+
+        // Extract swaps and token changes
+        let swaps = self.swap_parser.extract_swaps(tx);
+        let token_changes = self.swap_parser.extract_token_changes(tx);
+        let program_addresses = self.swap_parser.extract_dex_programs(tx);
 
         // Must have multiple swaps for arbitrage
-        if swap_count < self.min_swap_count {
+        if swaps.len() < self.min_swap_count {
             return None;
         }
 
-        let transfers = self.extract_transfers(tx);
-        let signer = tx.signer()?;
-
         // Check for profit (any token with positive delta owned by signer)
-        let mut profit_tokens = Vec::new();
-        for transfer in &transfers {
-            if transfer.delta > 0 && transfer.owner == signer {
-                profit_tokens.push(TokenProfit {
-                    mint: transfer.mint.clone(),
-                    delta: transfer.delta,
-                    decimals: transfer.decimals,
-                });
+        let signer_changes: Vec<_> = token_changes.iter()
+            .filter(|tc| tc.owner == signer)
+            .collect();
+
+        let has_profit = signer_changes.iter().any(|tc| tc.delta > 0);
+        if !has_profit {
+            return None;
+        }
+
+        // Convert token changes to TokenChange format
+        let token_changes_output: Vec<TokenChange> = signer_changes.iter()
+            .map(|tc| TokenChange {
+                mint: tc.mint.clone(),
+                delta: tc.delta,
+                decimals: tc.decimals,
+            })
+            .collect();
+
+        // Calculate profitability
+        let mut profit_usd = 0.0;
+        for change in &signer_changes {
+            if change.delta > 0 {
+                let price = self.oracle.get_price_usd(&change.mint).await.unwrap_or(0.0);
+                let amount = change.delta as f64 / 10_f64.powi(change.decimals as i32);
+                profit_usd += amount * price;
             }
         }
 
-        // Must have some profit
-        if profit_tokens.is_empty() {
-            return None;
-        }
+        let fee = tx.fee().unwrap_or(0);
+        let compute_units = tx.compute_units_consumed().unwrap_or(0);
+
+        // Estimate priority fee (total fee minus base fee)
+        // Base fee is roughly 5000 lamports per signature
+        let priority_fee = fee.saturating_sub(5000);
+
+        let fees_usd = fee as f64 / 1_000_000_000.0 * self.oracle.get_price_usd("So11111111111111111111111111111111111111112").await.unwrap_or(0.0);
+        let net_profit_usd = profit_usd - fees_usd;
 
         Some(ArbitrageEvent {
             signature: tx.signature.clone(),
-            slot,
             signer,
-            swap_count,
-            transfer_count: self.count_transfers(tx),
-            compute_units: tx.compute_units_consumed().unwrap_or(0),
-            fee: tx.fee().unwrap_or(0),
-            profit_tokens,
-            programs: self.extract_programs(tx),
+            success: tx.is_success(),
+            compute_units_consumed: compute_units,
+            fee,
+            priority_fee,
+            swaps,
+            program_addresses,
+            token_changes: token_changes_output,
+            profitability: Profitability {
+                profit_usd,
+                fees_usd,
+                net_profit_usd,
+            },
         })
     }
 
     /// Detect sandwich attacks
-    fn detect_sandwiches(
-        &self,
+    async fn detect_sandwiches(
+        &mut self,
         slot: u64,
         candidates: &[&FetchedTransaction],
     ) -> Vec<SandwichEvent> {
@@ -362,6 +405,66 @@ impl MevDetector {
             if signer1 == signer3 && signer1 != signer2 {
                 // Check they're close enough
                 if tx3.index - tx1.index <= self.max_sandwich_distance {
+                    // Extract swaps from all three transactions
+                    let swaps1 = self.swap_parser.extract_swaps(tx1);
+                    let swaps2 = self.swap_parser.extract_swaps(tx2);
+                    let swaps3 = self.swap_parser.extract_swaps(tx3);
+                    let mut all_swaps = Vec::new();
+                    all_swaps.extend(swaps1);
+                    all_swaps.extend(swaps2);
+                    all_swaps.extend(swaps3);
+
+                    // Extract token changes from attacker's transactions (tx1 and tx3)
+                    let changes1 = self.swap_parser.extract_token_changes(tx1);
+                    let changes3 = self.swap_parser.extract_token_changes(tx3);
+
+                    // Combine token changes from front and back run
+                    use std::collections::HashMap;
+                    let mut combined_changes: HashMap<String, (i64, u8)> = HashMap::new();
+
+                    for change in changes1.iter().chain(changes3.iter()) {
+                        if change.owner == signer1 {
+                            let entry = combined_changes.entry(change.mint.clone()).or_insert((0, change.decimals));
+                            entry.0 += change.delta;
+                        }
+                    }
+
+                    let token_changes: Vec<TokenChange> = combined_changes.iter()
+                        .map(|(mint, (delta, decimals))| TokenChange {
+                            mint: mint.clone(),
+                            delta: *delta,
+                            decimals: *decimals,
+                        })
+                        .collect();
+
+                    // Extract DEX programs
+                    let progs1 = self.swap_parser.extract_dex_programs(tx1);
+                    let progs2 = self.swap_parser.extract_dex_programs(tx2);
+                    let progs3 = self.swap_parser.extract_dex_programs(tx3);
+                    let mut program_addresses = Vec::new();
+                    program_addresses.extend(progs1);
+                    program_addresses.extend(progs2);
+                    program_addresses.extend(progs3);
+                    program_addresses.sort();
+                    program_addresses.dedup();
+
+                    // Calculate profitability
+                    let mut profit_usd = 0.0;
+                    for change in &token_changes {
+                        if change.delta > 0 {
+                            let price = self.oracle.get_price_usd(&change.mint).await.unwrap_or(0.0);
+                            let amount = change.delta as f64 / 10_f64.powi(change.decimals as i32);
+                            profit_usd += amount * price;
+                        }
+                    }
+
+                    let total_fees = tx1.fee().unwrap_or(0)
+                        + tx2.fee().unwrap_or(0)
+                        + tx3.fee().unwrap_or(0);
+
+                    let fees_usd = total_fees as f64 / 1_000_000_000.0 * self.oracle.get_price_usd("So11111111111111111111111111111111111111112").await.unwrap_or(0.0);
+                    let net_profit_usd = profit_usd - fees_usd;
+
                     sandwiches.push(SandwichEvent {
                         slot,
                         attacker: signer1.clone(),
@@ -390,9 +493,15 @@ impl MevDetector {
                         total_compute_units: tx1.compute_units_consumed().unwrap_or(0)
                             + tx2.compute_units_consumed().unwrap_or(0)
                             + tx3.compute_units_consumed().unwrap_or(0),
-                        total_fees: tx1.fee().unwrap_or(0)
-                            + tx2.fee().unwrap_or(0)
-                            + tx3.fee().unwrap_or(0),
+                        total_fees,
+                        swaps: all_swaps,
+                        program_addresses,
+                        token_changes,
+                        profitability: Profitability {
+                            profit_usd,
+                            fees_usd,
+                            net_profit_usd,
+                        },
                     });
                 }
             }
