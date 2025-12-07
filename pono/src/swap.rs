@@ -14,47 +14,12 @@ pub struct SwapInfo {
     pub decimals1: u8,
 }
 
-/// Known DEX program IDs
-const KNOWN_DEXES: &[(&str, &str)] = &[
-    ("JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4", "Jupiter"),
-    ("JUP4Fb2cqiRUcaTHdrPC8h2gNsA2ETXiPDD33WcGuJB", "Jupiter v4"),
-    ("JUP2jxvXaqu7NQY1GmNF4m1vodw12LVXYxbFL2uJvfo", "Jupiter v2"),
-    ("675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8", "Raydium AMM"),
-    ("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK", "Raydium CLMM"),
-    ("27haf8L6oxUeXrHrgEgsexjSY5hbVUWEmvv9Nyzbug", "Raydium CPMM"),
-    ("whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc", "Whirlpool"),
-    ("9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP", "Orca v2"),
-    ("DjVE6JNiYqPL2QXyCUUh8rNjHrbz9hXHNYt99MQ59qw1", "Orca v1"),
-    ("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P", "Pump.fun"),
-    ("PSwapMdSai8tjrEXcxFeQth87xC4rRsa4VA5mhGhXkP", "PancakeSwap"),
-    ("LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo", "Meteora"),
-    ("Dooar9JkhdZ7J3LHN3A7YCuoGRUggXhQaG4kijfLGU2j", "Meteora DLMM"),
-    ("PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY", "Phoenix"),
-    ("EewxydAPCCVuNEyrVN68PuSYdQ7wKn27V9Gjeoi8dy3S", "Lifinity v2"),
-    ("2wT8Yq49kHgDzXuPxZSaeLaH1qbmGXtEyPy64bL7aD3c", "Lifinity v1"),
-    ("srmqPvymJeFKQ4zGQed1GFppgkRHL9kaELCbyksJtPX", "Serum"),
-    ("9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin", "Serum v3"),
-];
-
 /// Swap parser for extracting swap details from transactions
-pub struct SwapParser {
-    dex_map: HashMap<String, String>,
-}
+pub struct SwapParser;
 
 impl SwapParser {
     pub fn new() -> Self {
-        let mut dex_map = HashMap::new();
-        for (addr, name) in KNOWN_DEXES {
-            dex_map.insert(addr.to_string(), name.to_string());
-        }
-        Self { dex_map }
-    }
-
-    /// Get human-readable DEX name from program ID
-    fn get_dex_name(&self, program_id: &str) -> String {
-        self.dex_map.get(program_id)
-            .cloned()
-            .unwrap_or_else(|| program_id.to_string())
+        Self
     }
 
     /// Extract all swaps from a transaction by parsing inner instructions
@@ -64,16 +29,22 @@ impl SwapParser {
         // Build a map of token accounts to mints and decimals
         let token_account_map = self.build_token_account_map(tx);
 
+        // Get account keys to resolve program IDs
+        let account_keys = self.get_account_keys(tx);
+
         // Parse inner instructions to find token transfers
         use solana_transaction_status::option_serializer::OptionSerializer;
         if let Some(meta) = &tx.meta {
             if let OptionSerializer::Some(inner_instructions) = &meta.inner_instructions {
                 for inner_set in inner_instructions {
-                    // Group transfers by instruction index to find swap patterns
-                    let transfers = self.extract_transfers_from_inner(&inner_set.instructions, &token_account_map, tx);
+                    // Get the program ID for this instruction from the outer transaction
+                    let program_id = self.get_program_id_for_instruction(tx, inner_set.index as usize, &account_keys);
 
-                    // Analyze transfer patterns to identify swaps
-                    let instruction_swaps = self.identify_swaps_from_transfers(&transfers, tx);
+                    // Extract transfers from this inner instruction set
+                    let transfers = self.extract_transfers_from_inner(&inner_set.instructions, &token_account_map);
+
+                    // Identify swaps from transfers and associate with the program ID
+                    let instruction_swaps = self.identify_swaps_from_transfers(&transfers, &program_id);
                     swaps.extend(instruction_swaps);
                 }
             }
@@ -85,6 +56,49 @@ impl SwapParser {
         }
 
         swaps
+    }
+
+    /// Get the program ID for a specific instruction index
+    fn get_program_id_for_instruction(&self, tx: &FetchedTransaction, instruction_index: usize, account_keys: &[String]) -> String {
+        use solana_transaction_status::{EncodedTransaction, UiMessage, UiInstruction, UiParsedInstruction};
+
+        match &tx.transaction {
+            EncodedTransaction::Json(ui_tx) => {
+                match &ui_tx.message {
+                    UiMessage::Parsed(parsed) => {
+                        if let Some(instruction) = parsed.instructions.get(instruction_index) {
+                            match instruction {
+                                UiInstruction::Parsed(parsed_inst) => {
+                                    match parsed_inst {
+                                        UiParsedInstruction::Parsed(info) => {
+                                            info.program.clone()
+                                        }
+                                        UiParsedInstruction::PartiallyDecoded(partial) => {
+                                            partial.program_id.clone()
+                                        }
+                                    }
+                                }
+                                UiInstruction::Compiled(compiled) => {
+                                    let idx = compiled.program_id_index as usize;
+                                    account_keys.get(idx).cloned().unwrap_or_else(|| "Unknown".to_string())
+                                }
+                            }
+                        } else {
+                            "Unknown".to_string()
+                        }
+                    }
+                    UiMessage::Raw(raw) => {
+                        if let Some(instruction) = raw.instructions.get(instruction_index) {
+                            let idx = instruction.program_id_index as usize;
+                            account_keys.get(idx).cloned().unwrap_or_else(|| "Unknown".to_string())
+                        } else {
+                            "Unknown".to_string()
+                        }
+                    }
+                }
+            }
+            _ => "Unknown".to_string(),
+        }
     }
 
     /// Build a map of token account addresses to their mint and decimals
@@ -150,7 +164,6 @@ impl SwapParser {
         &self,
         instructions: &[solana_transaction_status::UiInstruction],
         token_map: &HashMap<String, (String, u8)>,
-        _tx: &FetchedTransaction,
     ) -> Vec<TokenTransfer> {
         use solana_transaction_status::{UiInstruction, UiParsedInstruction};
 
@@ -221,21 +234,13 @@ impl SwapParser {
     fn identify_swaps_from_transfers(
         &self,
         transfers: &[TokenTransfer],
-        tx: &FetchedTransaction,
+        program_id: &str,
     ) -> Vec<SwapInfo> {
         let mut swaps = Vec::new();
 
         if transfers.len() < 2 {
             return swaps;
         }
-
-        // Get DEX programs used
-        let dex_programs = self.extract_dex_programs(tx);
-        let dex_name = if !dex_programs.is_empty() {
-            self.get_dex_name(&dex_programs[0])
-        } else {
-            "Unknown".to_string()
-        };
 
         // Group consecutive transfers that form swaps
         // A swap typically consists of: user sends token A, user receives token B
@@ -253,7 +258,7 @@ impl SwapParser {
                         amount0: t1.amount as f64 / 10_f64.powi(t1.decimals as i32),
                         token1: t2.mint.clone(),
                         amount1: t2.amount as f64 / 10_f64.powi(t2.decimals as i32),
-                        dex: dex_name.clone(),
+                        dex: program_id.to_string(),
                         decimals0: t1.decimals,
                         decimals1: t2.decimals,
                     });
@@ -277,7 +282,7 @@ impl SwapParser {
             return swaps;
         }
 
-        let dex_name = self.get_dex_name(&programs[0]);
+        let program_id = &programs[0];
 
         // Group by owner
         let mut owner_changes: HashMap<String, (Vec<&TokenChange>, Vec<&TokenChange>)> = HashMap::new();
@@ -316,7 +321,7 @@ impl SwapParser {
                         amount0: from_change.delta.abs() as f64 / 10_f64.powi(from_change.decimals as i32),
                         token1: to_change.mint.clone(),
                         amount1: to_change.delta as f64 / 10_f64.powi(to_change.decimals as i32),
-                        dex: dex_name.clone(),
+                        dex: program_id.clone(),
                         decimals0: from_change.decimals,
                         decimals1: to_change.decimals,
                     });
