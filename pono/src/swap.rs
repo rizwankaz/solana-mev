@@ -44,28 +44,88 @@ impl SwapParser {
             return Vec::new();
         };
 
-        let account_keys = self.get_account_keys(tx);
         let token_map = self.build_token_map(tx);
         let mut swaps = Vec::new();
 
         for inner_set in inner_instructions {
-            let program_id = self.get_program_id(tx, inner_set.index as usize, &account_keys);
-            let transfers = self.extract_transfers(&inner_set.instructions, &token_map);
+            // Extract swaps with DEX attribution from inner instructions
+            let inner_swaps = self.extract_swaps_from_inner_set(&inner_set.instructions, &token_map);
+            swaps.extend(inner_swaps);
+        }
 
-            // Pair consecutive transfers with different tokens as swaps
-            for i in (0..transfers.len()).step_by(2) {
-                if let (Some(t1), Some(t2)) = (transfers.get(i), transfers.get(i + 1)) {
-                    if t1.mint != t2.mint {
-                        swaps.push(SwapInfo {
-                            token0: t1.mint.clone(),
-                            amount0: t1.amount as f64 / 10_f64.powi(t1.decimals as i32),
-                            token1: t2.mint.clone(),
-                            amount1: t2.amount as f64 / 10_f64.powi(t2.decimals as i32),
-                            dex: program_id.clone(),
-                            decimals0: t1.decimals,
-                            decimals1: t2.decimals,
-                        });
-                    }
+        swaps
+    }
+
+    /// Extract swaps from an inner instruction set, tracking which program invoked each swap
+    fn extract_swaps_from_inner_set(&self, instructions: &[UiInstruction], token_map: &HashMap<String, (String, u8)>) -> Vec<SwapInfo> {
+        let mut swaps = Vec::new();
+        let mut transfers = Vec::new();
+        let mut current_dex = String::new();
+
+        for inst in instructions {
+            let UiInstruction::Parsed(UiParsedInstruction::Parsed(info)) = inst else {
+                continue;
+            };
+
+            // Track non-token programs as potential DEXes
+            if info.program != "spl-token" {
+                current_dex = info.program.clone();
+                continue;
+            }
+
+            // Extract token transfers
+            let Some(obj) = info.parsed.as_object() else {
+                continue;
+            };
+
+            let Some(typ) = obj.get("type").and_then(|v| v.as_str()) else {
+                continue;
+            };
+
+            if typ != "transfer" && typ != "transferChecked" {
+                continue;
+            }
+
+            let Some(info_obj) = obj.get("info").and_then(|v| v.as_object()) else {
+                continue;
+            };
+
+            let account = info_obj.get("source")
+                .or_else(|| info_obj.get("account"))
+                .or_else(|| info_obj.get("destination"))
+                .and_then(|v| v.as_str())
+                .and_then(|s| token_map.get(s));
+
+            let amount = info_obj.get("amount")
+                .or_else(|| info_obj.get("tokenAmount").and_then(|v| v.get("amount")))
+                .and_then(|v| v.as_str())
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0);
+
+            if let Some((mint, decimals)) = account {
+                if amount > 0 {
+                    transfers.push((Transfer {
+                        mint: mint.clone(),
+                        amount,
+                        decimals: *decimals,
+                    }, current_dex.clone()));
+                }
+            }
+        }
+
+        // Pair consecutive transfers with different tokens as swaps
+        for i in (0..transfers.len()).step_by(2) {
+            if let (Some((t1, dex1)), Some((t2, _dex2))) = (transfers.get(i), transfers.get(i + 1)) {
+                if t1.mint != t2.mint {
+                    swaps.push(SwapInfo {
+                        token0: t1.mint.clone(),
+                        amount0: t1.amount as f64 / 10_f64.powi(t1.decimals as i32),
+                        token1: t2.mint.clone(),
+                        amount1: t2.amount as f64 / 10_f64.powi(t2.decimals as i32),
+                        dex: dex1.clone(),
+                        decimals0: t1.decimals,
+                        decimals1: t2.decimals,
+                    });
                 }
             }
         }
