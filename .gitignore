@@ -38,3 +38,6 @@ pono/target/doc/
 tmp/
 temp/
 *.tmp
+
+# pono output files
+pono*.txt
