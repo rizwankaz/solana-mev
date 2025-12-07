@@ -1,85 +1,10 @@
-use serde::{Deserialize, Serialize};
-use crate::types::FetchedTransaction;
-use crate::swap::{SwapParser, SwapInfo};
+use crate::types::{
+    ArbitrageEvent, FetchedTransaction, MevEvent, Profitability, SandwichEvent,
+    SandwichTransaction, SimpleTokenChange, TokenChange,
+};
+use crate::parsers::SwapParser;
 use crate::oracle::OracleClient;
-
-/// MEV event type
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
-pub enum MevEvent {
-    Arbitrage(ArbitrageEvent),
-    Sandwich(SandwichEvent),
-}
-
-/// Arbitrage MEV event
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ArbitrageEvent {
-    pub signature: String,
-    pub signer: String,
-    pub success: bool,
-    pub compute_units_consumed: u64,
-    pub fee: u64,
-    pub priority_fee: u64,
-    pub swaps: Vec<SwapInfo>,
-    pub program_addresses: Vec<String>,
-    pub token_changes: Vec<TokenChange>,
-    pub profitability: Profitability,
-}
-
-/// Sandwich attack MEV event
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SandwichEvent {
-    pub slot: u64,
-    pub attacker: String,
-    pub victim_signature: String,
-    pub front_run: SandwichTransaction,
-    pub victim: SandwichTransaction,
-    pub back_run: SandwichTransaction,
-    pub total_compute_units: u64,
-    pub total_fees: u64,
-    pub swaps: Vec<SwapInfo>,
-    pub program_addresses: Vec<String>,
-    pub token_changes: Vec<TokenChange>,
-    pub profitability: Profitability,
-}
-
-/// Transaction in sandwich pattern
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SandwichTransaction {
-    pub signature: String,
-    pub index: usize,
-    pub signer: String,
-    pub compute_units: u64,
-    pub fee: u64,
-}
-
-/// Profitability information
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Profitability {
-    pub profit_usd: f64,
-    pub fees_usd: f64,
-    pub net_profit_usd: f64,
-}
-
-/// Token balance change
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TokenChange {
-    pub mint: String,
-    pub delta: i64,
-    pub decimals: u8,
-}
-
-/// Token balance change
-#[derive(Debug, Clone)]
-pub struct TokenTransfer {
-    pub account_index: usize,
-    pub mint: String,
-    pub owner: String,
-    pub pre_amount: u64,
-    pub post_amount: u64,
-    pub delta: i64,
-    pub decimals: u8,
-}
+use std::collections::HashMap;
 
 /// MEV detector for analyzing blocks
 pub struct MevDetector {
@@ -149,148 +74,6 @@ impl MevDetector {
         false
     }
 
-    /// Count swap instructions in transaction
-    fn count_swaps(&self, tx: &FetchedTransaction) -> usize {
-        use solana_transaction_status::option_serializer::OptionSerializer;
-
-        if let Some(meta) = &tx.meta {
-            let logs = match &meta.log_messages {
-                OptionSerializer::Some(logs) => logs,
-                _ => return 0,
-            };
-
-            return logs
-                .iter()
-                .filter(|msg| msg.contains("Instruction: Swap"))
-                .count();
-        }
-        0
-    }
-
-    /// Count transfer instructions
-    fn count_transfers(&self, tx: &FetchedTransaction) -> usize {
-        use solana_transaction_status::option_serializer::OptionSerializer;
-
-        if let Some(meta) = &tx.meta {
-            let logs = match &meta.log_messages {
-                OptionSerializer::Some(logs) => logs,
-                _ => return 0,
-            };
-
-            return logs
-                .iter()
-                .filter(|msg| msg.contains("Instruction: Transfer"))
-                .count();
-        }
-        0
-    }
-
-    /// Extract token transfers from transaction
-    fn extract_transfers(&self, tx: &FetchedTransaction) -> Vec<TokenTransfer> {
-        let mut transfers = Vec::new();
-
-        if let Some(meta) = &tx.meta {
-            let pre_balances = meta.pre_token_balances.as_ref().map(|v| v.as_slice()).unwrap_or(&[]);
-            let post_balances = meta.post_token_balances.as_ref().map(|v| v.as_slice()).unwrap_or(&[]);
-
-            // Index balances by account index
-            use std::collections::HashMap;
-            let mut pre_map: HashMap<usize, _> = HashMap::new();
-            let mut post_map: HashMap<usize, _> = HashMap::new();
-
-            for balance in pre_balances {
-                pre_map.insert(balance.account_index as usize, balance);
-            }
-
-            for balance in post_balances {
-                post_map.insert(balance.account_index as usize, balance);
-            }
-
-            // Find all accounts with token balance changes
-            let all_indices: std::collections::HashSet<_> = pre_map
-                .keys()
-                .chain(post_map.keys())
-                .copied()
-                .collect();
-
-            for idx in all_indices {
-                let pre = pre_map.get(&idx);
-                let post = post_map.get(&idx);
-
-                if let (Some(pre_bal), Some(post_bal)) = (pre, post) {
-                    let pre_amount = pre_bal.ui_token_amount.amount.parse::<u64>().unwrap_or(0);
-                    let post_amount = post_bal.ui_token_amount.amount.parse::<u64>().unwrap_or(0);
-
-                    if pre_amount != post_amount {
-                        use solana_transaction_status::option_serializer::OptionSerializer;
-
-                        let owner = match &post_bal.owner {
-                            OptionSerializer::Some(o) => o.clone(),
-                            _ => String::new(),
-                        };
-
-                        transfers.push(TokenTransfer {
-                            account_index: idx,
-                            mint: post_bal.mint.clone(),
-                            owner,
-                            pre_amount,
-                            post_amount,
-                            delta: post_amount as i64 - pre_amount as i64,
-                            decimals: post_bal.ui_token_amount.decimals,
-                        });
-                    }
-                }
-            }
-        }
-
-        transfers
-    }
-
-    /// Extract program IDs from transaction
-    fn extract_programs(&self, tx: &FetchedTransaction) -> Vec<String> {
-        use solana_transaction_status::{EncodedTransaction, UiMessage};
-
-        match &tx.transaction {
-            EncodedTransaction::Json(ui_tx) => {
-                match &ui_tx.message {
-                    UiMessage::Parsed(parsed) => {
-                        // Extract from instructions
-                        parsed.instructions.iter()
-                            .filter_map(|inst| {
-                                match inst {
-                                    solana_transaction_status::UiInstruction::Parsed(_) => {
-                                        // UiParsedInstruction has different structure
-                                        // We'll just use the account keys instead
-                                        None
-                                    }
-                                    solana_transaction_status::UiInstruction::Compiled(compiled) => {
-                                        // Get program id from account keys
-                                        let program_id_index = compiled.program_id_index as usize;
-                                        parsed.account_keys.get(program_id_index)
-                                            .map(|key| key.pubkey.clone())
-                                    }
-                                }
-                            })
-                            .collect()
-                    }
-                    UiMessage::Raw(raw) => {
-                        // Get unique programs from instructions
-                        let mut programs: Vec<String> = raw.instructions.iter()
-                            .filter_map(|inst| {
-                                let idx = inst.program_id_index as usize;
-                                raw.account_keys.get(idx).cloned()
-                            })
-                            .collect();
-                        programs.sort();
-                        programs.dedup();
-                        programs
-                    }
-                }
-            }
-            _ => Vec::new(),
-        }
-    }
-
     /// Detect arbitrage in a transaction
     async fn detect_arbitrage(
         &mut self,
@@ -318,13 +101,9 @@ impl MevDetector {
             return None;
         }
 
-        // Convert token changes to TokenChange format
-        let token_changes_output: Vec<TokenChange> = signer_changes.iter()
-            .map(|tc| TokenChange {
-                mint: tc.mint.clone(),
-                delta: tc.delta,
-                decimals: tc.decimals,
-            })
+        // Convert token changes to SimpleTokenChange format for output
+        let token_changes_output: Vec<SimpleTokenChange> = signer_changes.iter()
+            .map(|tc| tc.to_simple())
             .collect();
 
         // Calculate profitability
@@ -419,7 +198,6 @@ impl MevDetector {
                     let changes3 = self.swap_parser.extract_token_changes(tx3);
 
                     // Combine token changes from front and back run
-                    use std::collections::HashMap;
                     let mut combined_changes: HashMap<String, (i64, u8)> = HashMap::new();
 
                     for change in changes1.iter().chain(changes3.iter()) {
@@ -429,8 +207,8 @@ impl MevDetector {
                         }
                     }
 
-                    let token_changes: Vec<TokenChange> = combined_changes.iter()
-                        .map(|(mint, (delta, decimals))| TokenChange {
+                    let token_changes: Vec<SimpleTokenChange> = combined_changes.iter()
+                        .map(|(mint, (delta, decimals))| SimpleTokenChange {
                             mint: mint.clone(),
                             delta: *delta,
                             decimals: *decimals,
@@ -467,7 +245,7 @@ impl MevDetector {
 
                     sandwiches.push(SandwichEvent {
                         slot,
-                        attacker: signer1.clone(),
+                        signer: signer1.clone(),
                         victim_signature: tx2.signature.clone(),
                         front_run: SandwichTransaction {
                             signature: tx1.signature.clone(),

@@ -1,22 +1,9 @@
-use serde::{Deserialize, Serialize};
-use crate::types::FetchedTransaction;
+use crate::types::{FetchedTransaction, SwapInfo, TokenChange};
 use std::collections::HashMap;
 use solana_transaction_status::{
     option_serializer::OptionSerializer,
     EncodedTransaction, UiMessage, UiInstruction, UiParsedInstruction,
 };
-
-/// Individual swap within a transaction
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SwapInfo {
-    pub token0: String,
-    pub amount0: f64,
-    pub token1: String,
-    pub amount1: f64,
-    pub dex: String,
-    pub decimals0: u8,
-    pub decimals1: u8,
-}
 
 /// Token transfer within inner instructions
 #[derive(Debug)]
@@ -149,7 +136,7 @@ impl SwapParser {
     /// Get program ID from an inner instruction
     fn get_instruction_program_id(&self, inst: &UiInstruction, account_keys: &[String]) -> String {
         match inst {
-            UiInstruction::Parsed(UiParsedInstruction::Parsed(info)) => {
+            UiInstruction::Parsed(UiParsedInstruction::Parsed(_info)) => {
                 // For parsed instructions, program is the name, not ID
                 // We'd need a mapping, but for now return empty for non-standard programs
                 String::new()
@@ -173,29 +160,6 @@ impl SwapParser {
             "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL" | // Associated Token Program
             "ComputeBudget111111111111111111111111111111" // Compute Budget Program
         )
-    }
-
-    /// Get program ID for an instruction
-    fn get_program_id(&self, tx: &FetchedTransaction, idx: usize, keys: &[String]) -> String {
-        let EncodedTransaction::Json(ui_tx) = &tx.transaction else {
-            return String::new();
-        };
-
-        match &ui_tx.message {
-            UiMessage::Parsed(parsed) => {
-                parsed.instructions.get(idx).map(|inst| match inst {
-                    UiInstruction::Parsed(UiParsedInstruction::Parsed(info)) => info.program.clone(),
-                    UiInstruction::Parsed(UiParsedInstruction::PartiallyDecoded(partial)) => partial.program_id.clone(),
-                    UiInstruction::Compiled(c) => keys.get(c.program_id_index as usize).cloned().unwrap_or_default(),
-                }).unwrap_or_default()
-            }
-            UiMessage::Raw(raw) => {
-                raw.instructions.get(idx)
-                    .and_then(|inst| keys.get(inst.program_id_index as usize))
-                    .cloned()
-                    .unwrap_or_default()
-            }
-        }
     }
 
     /// Build token account to mint/decimals map
@@ -234,61 +198,6 @@ impl SwapParser {
             UiMessage::Parsed(p) => p.account_keys.iter().map(|k| k.pubkey.clone()).collect(),
             UiMessage::Raw(r) => r.account_keys.clone(),
         }
-    }
-
-    /// Extract token transfers from inner instructions
-    fn extract_transfers(&self, instructions: &[UiInstruction], token_map: &HashMap<String, (String, u8)>) -> Vec<Transfer> {
-        let mut transfers = Vec::new();
-
-        for inst in instructions {
-            let UiInstruction::Parsed(UiParsedInstruction::Parsed(info)) = inst else {
-                continue;
-            };
-
-            if info.program != "spl-token" {
-                continue;
-            }
-
-            let Some(obj) = info.parsed.as_object() else {
-                continue;
-            };
-
-            let Some(typ) = obj.get("type").and_then(|v| v.as_str()) else {
-                continue;
-            };
-
-            if typ != "transfer" && typ != "transferChecked" {
-                continue;
-            }
-
-            let Some(info_obj) = obj.get("info").and_then(|v| v.as_object()) else {
-                continue;
-            };
-
-            let account = info_obj.get("source")
-                .or_else(|| info_obj.get("account"))
-                .or_else(|| info_obj.get("destination"))
-                .and_then(|v| v.as_str())
-                .and_then(|s| token_map.get(s));
-
-            let amount = info_obj.get("amount")
-                .or_else(|| info_obj.get("tokenAmount").and_then(|v| v.get("amount")))
-                .and_then(|v| v.as_str())
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(0);
-
-            if let Some((mint, decimals)) = account {
-                if amount > 0 {
-                    transfers.push(Transfer {
-                        mint: mint.clone(),
-                        amount,
-                        decimals: *decimals,
-                    });
-                }
-            }
-        }
-
-        transfers
     }
 
     /// Extract token balance changes
@@ -374,16 +283,4 @@ impl Default for SwapParser {
     fn default() -> Self {
         Self::new()
     }
-}
-
-/// Token balance change
-#[derive(Debug, Clone)]
-pub struct TokenChange {
-    pub account_index: usize,
-    pub mint: String,
-    pub owner: String,
-    pub pre_amount: u64,
-    pub post_amount: u64,
-    pub delta: i64,
-    pub decimals: u8,
 }

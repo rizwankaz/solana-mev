@@ -84,7 +84,7 @@ async fn main() -> anyhow::Result<()> {
                 mev_compute_units += sand.total_compute_units;
                 sandwiches.push(json!({
                     "slot": sand.slot,
-                    "signer": sand.attacker,
+                    "signer": sand.signer,
                     "victim_signature": sand.victim_signature,
                     "total_compute_units": sand.total_compute_units,
                     "total_fees": sand.total_fees,
