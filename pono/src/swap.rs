@@ -239,13 +239,13 @@ impl SwapParser {
             .collect()
     }
 
-    /// Extract non-system programs from transaction
+    /// Extract programs from transaction
     pub fn extract_dex_programs(&self, tx: &FetchedTransaction) -> Vec<String> {
         let EncodedTransaction::Json(ui_tx) = &tx.transaction else {
             return Vec::new();
         };
 
-        let programs: Vec<String> = match &ui_tx.message {
+        let mut programs: Vec<String> = match &ui_tx.message {
             UiMessage::Parsed(parsed) => {
                 parsed.instructions.iter().filter_map(|inst| match inst {
                     UiInstruction::Parsed(UiParsedInstruction::Parsed(info)) => Some(info.program.clone()),
@@ -262,18 +262,9 @@ impl SwapParser {
             }
         };
 
-        // Filter system programs by checking if they contain common system keywords
-        let mut result: Vec<_> = programs.into_iter()
-            .filter(|p| {
-                !p.contains("11111111111111") && // System program
-                p != "system" &&
-                p != "spl-token" &&
-                p != "spl-associated-token-account"
-            })
-            .collect();
-        result.sort_unstable();
-        result.dedup();
-        result
+        programs.sort_unstable();
+        programs.dedup();
+        programs
     }
 }
 
