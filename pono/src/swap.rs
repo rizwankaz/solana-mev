@@ -31,36 +31,43 @@ impl SwapParser {
         // Get programs used in transaction
         let programs = self.extract_dex_programs(tx);
 
-        // Match token changes to swaps
-        // This is a simplified approach - in reality, you'd parse the instruction data
-        // For now, we'll infer swaps from token balance changes
-        if token_changes.len() >= 2 && !programs.is_empty() {
-            // Group changes by positive and negative
-            let mut negative_changes = Vec::new();
-            let mut positive_changes = Vec::new();
+        if programs.is_empty() {
+            return swaps;
+        }
 
-            for change in &token_changes {
-                if change.delta < 0 {
-                    negative_changes.push(change);
-                } else if change.delta > 0 {
-                    positive_changes.push(change);
-                }
+        // Get the DEX program to use for labeling
+        let dex = programs.first().unwrap_or(&"Unknown".to_string()).clone();
+
+        // Group changes by positive and negative, per unique owner
+        use std::collections::HashMap;
+        let mut owner_changes: HashMap<String, (Vec<&TokenChange>, Vec<&TokenChange>)> = HashMap::new();
+
+        for change in &token_changes {
+            let entry = owner_changes.entry(change.owner.clone()).or_insert((Vec::new(), Vec::new()));
+            if change.delta < 0 {
+                entry.0.push(change);
+            } else if change.delta > 0 {
+                entry.1.push(change);
             }
+        }
 
-            // Try to pair negative and positive changes as swaps
-            for (i, from_change) in negative_changes.iter().enumerate() {
-                if let Some(to_change) = positive_changes.get(i) {
-                    let dex = programs.first().unwrap_or(&"Unknown".to_string()).clone();
-
-                    swaps.push(SwapInfo {
-                        token0: from_change.mint.clone(),
-                        amount0: from_change.delta.abs() as f64 / 10_f64.powi(from_change.decimals as i32),
-                        token1: to_change.mint.clone(),
-                        amount1: to_change.delta as f64 / 10_f64.powi(to_change.decimals as i32),
-                        dex,
-                        decimals0: from_change.decimals,
-                        decimals1: to_change.decimals,
-                    });
+        // For each owner, try to match negative and positive changes
+        for (_owner, (negative_changes, positive_changes)) in owner_changes {
+            // Match each negative change with each positive change for different tokens
+            for from_change in &negative_changes {
+                for to_change in &positive_changes {
+                    // Only create swap if tokens are different
+                    if from_change.mint != to_change.mint {
+                        swaps.push(SwapInfo {
+                            token0: from_change.mint.clone(),
+                            amount0: from_change.delta.abs() as f64 / 10_f64.powi(from_change.decimals as i32),
+                            token1: to_change.mint.clone(),
+                            amount1: to_change.delta as f64 / 10_f64.powi(to_change.decimals as i32),
+                            dex: dex.clone(),
+                            decimals0: from_change.decimals,
+                            decimals1: to_change.decimals,
+                        });
+                    }
                 }
             }
         }
@@ -129,11 +136,27 @@ impl SwapParser {
         changes
     }
 
+    /// Check if a program is a known system/utility program (not a DEX)
+    fn is_system_program(program: &str) -> bool {
+        matches!(program,
+            "ComputeBudget111111111111111111111111111111" |
+            "11111111111111111111111111111111" | // System program
+            "system" |
+            "spl-token" |
+            "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" | // Token program
+            "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL" | // Associated Token program
+            "spl-associated-token-account" |
+            "Vote111111111111111111111111111111111111111" | // Vote program
+            "Config1111111111111111111111111111111111111" | // Config program
+            "Stake11111111111111111111111111111111111111" // Stake program
+        )
+    }
+
     /// Extract programs from transaction
     pub fn extract_dex_programs(&self, tx: &FetchedTransaction) -> Vec<String> {
         use solana_transaction_status::{EncodedTransaction, UiMessage, UiInstruction, UiParsedInstruction};
 
-        match &tx.transaction {
+        let programs: Vec<String> = match &tx.transaction {
             EncodedTransaction::Json(ui_tx) => {
                 match &ui_tx.message {
                     UiMessage::Parsed(parsed) => {
@@ -171,7 +194,15 @@ impl SwapParser {
                 }
             }
             _ => Vec::new(),
-        }
+        };
+
+        // Filter out system programs and deduplicate
+        let mut dex_programs: Vec<String> = programs.into_iter()
+            .filter(|p| !Self::is_system_program(p))
+            .collect();
+        dex_programs.sort();
+        dex_programs.dedup();
+        dex_programs
     }
 }
 
