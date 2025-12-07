@@ -1,0 +1,1671 @@
+{
+  "blockhash": "HyxzaYPx3n2BzmC2HJWH8Z7PwKYg4uUeH1pXU3BqapUj",
+  "mev_transactions": [
+    {
+      "attacker_signer": "AaaA2FSj1FyMEPhdpoF7PJrjsovB6yVv7YZFLn6MSiEQ",
+      "category": "ARBITRAGE",
+      "compute_units_consumed": 380123,
+      "fee": 5000,
+      "priority_fee": 0,
+      "profitability": {
+        "fees_usd": 0.0006550000000000001,
+        "net_profit_usd": 0.0451819,
+        "profit_usd": 0.0458369
+      },
+      "program_addresses": [
+        "ComputeBudget111111111111111111111111111111",
+        "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
+        "system"
+      ],
+      "signature": "1WdpJzEBEmsB7MPuEbHa7jE7kQtaCp7VvsowLQLRanSxDScTXNrtbWSpzAC8yGx4pu7fc1yXCuVwhnyuqWCypbg",
+      "success": true,
+      "swap_count": 5,
+      "swaps": [
+        {
+          "amount0": 29.256681,
+          "amount1": 158882.16708727,
+          "decimals0": 6,
+          "decimals1": 8,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump",
+          "token1": "26s3UGB9hund1qspApy1zYgCritxAooGg7o63BMn89Yq"
+        },
+        {
+          "amount0": 0.06225621,
+          "amount1": 6.98162,
+          "decimals0": 8,
+          "decimals1": 6,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "XsvNBAYkrDRNhA7wPHQfX3ZUXZyZLdnCQDfHZ56bzpg",
+          "token1": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+        },
+        {
+          "amount0": 0.0536599,
+          "amount1": 0.06225621,
+          "decimals0": 9,
+          "decimals1": 8,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "So11111111111111111111111111111111111111112",
+          "token1": "XsvNBAYkrDRNhA7wPHQfX3ZUXZyZLdnCQDfHZ56bzpg"
+        },
+        {
+          "amount0": 6.98162,
+          "amount1": 0.0003499,
+          "decimals0": 6,
+          "decimals1": 9,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "token1": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "amount0": 158882.16708727,
+          "amount1": 29.256681,
+          "decimals0": 8,
+          "decimals1": 6,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "26s3UGB9hund1qspApy1zYgCritxAooGg7o63BMn89Yq",
+          "token1": "9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump"
+        }
+      ],
+      "token_changes": [
+        {
+          "amount": 0.0003499,
+          "decimals": 9,
+          "token_address": "So11111111111111111111111111111111111111112"
+        }
+      ]
+    },
+    {
+      "attacker_signer": "LvjCuiYEvNiHiXNAMUPUDbuCrmaMTUyubLypXwn22Fm",
+      "category": "ARBITRAGE",
+      "compute_units_consumed": 167864,
+      "fee": 5191,
+      "priority_fee": 191,
+      "profitability": {
+        "fees_usd": 0.000680021,
+        "net_profit_usd": 0.002351843,
+        "profit_usd": 0.003031864
+      },
+      "program_addresses": [
+        "ComputeBudget111111111111111111111111111111",
+        "LVJFnvzw4jDzjdhJ9onG8H7R27ph8bqhU1aN4bBj6pP"
+      ],
+      "signature": "2RipZvE4CK5KCZenQFqJ5JvPU6FH6bFSwj4SAgC38qFsiPydLBUqKY6RerMbgukrjHYtmqstjCdzYrh4uy7587w",
+      "success": true,
+      "swap_count": 2,
+      "swaps": [
+        {
+          "amount0": 56.207834327,
+          "amount1": 0.000023144,
+          "decimals0": 9,
+          "decimals1": 9,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "G1VhWSAhYXRRzokGqxs4aQ8u5DSuP69ki2bN7hnapjzZ",
+          "token1": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "amount0": 0.002587849,
+          "amount1": 0.005982594,
+          "decimals0": 9,
+          "decimals1": 9,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "So11111111111111111111111111111111111111112",
+          "token1": "G1VhWSAhYXRRzokGqxs4aQ8u5DSuP69ki2bN7hnapjzZ"
+        }
+      ],
+      "token_changes": [
+        {
+          "amount": 0.000023144,
+          "decimals": 9,
+          "token_address": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "amount": 0.005982594,
+          "decimals": 9,
+          "token_address": "G1VhWSAhYXRRzokGqxs4aQ8u5DSuP69ki2bN7hnapjzZ"
+        }
+      ]
+    },
+    {
+      "attacker_signer": "GFB2DeNtacxA4fePj73NSMT4Nk14eau11bu5oXqb3ZBQ",
+      "category": "ARBITRAGE",
+      "compute_units_consumed": 548433,
+      "fee": 1211000,
+      "priority_fee": 1206000,
+      "profitability": {
+        "fees_usd": 0.158641,
+        "net_profit_usd": 14660.623725,
+        "profit_usd": 14660.782366
+      },
+      "program_addresses": [
+        "ComputeBudget111111111111111111111111111111",
+        "proVF4pMXVaYqmy4NjniPh4pqKNfMmsihgd4wdkCX3u",
+        "spl-associated-token-account",
+        "system"
+      ],
+      "signature": "2ondd7y51qYPL7XL9dCBkWDBGwmck5kroCXHW2auLEGahxeJ1YQd8Nzh89CYJeVne1sNtmWLZ5QPsWXCL51fLec8",
+      "success": true,
+      "swap_count": 2,
+      "swaps": [
+        {
+          "amount0": 95.956971,
+          "amount1": 125.684972,
+          "decimals0": 6,
+          "decimals1": 6,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "token1": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+        },
+        {
+          "amount0": 13990904.059527,
+          "amount1": 84.462451,
+          "decimals0": 6,
+          "decimals1": 6,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "token1": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R"
+        },
+        {
+          "amount0": 84.462451,
+          "amount1": 112.35866149,
+          "decimals0": 6,
+          "decimals1": 9,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+          "token1": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "amount0": 14690.510367,
+          "amount1": 6155997.786192,
+          "decimals0": 6,
+          "decimals1": 6,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "token1": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU"
+        },
+        {
+          "amount0": 112.35866149,
+          "amount1": 14660.782366,
+          "decimals0": 9,
+          "decimals1": 6,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "So11111111111111111111111111111111111111112",
+          "token1": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+        }
+      ],
+      "token_changes": [
+        {
+          "amount": 14660.782366,
+          "decimals": 6,
+          "token_address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+        }
+      ]
+    },
+    {
+      "attacker_signer": "3nMNd89AxwHUa1AFvQGqohRkxFEQsTsgiEyEyqXFHyyH",
+      "category": "ARBITRAGE",
+      "compute_units_consumed": 278958,
+      "fee": 5000,
+      "priority_fee": 0,
+      "profitability": {
+        "fees_usd": 0.0006550000000000001,
+        "net_profit_usd": 0.011354425000000001,
+        "profit_usd": 0.012009425
+      },
+      "program_addresses": [
+        "9Zzf9QqTy3TkyXysvJBsXyuRjda5aXCEJ9vXfL2HKSYv",
+        "ComputeBudget111111111111111111111111111111",
+        "system"
+      ],
+      "signature": "2j4ayWc4JFTCY4Mkuo596RNPjNCndUKpjMZfThMVmJE6WiKAL9YRHDESt8kw1FkwPrBKZdoSdRxfxMHXJexBqR2t",
+      "success": true,
+      "swap_count": 4,
+      "swaps": [
+        {
+          "amount0": 24252.08192769,
+          "amount1": 161.264858,
+          "decimals0": 8,
+          "decimals1": 6,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "26s3UGB9hund1qspApy1zYgCritxAooGg7o63BMn89Yq",
+          "token1": "CB9dDufT3ZuQXqqSfa1c5kY935TEreyBw9XJXxHKpump"
+        },
+        {
+          "amount0": 161.264858,
+          "amount1": 2830.304066,
+          "decimals0": 6,
+          "decimals1": 6,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "CB9dDufT3ZuQXqqSfa1c5kY935TEreyBw9XJXxHKpump",
+          "token1": "26KMQVgDUoB6rEfnJ51yAABWWJND8uMtpnQgsHQ64Udr"
+        },
+        {
+          "amount0": 2830.304066,
+          "amount1": 24252.08192769,
+          "decimals0": 6,
+          "decimals1": 8,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "26KMQVgDUoB6rEfnJ51yAABWWJND8uMtpnQgsHQ64Udr",
+          "token1": "26s3UGB9hund1qspApy1zYgCritxAooGg7o63BMn89Yq"
+        },
+        {
+          "amount0": 2825869508.04282,
+          "amount1": 2825869508.04282,
+          "decimals0": 5,
+          "decimals1": 5,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "8FA3TPf84h9gEZAxDhiLkMN4vvZcdEUZxmGadbo12auh",
+          "token1": "8FA3TPf84h9gEZAxDhiLkMN4vvZcdEUZxmGadbo12auh"
+        },
+        {
+          "amount0": 0.008184171,
+          "amount1": 0.000091675,
+          "decimals0": 9,
+          "decimals1": 9,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "So11111111111111111111111111111111111111112",
+          "token1": "So11111111111111111111111111111111111111112"
+        }
+      ],
+      "token_changes": [
+        {
+          "amount": 0.000091675,
+          "decimals": 9,
+          "token_address": "So11111111111111111111111111111111111111112"
+        }
+      ]
+    },
+    {
+      "attacker_signer": "3nMNd89AxwHUa1AFvQGqohRkxFEQsTsgiEyEyqXFHyyH",
+      "category": "ARBITRAGE",
+      "compute_units_consumed": 323405,
+      "fee": 5000,
+      "priority_fee": 0,
+      "profitability": {
+        "fees_usd": 0.0006550000000000001,
+        "net_profit_usd": 0.0012310069999999997,
+        "profit_usd": 0.0018860069999999999
+      },
+      "program_addresses": [
+        "9Zzf9QqTy3TkyXysvJBsXyuRjda5aXCEJ9vXfL2HKSYv",
+        "ComputeBudget111111111111111111111111111111",
+        "system"
+      ],
+      "signature": "JLvQfLFFsqKdMpANaDpdHPdkETvt4HHH1f9iZK3eKbn9ehgJobi3rDRRAd8iDJio6PWcXfH4Vo6bstTpjB23QAh",
+      "success": true,
+      "swap_count": 5,
+      "swaps": [
+        {
+          "amount0": 2823634226.88816,
+          "amount1": 0.008092496,
+          "decimals0": 5,
+          "decimals1": 9,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "8FA3TPf84h9gEZAxDhiLkMN4vvZcdEUZxmGadbo12auh",
+          "token1": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "amount0": 24202.0744433,
+          "amount1": 161.099357,
+          "decimals0": 8,
+          "decimals1": 6,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "26s3UGB9hund1qspApy1zYgCritxAooGg7o63BMn89Yq",
+          "token1": "CB9dDufT3ZuQXqqSfa1c5kY935TEreyBw9XJXxHKpump"
+        },
+        {
+          "amount0": 0.008106893,
+          "amount1": 24202.0744433,
+          "decimals0": 9,
+          "decimals1": 8,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "So11111111111111111111111111111111111111112",
+          "token1": "26s3UGB9hund1qspApy1zYgCritxAooGg7o63BMn89Yq"
+        },
+        {
+          "amount0": 0.00581171,
+          "amount1": 0.00581171,
+          "decimals0": 8,
+          "decimals1": 8,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "XsP7xzNPvEHS1m6qfanPUGjNmdnmsLKEoNAnHjdxxyZ",
+          "token1": "XsP7xzNPvEHS1m6qfanPUGjNmdnmsLKEoNAnHjdxxyZ"
+        },
+        {
+          "amount0": 161.099357,
+          "amount1": 2823634226.88816,
+          "decimals0": 6,
+          "decimals1": 5,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "CB9dDufT3ZuQXqqSfa1c5kY935TEreyBw9XJXxHKpump",
+          "token1": "8FA3TPf84h9gEZAxDhiLkMN4vvZcdEUZxmGadbo12auh"
+        }
+      ],
+      "token_changes": [
+        {
+          "amount": 0.000014397,
+          "decimals": 9,
+          "token_address": "So11111111111111111111111111111111111111112"
+        }
+      ]
+    },
+    {
+      "attacker_signer": "RaVenxw8kykBbW7KGBaBsb7fDkkBYK4uJVDSFun6ZxR",
+      "category": "ARBITRAGE",
+      "compute_units_consumed": 368616,
+      "fee": 2081682,
+      "priority_fee": 2076682,
+      "profitability": {
+        "fees_usd": 0.272700342,
+        "net_profit_usd": 681.876239947,
+        "profit_usd": 682.148940289
+      },
+      "program_addresses": [
+        "ComputeBudget111111111111111111111111111111",
+        "CroWg74XNDF8UMnAZVbXx49iVj7iJ7b4CsqTCVWF7aK",
+        "system"
+      ],
+      "signature": "6gvoR1FWg1P7Jw7ibz2FUTRL4x5xfKx9yKMNxpEC9moePhFbdzs7KwcR4bsY7tReynTZUTstWw5CtCCf5Q1hTbG",
+      "success": true,
+      "swap_count": 2,
+      "swaps": [
+        {
+          "amount0": 1827591.856892,
+          "amount1": 29.950678287,
+          "decimals0": 6,
+          "decimals1": 9,
+          "dex": "system",
+          "token0": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "token1": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "amount0": 35.157922106,
+          "amount1": 1827591.856892,
+          "decimals0": 9,
+          "decimals1": 6,
+          "dex": "system",
+          "token0": "So11111111111111111111111111111111111111112",
+          "token1": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU"
+        }
+      ],
+      "token_changes": [
+        {
+          "amount": 5.207243819,
+          "decimals": 9,
+          "token_address": "So11111111111111111111111111111111111111112"
+        }
+      ]
+    },
+    {
+      "attacker_signer": "RaVenxw8kykBbW7KGBaBsb7fDkkBYK4uJVDSFun6ZxR",
+      "category": "ARBITRAGE",
+      "compute_units_consumed": 325693,
+      "fee": 17290793,
+      "priority_fee": 17285793,
+      "profitability": {
+        "fees_usd": 2.265093883,
+        "net_profit_usd": 225.88742335600003,
+        "profit_usd": 228.15251723900002
+      },
+      "program_addresses": [
+        "ComputeBudget111111111111111111111111111111",
+        "CroWg74XNDF8UMnAZVbXx49iVj7iJ7b4CsqTCVWF7aK",
+        "system"
+      ],
+      "signature": "4xavPLhDmn3xcykLkwUHd2cd7JEdSCBiLktbU82Qe4nxNPxPVJ3qyku8uNT3XVFz1pMKAijtfTFDe3ALgQ6Mmcon",
+      "success": true,
+      "swap_count": 3,
+      "swaps": [
+        {
+          "amount0": 5109.712847,
+          "amount1": 1.741622269,
+          "decimals0": 6,
+          "decimals1": 9,
+          "dex": "system",
+          "token0": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "token1": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "amount0": 1993415.864692,
+          "amount1": 1993415.864692,
+          "decimals0": 6,
+          "decimals1": 6,
+          "dex": "system",
+          "token0": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "token1": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU"
+        },
+        {
+          "amount0": 39.001865905,
+          "amount1": 37.260243636,
+          "decimals0": 9,
+          "decimals1": 9,
+          "dex": "system",
+          "token0": "So11111111111111111111111111111111111111112",
+          "token1": "So11111111111111111111111111111111111111112"
+        }
+      ],
+      "token_changes": [
+        {
+          "amount": 1.741622269,
+          "decimals": 9,
+          "token_address": "So11111111111111111111111111111111111111112"
+        }
+      ]
+    },
+    {
+      "attacker_signer": "CwHFgfaUd4AiQqc9cGZF6gjnuWQnayDHp7dEam5DAtXf",
+      "category": "ARBITRAGE",
+      "compute_units_consumed": 186872,
+      "fee": 1625976,
+      "priority_fee": 1620976,
+      "profitability": {
+        "fees_usd": 0.213002856,
+        "net_profit_usd": 2.769211882,
+        "profit_usd": 2.982214738
+      },
+      "program_addresses": [
+        "CctXvztEB5nqHsdxu1MWnMjAXs53xJ2KPYMD6xabER4B",
+        "ComputeBudget111111111111111111111111111111",
+        "system"
+      ],
+      "signature": "p171XzDcESADvc3PJzhBrozi6nAGrrbXq17hhuvnxJ1EdWXvPjKRzvbSwkKaxfPkfXiGyrFgXg9HJMsacupj4s8",
+      "success": true,
+      "swap_count": 2,
+      "swaps": [
+        {
+          "amount0": 233366.889489,
+          "amount1": 233366.889489,
+          "decimals0": 6,
+          "decimals1": 6,
+          "dex": "system",
+          "token0": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "token1": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU"
+        },
+        {
+          "amount0": 4.543281468,
+          "amount1": 4.52051647,
+          "decimals0": 9,
+          "decimals1": 9,
+          "dex": "system",
+          "token0": "So11111111111111111111111111111111111111112",
+          "token1": "So11111111111111111111111111111111111111112"
+        }
+      ],
+      "token_changes": [
+        {
+          "amount": 0.022764998,
+          "decimals": 9,
+          "token_address": "So11111111111111111111111111111111111111112"
+        }
+      ]
+    },
+    {
+      "attacker_signer": "K1tChn2NETQd9cCHe1UmUyWP3rDA92gP1dH4nNyEJrx",
+      "category": "ARBITRAGE",
+      "compute_units_consumed": 294037,
+      "fee": 21022,
+      "priority_fee": 16022,
+      "profitability": {
+        "fees_usd": 0.002753882,
+        "net_profit_usd": 8734.505448541,
+        "profit_usd": 8734.508202423
+      },
+      "program_addresses": [
+        "ComputeBudget111111111111111111111111111111",
+        "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
+        "system"
+      ],
+      "signature": "65HvHpxPBwG4RG5fpf87rJWWCUKyAZXNbN6wJRNSncBuSBN3KxoYknwWzLw3x3BdsASZy65S2K2AHgy3iAq2dRPw",
+      "success": true,
+      "swap_count": 2,
+      "swaps": [
+        {
+          "amount0": 1.151409,
+          "amount1": 3779279.727863,
+          "decimals0": 6,
+          "decimals1": 6,
+          "dex": "system",
+          "token0": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+          "token1": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU"
+        },
+        {
+          "amount0": 66.685635133,
+          "amount1": 1.151409,
+          "decimals0": 9,
+          "decimals1": 6,
+          "dex": "system",
+          "token0": "So11111111111111111111111111111111111111112",
+          "token1": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R"
+        },
+        {
+          "amount0": 3779279.727863,
+          "amount1": 66.675635133,
+          "decimals0": 6,
+          "decimals1": 9,
+          "dex": "system",
+          "token0": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "token1": "So11111111111111111111111111111111111111112"
+        }
+      ],
+      "token_changes": [
+        {
+          "amount": 66.675635133,
+          "decimals": 9,
+          "token_address": "So11111111111111111111111111111111111111112"
+        }
+      ]
+    },
+    {
+      "attacker_signer": "CQwT1byuHgjKnL6vzmuNaAywKfDBVxDmFVgsQDBWxcWt",
+      "category": "ARBITRAGE",
+      "compute_units_consumed": 183012,
+      "fee": 613813,
+      "priority_fee": 608813,
+      "profitability": {
+        "fees_usd": 0.08040950300000001,
+        "net_profit_usd": 27.329457503000004,
+        "profit_usd": 27.409867006000002
+      },
+      "program_addresses": [
+        "2A6m4MBgk3xL6a8SBMdKmAmFc85tTLh4Ds6wy7dBxBxb",
+        "ComputeBudget111111111111111111111111111111",
+        "spl-associated-token-account",
+        "system"
+      ],
+      "signature": "5PQynpgXaumfx4dNqhFL4afzRcU98Z2qsMdrDujQP8U8L5FdFs1sF3vEH2VURkKftiWPZG6HvvwAnaMXcPrQjGFd",
+      "success": true,
+      "swap_count": 2,
+      "swaps": [
+        {
+          "amount0": 57644.372191,
+          "amount1": 0.870167298,
+          "decimals0": 6,
+          "decimals1": 9,
+          "dex": "system",
+          "token0": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "token1": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "amount0": 1.079402924,
+          "amount1": 0.209235626,
+          "decimals0": 9,
+          "decimals1": 9,
+          "dex": "system",
+          "token0": "So11111111111111111111111111111111111111112",
+          "token1": "So11111111111111111111111111111111111111112"
+        }
+      ],
+      "token_changes": [
+        {
+          "amount": 0.209235626,
+          "decimals": 9,
+          "token_address": "So11111111111111111111111111111111111111112"
+        }
+      ]
+    },
+    {
+      "attacker_signer": "2QfBNK2WDwSLoUQRb1zAnp3KM12N9hQ8q6ApwUMnWW2T",
+      "category": "ARBITRAGE",
+      "compute_units_consumed": 349472,
+      "fee": 85240,
+      "priority_fee": 80240,
+      "profitability": {
+        "fees_usd": 0.01116644,
+        "net_profit_usd": 4.102117491,
+        "profit_usd": 4.113283931
+      },
+      "program_addresses": [
+        "ComputeBudget111111111111111111111111111111",
+        "sattCHvHkM4XHLyadnU4KQtuNWZbWVDKzuPhmJBXCkq",
+        "system"
+      ],
+      "signature": "4hT9ARq82FH8Sk5CrVzWS66Zve4bcK8rXSSAtFoWuepVf7vNrnSpmsFzcZRLcQD8cUdkAE69FdFtuPrpLiSeHA82",
+      "success": true,
+      "swap_count": 2,
+      "swaps": [
+        {
+          "amount0": 0.278523549,
+          "amount1": 0.0313452,
+          "decimals0": 9,
+          "decimals1": 9,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "So11111111111111111111111111111111111111112",
+          "token1": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "amount0": 16169.281393,
+          "amount1": 16166.564958,
+          "decimals0": 6,
+          "decimals1": 6,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "token1": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU"
+        }
+      ],
+      "token_changes": [
+        {
+          "amount": 0.0313452,
+          "decimals": 9,
+          "token_address": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "amount": 2.716435,
+          "decimals": 6,
+          "token_address": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU"
+        }
+      ]
+    },
+    {
+      "attacker_signer": "2QfBNK2WDwSLoUQRb1zAnp3KM12N9hQ8q6ApwUMnWW2T",
+      "category": "ARBITRAGE",
+      "compute_units_consumed": 463731,
+      "fee": 95000,
+      "priority_fee": 90000,
+      "profitability": {
+        "fees_usd": 0.012445000000000001,
+        "net_profit_usd": 137.74479472439998,
+        "profit_usd": 137.7572397244
+      },
+      "program_addresses": [
+        "ComputeBudget111111111111111111111111111111",
+        "sattCHvHkM4XHLyadnU4KQtuNWZbWVDKzuPhmJBXCkq",
+        "system"
+      ],
+      "signature": "4BmnxMAJUeBPu5bwvdcg1terdxYPS4MutNeumNrzEtwBhy9DEDwxyTLWCvYkhpim73Mxv46iK4sThQRaPECB6MpC",
+      "success": true,
+      "swap_count": 2,
+      "swaps": [
+        {
+          "amount0": 5.512833238,
+          "amount1": 16.120539,
+          "decimals0": 9,
+          "decimals1": 6,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "So11111111111111111111111111111111111111112",
+          "token1": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU"
+        },
+        {
+          "amount0": 283879.319996,
+          "amount1": 283863.199457,
+          "decimals0": 6,
+          "decimals1": 6,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "token1": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU"
+        }
+      ],
+      "token_changes": [
+        {
+          "amount": 16.120539,
+          "decimals": 6,
+          "token_address": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU"
+        },
+        {
+          "amount": 1.051262033,
+          "decimals": 9,
+          "token_address": "So11111111111111111111111111111111111111112"
+        }
+      ]
+    },
+    {
+      "attacker_signer": "2QfBNK2WDwSLoUQRb1zAnp3KM12N9hQ8q6ApwUMnWW2T",
+      "category": "ARBITRAGE",
+      "compute_units_consumed": 458778,
+      "fee": 108600,
+      "priority_fee": 103600,
+      "profitability": {
+        "fees_usd": 0.014226599999999999,
+        "net_profit_usd": 42.2588544268,
+        "profit_usd": 42.2730810268
+      },
+      "program_addresses": [
+        "ComputeBudget111111111111111111111111111111",
+        "sattCHvHkM4XHLyadnU4KQtuNWZbWVDKzuPhmJBXCkq",
+        "system"
+      ],
+      "signature": "5Shyxs3AovVyJuoozSTdesEMCeGa2Lcrx96VSRxqviuGFzrpNJoRDyqWfPsE8B3WFVw98p6HkGvpkcBAVrKu8n4s",
+      "success": true,
+      "swap_count": 2,
+      "swaps": [
+        {
+          "amount0": 5.151762243,
+          "amount1": 57.013468,
+          "decimals0": 9,
+          "decimals1": 6,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "So11111111111111111111111111111111111111112",
+          "token1": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU"
+        },
+        {
+          "amount0": 293761.246133,
+          "amount1": 4.830198533,
+          "decimals0": 6,
+          "decimals1": 9,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "token1": "So11111111111111111111111111111111111111112"
+        }
+      ],
+      "token_changes": [
+        {
+          "amount": 57.013468,
+          "decimals": 6,
+          "token_address": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU"
+        },
+        {
+          "amount": 0.32156371,
+          "decimals": 9,
+          "token_address": "So11111111111111111111111111111111111111112"
+        }
+      ]
+    },
+    {
+      "attacker_signer": "3nMNd89AxwHUa1AFvQGqohRkxFEQsTsgiEyEyqXFHyyH",
+      "category": "ARBITRAGE",
+      "compute_units_consumed": 332708,
+      "fee": 5000,
+      "priority_fee": 0,
+      "profitability": {
+        "fees_usd": 0.0006550000000000001,
+        "net_profit_usd": 0.0023188309999999995,
+        "profit_usd": 0.0029738309999999997
+      },
+      "program_addresses": [
+        "9Zzf9QqTy3TkyXysvJBsXyuRjda5aXCEJ9vXfL2HKSYv",
+        "ComputeBudget111111111111111111111111111111",
+        "system"
+      ],
+      "signature": "H5HecxYLMpVnzoiJ1ecHEwcvkKTVSndZ3dpJ1gSnqBxC5VpYfyzWK22c3vK4P4K5SFWogYgezymg8bxvJyPBAqu",
+      "success": true,
+      "swap_count": 5,
+      "swaps": [
+        {
+          "amount0": 24152.22132075,
+          "amount1": 24152.22132075,
+          "decimals0": 8,
+          "decimals1": 8,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "26s3UGB9hund1qspApy1zYgCritxAooGg7o63BMn89Yq",
+          "token1": "26s3UGB9hund1qspApy1zYgCritxAooGg7o63BMn89Yq"
+        },
+        {
+          "amount0": 160.93411,
+          "amount1": 2821401597.79609,
+          "decimals0": 6,
+          "decimals1": 5,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "CB9dDufT3ZuQXqqSfa1c5kY935TEreyBw9XJXxHKpump",
+          "token1": "8FA3TPf84h9gEZAxDhiLkMN4vvZcdEUZxmGadbo12auh"
+        },
+        {
+          "amount0": 2821401597.79609,
+          "amount1": 0.008092496,
+          "decimals0": 5,
+          "decimals1": 9,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "8FA3TPf84h9gEZAxDhiLkMN4vvZcdEUZxmGadbo12auh",
+          "token1": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "amount0": 23.70058023,
+          "amount1": 0.000022701,
+          "decimals0": 8,
+          "decimals1": 9,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "CTgiaZUK12kCcB8sosn4Nt2NZtzLgtPqDwyQyr2syATC",
+          "token1": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "amount0": 0.008115197,
+          "amount1": 160.93411,
+          "decimals0": 9,
+          "decimals1": 6,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "So11111111111111111111111111111111111111112",
+          "token1": "CB9dDufT3ZuQXqqSfa1c5kY935TEreyBw9XJXxHKpump"
+        }
+      ],
+      "token_changes": [
+        {
+          "amount": 0.000022701,
+          "decimals": 9,
+          "token_address": "So11111111111111111111111111111111111111112"
+        }
+      ]
+    },
+    {
+      "attacker_signer": "HxjwdF326ZunmUwC1iXhfgL3ku78YsksN6n7Rfxzwr6b",
+      "category": "ARBITRAGE",
+      "compute_units_consumed": 284541,
+      "fee": 69128000,
+      "priority_fee": 69123000,
+      "profitability": {
+        "fees_usd": 9.055767999999999,
+        "net_profit_usd": 818.9496950868001,
+        "profit_usd": 828.0054630868001
+      },
+      "program_addresses": [
+        "9GCBb4NsSDRuEkkGfQkN37oppmMVPops5sXDWhAKAvQQ",
+        "ComputeBudget111111111111111111111111111111",
+        "system"
+      ],
+      "signature": "3UUa9VWV6AsAAtGL1iTb4YtkGWbCH3QG6QtEawVssfTdWgPHQccCd6JQ8yhXCEbt9JCitK7RhEJBkuBxzxS8omnZ",
+      "success": true,
+      "swap_count": 3,
+      "swaps": [
+        {
+          "amount0": 0.003445006,
+          "amount1": 827.900149,
+          "decimals0": 9,
+          "decimals1": 6,
+          "dex": "system",
+          "token0": "So11111111111111111111111111111111111111112",
+          "token1": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+        },
+        {
+          "amount0": 0.396661,
+          "amount1": 40.505418,
+          "decimals0": 6,
+          "decimals1": 6,
+          "dex": "system",
+          "token0": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+          "token1": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU"
+        },
+        {
+          "amount0": 343819.416558,
+          "amount1": 0.396661,
+          "decimals0": 6,
+          "decimals1": 6,
+          "dex": "system",
+          "token0": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "token1": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R"
+        },
+        {
+          "amount0": 828.351333,
+          "amount1": 0.003445006,
+          "decimals0": 6,
+          "decimals1": 9,
+          "dex": "system",
+          "token0": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "token1": "So11111111111111111111111111111111111111112"
+        }
+      ],
+      "token_changes": [
+        {
+          "amount": 40.505418,
+          "decimals": 6,
+          "token_address": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU"
+        },
+        {
+          "amount": 827.900149,
+          "decimals": 6,
+          "token_address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+        }
+      ]
+    },
+    {
+      "attacker_signer": "HxjwdF326ZunmUwC1iXhfgL3ku78YsksN6n7Rfxzwr6b",
+      "category": "ARBITRAGE",
+      "compute_units_consumed": 208968,
+      "fee": 9879715,
+      "priority_fee": 9874715,
+      "profitability": {
+        "fees_usd": 1.294242665,
+        "net_profit_usd": 393.73104132619994,
+        "profit_usd": 395.02528399119996
+      },
+      "program_addresses": [
+        "9GCBb4NsSDRuEkkGfQkN37oppmMVPops5sXDWhAKAvQQ",
+        "ComputeBudget111111111111111111111111111111",
+        "system"
+      ],
+      "signature": "63sk4dPmYQd1vfwqjBjPoYn7xaXYKq2kp9QX7SAxVkfTuvtuqL4ZpD9Kz9uXYkhTPAjoLL4soAWaV38wHS8757oa",
+      "success": true,
+      "swap_count": 2,
+      "swaps": [
+        {
+          "amount0": 170378.104927,
+          "amount1": 0.395682,
+          "decimals0": 6,
+          "decimals1": 6,
+          "dex": "system",
+          "token0": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "token1": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R"
+        },
+        {
+          "amount0": 0.003445003,
+          "amount1": 0.451184,
+          "decimals0": 9,
+          "decimals1": 6,
+          "dex": "system",
+          "token0": "So11111111111111111111111111111111111111112",
+          "token1": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+        },
+        {
+          "amount0": 0.395682,
+          "amount1": 170358.000315,
+          "decimals0": 6,
+          "decimals1": 6,
+          "dex": "system",
+          "token0": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+          "token1": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU"
+        },
+        {
+          "amount0": 395.424196,
+          "amount1": 0.003445003,
+          "decimals0": 6,
+          "decimals1": 9,
+          "dex": "system",
+          "token0": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "token1": "So11111111111111111111111111111111111111112"
+        }
+      ],
+      "token_changes": [
+        {
+          "amount": 394.973012,
+          "decimals": 6,
+          "token_address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+        },
+        {
+          "amount": 20.104612,
+          "decimals": 6,
+          "token_address": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU"
+        }
+      ]
+    },
+    {
+      "attacker_signer": "bobCPc5nqVoX7r8gKzCMPLrKjFidjnSCrAdcYGCH2Ye",
+      "category": "ARBITRAGE",
+      "compute_units_consumed": 147918,
+      "fee": 305000,
+      "priority_fee": 300000,
+      "profitability": {
+        "fees_usd": 0.039955,
+        "net_profit_usd": 62.98851,
+        "profit_usd": 63.028465
+      },
+      "program_addresses": [
+        "ComputeBudget111111111111111111111111111111",
+        "Evo1veLzNhWcEXFc4xv9nwoDg4MBoyo2N2j6nWWHQF69"
+      ],
+      "signature": "61EvGy3TjPZ5N8Rdqbhd17Jj1DBuM6u95iSDiC77SUPuB3Yrs1RMfA48iJLHuCG3pwCoRcRmTAHgVkMjFsGH7SWX",
+      "success": true,
+      "swap_count": 2,
+      "swaps": [
+        {
+          "amount0": 63.104184,
+          "amount1": 0.075719,
+          "decimals0": 6,
+          "decimals1": 6,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "token1": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+        },
+        {
+          "amount0": 24144.046022,
+          "amount1": 63.028465,
+          "decimals0": 6,
+          "decimals1": 6,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "token1": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+        },
+        {
+          "amount0": 0.06644,
+          "amount1": 4.7e-7,
+          "decimals0": 6,
+          "decimals1": 8,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+          "token1": "2ojCALzjaVo47FeWcFUWDWFZLLMr1cMAfAe4Skzq5i7C"
+        }
+      ],
+      "token_changes": [
+        {
+          "amount": 63.028465,
+          "decimals": 6,
+          "token_address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+        }
+      ]
+    },
+    {
+      "attacker_signer": "HxjwdF326ZunmUwC1iXhfgL3ku78YsksN6n7Rfxzwr6b",
+      "category": "ARBITRAGE",
+      "compute_units_consumed": 448357,
+      "fee": 3708108,
+      "priority_fee": 3703108,
+      "profitability": {
+        "fees_usd": 0.485762148,
+        "net_profit_usd": 24.5532199632,
+        "profit_usd": 25.0389821112
+      },
+      "program_addresses": [
+        "9GCBb4NsSDRuEkkGfQkN37oppmMVPops5sXDWhAKAvQQ",
+        "ComputeBudget111111111111111111111111111111",
+        "system"
+      ],
+      "signature": "4DpGrvU6gTjk2rviMpQM9LLCxW1Uaz2EMNDJzX2fKDhPNEjKfdCxDiMr3FaU6FCKiRnjQfqrrqjwEERQvqQS78Rx",
+      "success": true,
+      "swap_count": 4,
+      "swaps": [
+        {
+          "amount0": 1151.494237,
+          "amount1": 2.88812768,
+          "decimals0": 6,
+          "decimals1": 9,
+          "dex": "system",
+          "token0": "METvsvVRapdj9cFLzq4Tr43xK4tAjQfwX76z3n6mWQL",
+          "token1": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "amount0": 403.367392,
+          "amount1": 403.367392,
+          "decimals0": 6,
+          "decimals1": 6,
+          "dex": "system",
+          "token0": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "token1": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+        },
+        {
+          "amount0": 170067.070326,
+          "amount1": 0.023173,
+          "decimals0": 6,
+          "decimals1": 6,
+          "dex": "system",
+          "token0": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "token1": "METvsvVRapdj9cFLzq4Tr43xK4tAjQfwX76z3n6mWQL"
+        },
+        {
+          "amount0": 3.078814899,
+          "amount1": 0.190687219,
+          "decimals0": 9,
+          "decimals1": 9,
+          "dex": "system",
+          "token0": "So11111111111111111111111111111111111111112",
+          "token1": "So11111111111111111111111111111111111111112"
+        }
+      ],
+      "token_changes": [
+        {
+          "amount": 22.675547,
+          "decimals": 6,
+          "token_address": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU"
+        },
+        {
+          "amount": 0.190687219,
+          "decimals": 9,
+          "token_address": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "amount": 0.023173,
+          "decimals": 6,
+          "token_address": "METvsvVRapdj9cFLzq4Tr43xK4tAjQfwX76z3n6mWQL"
+        }
+      ]
+    },
+    {
+      "attacker_signer": "bobCPc5nqVoX7r8gKzCMPLrKjFidjnSCrAdcYGCH2Ye",
+      "category": "ARBITRAGE",
+      "compute_units_consumed": 202377,
+      "fee": 305000,
+      "priority_fee": 300000,
+      "profitability": {
+        "fees_usd": 0.039955,
+        "net_profit_usd": 74.57950699999999,
+        "profit_usd": 74.619462
+      },
+      "program_addresses": [
+        "ComputeBudget111111111111111111111111111111",
+        "Evo1veLzNhWcEXFc4xv9nwoDg4MBoyo2N2j6nWWHQF69"
+      ],
+      "signature": "3KtvJt59gUepuHVsmDj8xhRQNu9EqNBEwPwMHBdjVqjZCGRG9vVQGwqNEsWJKPjpRHX3Uc5XJsKMRNYNgwybAVaV",
+      "success": true,
+      "swap_count": 3,
+      "swaps": [
+        {
+          "amount0": 7.805517484,
+          "amount1": 1022.65625,
+          "decimals0": 9,
+          "decimals1": 6,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "So11111111111111111111111111111111111111112",
+          "token1": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+        },
+        {
+          "amount0": 444081.656698,
+          "amount1": 444081.656698,
+          "decimals0": 6,
+          "decimals1": 6,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "token1": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU"
+        },
+        {
+          "amount0": 1097.275712,
+          "amount1": 7.805517484,
+          "decimals0": 6,
+          "decimals1": 9,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "token1": "So11111111111111111111111111111111111111112"
+        }
+      ],
+      "token_changes": [
+        {
+          "amount": 74.619462,
+          "decimals": 6,
+          "token_address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+        }
+      ]
+    },
+    {
+      "attacker_signer": "2QfBNK2WDwSLoUQRb1zAnp3KM12N9hQ8q6ApwUMnWW2T",
+      "category": "ARBITRAGE",
+      "compute_units_consumed": 444389,
+      "fee": 98760,
+      "priority_fee": 93760,
+      "profitability": {
+        "fees_usd": 0.012937559999999999,
+        "net_profit_usd": 10.867176788,
+        "profit_usd": 10.880114348
+      },
+      "program_addresses": [
+        "ComputeBudget111111111111111111111111111111",
+        "sattCHvHkM4XHLyadnU4KQtuNWZbWVDKzuPhmJBXCkq",
+        "system"
+      ],
+      "signature": "3wPJw1wRfHpmVHSn3xgtdLUaaqhH7xfUpago9XcqseYnvs69EdRgn52bh5KRUcuRT2tKhw7UVvEAVGa1oASDMmPN",
+      "success": true,
+      "swap_count": 2,
+      "swaps": [
+        {
+          "amount0": 2.310008366,
+          "amount1": 124252.704662,
+          "decimals0": 9,
+          "decimals1": 6,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "So11111111111111111111111111111111111111112",
+          "token1": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU"
+        },
+        {
+          "amount0": 124252.704662,
+          "amount1": 2.226954058,
+          "decimals0": 6,
+          "decimals1": 9,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "token1": "So11111111111111111111111111111111111111112"
+        }
+      ],
+      "token_changes": [
+        {
+          "amount": 0.083054308,
+          "decimals": 9,
+          "token_address": "So11111111111111111111111111111111111111112"
+        }
+      ]
+    },
+    {
+      "attacker_signer": "K1tChn2NETQd9cCHe1UmUyWP3rDA92gP1dH4nNyEJrx",
+      "category": "ARBITRAGE",
+      "compute_units_consumed": 167552,
+      "fee": 24352,
+      "priority_fee": 19352,
+      "profitability": {
+        "fees_usd": 0.003190112,
+        "net_profit_usd": 0.178527717,
+        "profit_usd": 0.181717829
+      },
+      "program_addresses": [
+        "ComputeBudget111111111111111111111111111111",
+        "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
+        "system"
+      ],
+      "signature": "2DkfuJzb9yzv9LpUiHqNS4hgEsiPGCmSUa9shGLSy784Yh5ki8dPduy6zYCKy2L489j56w2m86umL5wiEiCRZVNx",
+      "success": true,
+      "swap_count": 2,
+      "swaps": [
+        {
+          "amount0": 0.016387159,
+          "amount1": 0.015,
+          "decimals0": 9,
+          "decimals1": 9,
+          "dex": "system",
+          "token0": "So11111111111111111111111111111111111111112",
+          "token1": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "amount0": 1.727113,
+          "amount1": 930.518574,
+          "decimals0": 6,
+          "decimals1": 6,
+          "dex": "system",
+          "token0": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+          "token1": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU"
+        },
+        {
+          "amount0": 930.518574,
+          "amount1": 0.001387159,
+          "decimals0": 6,
+          "decimals1": 9,
+          "dex": "system",
+          "token0": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "token1": "So11111111111111111111111111111111111111112"
+        }
+      ],
+      "token_changes": [
+        {
+          "amount": 0.001387159,
+          "decimals": 9,
+          "token_address": "So11111111111111111111111111111111111111112"
+        }
+      ]
+    },
+    {
+      "attacker_signer": "K1tChn2NETQd9cCHe1UmUyWP3rDA92gP1dH4nNyEJrx",
+      "category": "ARBITRAGE",
+      "compute_units_consumed": 167307,
+      "fee": 24352,
+      "priority_fee": 19352,
+      "profitability": {
+        "fees_usd": 0.003190112,
+        "net_profit_usd": 0.084357712,
+        "profit_usd": 0.087547824
+      },
+      "program_addresses": [
+        "ComputeBudget111111111111111111111111111111",
+        "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
+        "system"
+      ],
+      "signature": "yyztSNEkaFVDhe3m3DrqryiCQ6Zq12WVG1sqAMsdD5w4ZRqMkuZ6t4e1RCAJLKBAQtxyqyp1VyAQaZh3r1BNgiN",
+      "success": true,
+      "swap_count": 2,
+      "swaps": [
+        {
+          "amount0": 1.727112,
+          "amount1": 0.000668304,
+          "decimals0": 6,
+          "decimals1": 9,
+          "dex": "system",
+          "token0": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+          "token1": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "amount0": 889.730324,
+          "amount1": 889.730324,
+          "decimals0": 6,
+          "decimals1": 6,
+          "dex": "system",
+          "token0": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "token1": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU"
+        },
+        {
+          "amount0": 0.015668304,
+          "amount1": 0.015,
+          "decimals0": 9,
+          "decimals1": 9,
+          "dex": "system",
+          "token0": "So11111111111111111111111111111111111111112",
+          "token1": "So11111111111111111111111111111111111111112"
+        }
+      ],
+      "token_changes": [
+        {
+          "amount": 0.000668304,
+          "decimals": 9,
+          "token_address": "So11111111111111111111111111111111111111112"
+        }
+      ]
+    },
+    {
+      "attacker_signer": "7dGrdJRYtsNR8UYxZ3TnifXGjGc9eRYLq9sELwYpuuUu",
+      "category": "ARBITRAGE",
+      "compute_units_consumed": 345686,
+      "fee": 5150,
+      "priority_fee": 150,
+      "profitability": {
+        "fees_usd": 0.00067465,
+        "net_profit_usd": 2.6352447374000003,
+        "profit_usd": 2.6359193874000004
+      },
+      "program_addresses": [
+        "ComputeBudget111111111111111111111111111111",
+        "King7ki4SKMBPb3iupnQwTyjsq294jaXsgLmJo8cb7T"
+      ],
+      "signature": "2RU86y7KFyEVvqyXMiFbyfpVv1Mpbt3fNkuXvMfRf1Zedo61L3mUyefYFaohAahnfJgmD2uFPXDAMnCxL3KERoMu",
+      "success": true,
+      "swap_count": 2,
+      "swaps": [
+        {
+          "amount0": 1.021278545,
+          "amount1": 0.019986954,
+          "decimals0": 9,
+          "decimals1": 9,
+          "dex": "King7ki4SKMBPb3iupnQwTyjsq294jaXsgLmJo8cb7T",
+          "token0": "So11111111111111111111111111111111111111112",
+          "token1": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "amount0": 55877.592564,
+          "amount1": 1.001291591,
+          "decimals0": 6,
+          "decimals1": 9,
+          "dex": "King7ki4SKMBPb3iupnQwTyjsq294jaXsgLmJo8cb7T",
+          "token0": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "token1": "So11111111111111111111111111111111111111112"
+        }
+      ],
+      "token_changes": [
+        {
+          "amount": 0.019986954,
+          "decimals": 9,
+          "token_address": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "amount": 6.780159,
+          "decimals": 6,
+          "token_address": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU"
+        }
+      ]
+    },
+    {
+      "attacker_signer": "7dGrdJRYtsNR8UYxZ3TnifXGjGc9eRYLq9sELwYpuuUu",
+      "category": "ARBITRAGE",
+      "compute_units_consumed": 280428,
+      "fee": 5150,
+      "priority_fee": 150,
+      "profitability": {
+        "fees_usd": 0.00067465,
+        "net_profit_usd": 0.31967799799999996,
+        "profit_usd": 0.32035264799999996
+      },
+      "program_addresses": [
+        "ComputeBudget111111111111111111111111111111",
+        "King7ki4SKMBPb3iupnQwTyjsq294jaXsgLmJo8cb7T"
+      ],
+      "signature": "rwwKtgtp6GMcv4duhHUZez154rZz95VdBMfRxuxR7cRTPBKVS1J9WYn35ZBKzPManZnPiQeKTyZHF454L7c3TkT",
+      "success": true,
+      "swap_count": 2,
+      "swaps": [
+        {
+          "amount0": 11222.795923,
+          "amount1": 0.19904332,
+          "decimals0": 6,
+          "decimals1": 9,
+          "dex": "King7ki4SKMBPb3iupnQwTyjsq294jaXsgLmJo8cb7T",
+          "token0": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+          "token1": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "amount0": 0.201455293,
+          "amount1": 1.686225,
+          "decimals0": 9,
+          "decimals1": 6,
+          "dex": "King7ki4SKMBPb3iupnQwTyjsq294jaXsgLmJo8cb7T",
+          "token0": "So11111111111111111111111111111111111111112",
+          "token1": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU"
+        }
+      ],
+      "token_changes": [
+        {
+          "amount": 0.002411973,
+          "decimals": 9,
+          "token_address": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "amount": 1.686225,
+          "decimals": 6,
+          "token_address": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU"
+        }
+      ]
+    },
+    {
+      "attacker_signer": "3nMNd89AxwHUa1AFvQGqohRkxFEQsTsgiEyEyqXFHyyH",
+      "category": "ARBITRAGE",
+      "compute_units_consumed": 479420,
+      "fee": 5000,
+      "priority_fee": 0,
+      "profitability": {
+        "fees_usd": 0.0006550000000000001,
+        "net_profit_usd": 0.004497,
+        "profit_usd": 0.005152
+      },
+      "program_addresses": [
+        "9Zzf9QqTy3TkyXysvJBsXyuRjda5aXCEJ9vXfL2HKSYv",
+        "ComputeBudget111111111111111111111111111111",
+        "system"
+      ],
+      "signature": "KkYBoGbhkDChQTB2Cqh91nEaS5u93BzqhRzr7WJWgHGHXHuCw8m1hYiduhBurVonnjhMxkt2aaQJGbTgC3jaUc3",
+      "success": true,
+      "swap_count": 6,
+      "swaps": [
+        {
+          "amount0": 0.07426736,
+          "amount1": 0.07426736,
+          "decimals0": 8,
+          "decimals1": 8,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "XsvNBAYkrDRNhA7wPHQfX3ZUXZyZLdnCQDfHZ56bzpg",
+          "token1": "XsvNBAYkrDRNhA7wPHQfX3ZUXZyZLdnCQDfHZ56bzpg"
+        },
+        {
+          "amount0": 191840.94826277,
+          "amount1": 191076.07330287,
+          "decimals0": 8,
+          "decimals1": 8,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "26s3UGB9hund1qspApy1zYgCritxAooGg7o63BMn89Yq",
+          "token1": "26s3UGB9hund1qspApy1zYgCritxAooGg7o63BMn89Yq"
+        },
+        {
+          "amount0": 8.479508,
+          "amount1": 764.8749599,
+          "decimals0": 6,
+          "decimals1": 8,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "token1": "26s3UGB9hund1qspApy1zYgCritxAooGg7o63BMn89Yq"
+        },
+        {
+          "amount0": 35.462224,
+          "amount1": 0.005152,
+          "decimals0": 6,
+          "decimals1": 6,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump",
+          "token1": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+        }
+      ],
+      "token_changes": [
+        {
+          "amount": 0.005152,
+          "decimals": 6,
+          "token_address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+        }
+      ]
+    },
+    {
+      "attacker_signer": "3rnVJzSEcV1wnStkX15qS5pX43U4ENHv2me6LwEjp9bc",
+      "category": "ARBITRAGE",
+      "compute_units_consumed": 367095,
+      "fee": 5000,
+      "priority_fee": 0,
+      "profitability": {
+        "fees_usd": 0.0006550000000000001,
+        "net_profit_usd": 0.026257902,
+        "profit_usd": 0.026912902
+      },
+      "program_addresses": [
+        "ComputeBudget111111111111111111111111111111",
+        "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
+        "spl-associated-token-account",
+        "system"
+      ],
+      "signature": "5kJNjbhbWqwDGSUVMrUNbcHWy1FSSuBY5MYEhHLGPDVEEr3ZJ9abZAis2qgXTcF9A8sFv2NszjYYdcSmG4jS6LeZ",
+      "success": true,
+      "swap_count": 4,
+      "swaps": [
+        {
+          "amount0": 0.066805442,
+          "amount1": 193.09836382,
+          "decimals0": 9,
+          "decimals1": 8,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "So11111111111111111111111111111111111111112",
+          "token1": "CTgiaZUK12kCcB8sosn4Nt2NZtzLgtPqDwyQyr2syATC"
+        },
+        {
+          "amount0": 8.749843,
+          "amount1": 197092.73558186,
+          "decimals0": 6,
+          "decimals1": 8,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "token1": "26s3UGB9hund1qspApy1zYgCritxAooGg7o63BMn89Yq"
+        },
+        {
+          "amount0": 197092.73558186,
+          "amount1": 87.146340887,
+          "decimals0": 8,
+          "decimals1": 9,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "26s3UGB9hund1qspApy1zYgCritxAooGg7o63BMn89Yq",
+          "token1": "7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr"
+        },
+        {
+          "amount0": 87.146340887,
+          "amount1": 0.000205442,
+          "decimals0": 9,
+          "decimals1": 9,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr",
+          "token1": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "amount0": 193.09836382,
+          "amount1": 0.0666,
+          "decimals0": 8,
+          "decimals1": 9,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "CTgiaZUK12kCcB8sosn4Nt2NZtzLgtPqDwyQyr2syATC",
+          "token1": "So11111111111111111111111111111111111111112"
+        }
+      ],
+      "token_changes": [
+        {
+          "amount": 0.000205442,
+          "decimals": 9,
+          "token_address": "So11111111111111111111111111111111111111112"
+        }
+      ]
+    },
+    {
+      "attacker_signer": "3nMNd89AxwHUa1AFvQGqohRkxFEQsTsgiEyEyqXFHyyH",
+      "category": "ARBITRAGE",
+      "compute_units_consumed": 283484,
+      "fee": 5000,
+      "priority_fee": 0,
+      "profitability": {
+        "fees_usd": 0.0006550000000000001,
+        "net_profit_usd": 0.004300206,
+        "profit_usd": 0.004955206
+      },
+      "program_addresses": [
+        "9Zzf9QqTy3TkyXysvJBsXyuRjda5aXCEJ9vXfL2HKSYv",
+        "ComputeBudget111111111111111111111111111111",
+        "system"
+      ],
+      "signature": "4yYZkrtL7BmzwdsLebZc7NLjKZTkapNhxg8x3y5qtgYyW7p7wYs2Lxj25g5h8qzFWw5B1cMqoanHgcGwgtyRhGz4",
+      "success": true,
+      "swap_count": 4,
+      "swaps": [
+        {
+          "amount0": 752.068322,
+          "amount1": 0.008092496,
+          "decimals0": 6,
+          "decimals1": 9,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "7XJiwLDrjzxDYdZipnJXzpr1iDTmK55XixSFAa7JgNEL",
+          "token1": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "amount0": 160.769118,
+          "amount1": 24102.52230343,
+          "decimals0": 6,
+          "decimals1": 8,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "CB9dDufT3ZuQXqqSfa1c5kY935TEreyBw9XJXxHKpump",
+          "token1": "26s3UGB9hund1qspApy1zYgCritxAooGg7o63BMn89Yq"
+        },
+        {
+          "amount0": 0.008130322,
+          "amount1": 2819171616.57214,
+          "decimals0": 9,
+          "decimals1": 5,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "So11111111111111111111111111111111111111112",
+          "token1": "8FA3TPf84h9gEZAxDhiLkMN4vvZcdEUZxmGadbo12auh"
+        },
+        {
+          "amount0": 24102.52230343,
+          "amount1": 752.068322,
+          "decimals0": 8,
+          "decimals1": 6,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "26s3UGB9hund1qspApy1zYgCritxAooGg7o63BMn89Yq",
+          "token1": "7XJiwLDrjzxDYdZipnJXzpr1iDTmK55XixSFAa7JgNEL"
+        },
+        {
+          "amount0": 2819171616.57214,
+          "amount1": 160.769118,
+          "decimals0": 5,
+          "decimals1": 6,
+          "dex": "ComputeBudget111111111111111111111111111111",
+          "token0": "8FA3TPf84h9gEZAxDhiLkMN4vvZcdEUZxmGadbo12auh",
+          "token1": "CB9dDufT3ZuQXqqSfa1c5kY935TEreyBw9XJXxHKpump"
+        }
+      ],
+      "token_changes": [
+        {
+          "amount": 0.000037826,
+          "decimals": 9,
+          "token_address": "So11111111111111111111111111111111111111112"
+        }
+      ]
+    }
+  ],
+  "sandwich_attacks": [
+    {
+      "attacker": "RaVenxw8kykBbW7KGBaBsb7fDkkBYK4uJVDSFun6ZxR",
+      "back_run": {
+        "compute_units": 368616,
+        "fee": 2081682,
+        "index": 748,
+        "signature": "6gvoR1FWg1P7Jw7ibz2FUTRL4x5xfKx9yKMNxpEC9moePhFbdzs7KwcR4bsY7tReynTZUTstWw5CtCCf5Q1hTbG",
+        "signer": "RaVenxw8kykBbW7KGBaBsb7fDkkBYK4uJVDSFun6ZxR"
+      },
+      "front_run": {
+        "compute_units": 128854,
+        "fee": 4506950,
+        "index": 746,
+        "signature": "5sKCnzzdhBrX4qYLMa66eEKefnXjxgZ7MPwc7fB34xbHb2F7Qu2SNAS465VBnRHce5PubVmqjMphPAoDq4VcbJbj",
+        "signer": "RaVenxw8kykBbW7KGBaBsb7fDkkBYK4uJVDSFun6ZxR"
+      },
+      "slot": 381165825,
+      "total_compute_units": 509755,
+      "total_fees": 6598996,
+      "victim": {
+        "compute_units": 12285,
+        "fee": 10364,
+        "index": 747,
+        "signature": "59uDahHQU7b2E9zLx6qzpeTadSoXfv6Tz2k3vPSHFk5QP2ZXozgkt9U1F5efkreygGvehUYzbkVeTpFoSi41TAqy",
+        "signer": "6LY1JzAFVZsP2a2xKrtU6znQMQ5h4i7tocWdgrkZzkzF"
+      },
+      "victim_signature": "59uDahHQU7b2E9zLx6qzpeTadSoXfv6Tz2k3vPSHFk5QP2ZXozgkt9U1F5efkreygGvehUYzbkVeTpFoSi41TAqy"
+    }
+  ],
+  "slot": 381165825,
+  "timestamp": "2025-11-19 18:42:37 UTC",
+  "total_net_profit_usd": 25906.081724313797,
+  "total_transactions": 1381
+}
