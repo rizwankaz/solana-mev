@@ -45,11 +45,12 @@ impl SwapParser {
         };
 
         let token_map = self.build_token_map(tx);
+        let account_keys = self.get_account_keys(tx);
         let mut swaps = Vec::new();
 
         for inner_set in inner_instructions {
             // Extract swaps with DEX attribution from inner instructions
-            let inner_swaps = self.extract_swaps_from_inner_set(&inner_set.instructions, &token_map);
+            let inner_swaps = self.extract_swaps_from_inner_set(&inner_set.instructions, &token_map, &account_keys);
             swaps.extend(inner_swaps);
         }
 
@@ -57,58 +58,70 @@ impl SwapParser {
     }
 
     /// Extract swaps from an inner instruction set, tracking which program invoked each swap
-    fn extract_swaps_from_inner_set(&self, instructions: &[UiInstruction], token_map: &HashMap<String, (String, u8)>) -> Vec<SwapInfo> {
+    fn extract_swaps_from_inner_set(&self, instructions: &[UiInstruction], token_map: &HashMap<String, (String, u8)>, account_keys: &[String]) -> Vec<SwapInfo> {
         let mut swaps = Vec::new();
         let mut transfers = Vec::new();
         let mut current_dex = String::new();
 
         for inst in instructions {
-            let UiInstruction::Parsed(UiParsedInstruction::Parsed(info)) = inst else {
-                continue;
+            // Extract program ID from this instruction
+            let program_id = self.get_instruction_program_id(inst, account_keys);
+
+            // Check if this is a token program instruction
+            let is_token_program = match inst {
+                UiInstruction::Parsed(UiParsedInstruction::Parsed(info)) => info.program == "spl-token",
+                _ => program_id == "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
             };
 
-            // Track non-token programs as potential DEXes
-            if info.program != "spl-token" {
-                current_dex = info.program.clone();
+            // Track non-token, non-system programs as potential DEXes
+            // Only update current_dex if we have a valid program ID
+            if !is_token_program && !program_id.is_empty() && !self.is_system_program(&program_id) {
+                current_dex = program_id;
+            }
+
+            // Only process token transfer instructions
+            if !is_token_program {
                 continue;
             }
 
-            // Extract token transfers
-            let Some(obj) = info.parsed.as_object() else {
-                continue;
-            };
+            // Extract token transfer data
+            if let UiInstruction::Parsed(UiParsedInstruction::Parsed(info)) = inst {
+                let Some(obj) = info.parsed.as_object() else {
+                    continue;
+                };
 
-            let Some(typ) = obj.get("type").and_then(|v| v.as_str()) else {
-                continue;
-            };
+                let Some(typ) = obj.get("type").and_then(|v| v.as_str()) else {
+                    continue;
+                };
 
-            if typ != "transfer" && typ != "transferChecked" {
-                continue;
-            }
+                if typ != "transfer" && typ != "transferChecked" {
+                    continue;
+                }
 
-            let Some(info_obj) = obj.get("info").and_then(|v| v.as_object()) else {
-                continue;
-            };
+                let Some(info_obj) = obj.get("info").and_then(|v| v.as_object()) else {
+                    continue;
+                };
 
-            let account = info_obj.get("source")
-                .or_else(|| info_obj.get("account"))
-                .or_else(|| info_obj.get("destination"))
-                .and_then(|v| v.as_str())
-                .and_then(|s| token_map.get(s));
+                let account = info_obj.get("source")
+                    .or_else(|| info_obj.get("account"))
+                    .or_else(|| info_obj.get("destination"))
+                    .and_then(|v| v.as_str())
+                    .and_then(|s| token_map.get(s));
 
-            let amount = info_obj.get("amount")
-                .or_else(|| info_obj.get("tokenAmount").and_then(|v| v.get("amount")))
-                .and_then(|v| v.as_str())
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(0);
+                let amount = info_obj.get("amount")
+                    .or_else(|| info_obj.get("tokenAmount").and_then(|v| v.get("amount")))
+                    .and_then(|v| v.as_str())
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(0);
 
-            if let Some((mint, decimals)) = account {
-                if amount > 0 {
-                    transfers.push((Transfer {
-                        mint: mint.clone(),
-                        amount,
-                        decimals: *decimals,
-                    }, current_dex.clone()));
+                if let Some((mint, decimals)) = account {
+                    if amount > 0 {
+                        transfers.push((Transfer {
+                            mint: mint.clone(),
+                            amount,
+                            decimals: *decimals,
+                        }, current_dex.clone()));
+                    }
                 }
             }
         }
@@ -131,6 +144,35 @@ impl SwapParser {
         }
 
         swaps
+    }
+
+    /// Get program ID from an inner instruction
+    fn get_instruction_program_id(&self, inst: &UiInstruction, account_keys: &[String]) -> String {
+        match inst {
+            UiInstruction::Parsed(UiParsedInstruction::Parsed(info)) => {
+                // For parsed instructions, program is the name, not ID
+                // We'd need a mapping, but for now return empty for non-standard programs
+                String::new()
+            }
+            UiInstruction::Parsed(UiParsedInstruction::PartiallyDecoded(partial)) => {
+                partial.program_id.clone()
+            }
+            UiInstruction::Compiled(compiled) => {
+                account_keys.get(compiled.program_id_index as usize)
+                    .cloned()
+                    .unwrap_or_default()
+            }
+        }
+    }
+
+    /// Check if a program ID is a system program (not a DEX)
+    fn is_system_program(&self, program_id: &str) -> bool {
+        matches!(program_id,
+            "11111111111111111111111111111111" | // System Program
+            "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" | // Token Program
+            "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL" | // Associated Token Program
+            "ComputeBudget111111111111111111111111111111" // Compute Budget Program
+        )
     }
 
     /// Get program ID for an instruction
