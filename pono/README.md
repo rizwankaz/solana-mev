@@ -45,11 +45,25 @@ cargo run --bin pono -- 381165825
 
 ### Configuration
 
+#### Required: Solana RPC Endpoint
 Set the RPC endpoint via environment variable:
 ```bash
 export SOLANA_RPC_URL="https://your-rpc-endpoint.com"
+```
+
+#### Required: Birdeye API Key
+Pono uses Birdeye's historical price API to accurately calculate MEV profitability at the exact block timestamp. Get a free API key at [Birdeye](https://birdeye.so):
+
+```bash
+export BIRDEYE_API_KEY="your_birdeye_api_key"
+```
+
+Then run the analyzer:
+```bash
 cargo run --bin pono -- 381165825
 ```
+
+**Note**: Historical prices are essential for MEV analysis. Without accurate prices at the transaction timestamp, profitability calculations will be incorrect. Birdeye provides comprehensive Solana token price history.
 
 ### JSON Output
 
@@ -157,10 +171,16 @@ Run tests:
 cargo test
 ```
 
-Run with verbose logging:
+Run with verbose logging to see price fetching details:
 ```bash
-RUST_LOG=debug cargo run --bin pono -- 381165825
+RUST_LOG=pono=debug cargo run --bin pono -- 381165825
 ```
+
+This will show:
+- Historical price API requests for each token
+- Price values fetched at the block timestamp
+- Success/failure rate of price fetching
+- Network issues or API errors
 
 Build optimized binary:
 ```bash
