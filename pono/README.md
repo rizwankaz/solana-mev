@@ -51,19 +51,17 @@ Set the RPC endpoint via environment variable:
 export SOLANA_RPC_URL="https://your-rpc-endpoint.com"
 ```
 
-#### Required: Birdeye API Key
-Pono uses Birdeye's historical price API to accurately calculate MEV profitability at the exact block timestamp. Get a free API key at [Birdeye](https://birdeye.so):
+#### Price Data: Pyth Network (Free)
+Pono uses Pyth's Hermes API to fetch historical token prices at the exact block timestamp. Pyth is free to use with no API key required!
 
-```bash
-export BIRDEYE_API_KEY="your_birdeye_api_key"
-```
+**Coverage**: Pyth supports major Solana tokens including SOL, USDC, USDT, BONK, JTO, PYTH, JUP, WIF, and more. Tokens without Pyth feeds will show $0 profitability.
 
 Then run the analyzer:
 ```bash
 cargo run --bin pono -- 381165825
 ```
 
-**Note**: Historical prices are essential for MEV analysis. Without accurate prices at the transaction timestamp, profitability calculations will be incorrect. Birdeye provides comprehensive Solana token price history.
+**Note**: Historical prices are essential for MEV analysis. Without accurate prices at the transaction timestamp, profitability calculations will be incorrect. Long-tail tokens without Pyth feeds will not have price data.
 
 ### JSON Output
 
