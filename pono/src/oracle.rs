@@ -3,7 +3,7 @@ use reqwest;
 use serde::Deserialize;
 use anyhow::Result;
 use std::sync::Arc;
-use futures::future::join_all;
+use std::collections::HashMap;
 
 /// Price data from oracle
 #[derive(Debug, Clone)]
@@ -12,29 +12,27 @@ pub struct PriceData {
     pub timestamp: i64,
 }
 
-/// Pyth price feed IDs for common tokens
-const PYTH_FEEDS: &[(&str, &str)] = &[
-    ("So11111111111111111111111111111111111111112", "ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d"), // SOL/USD
-    ("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "eaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a"), // USDC/USD
-    ("Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB", "2b89b9dc8fdf9f34709a5b106b472f0f39bb6ca9ce04b0fd7f2e971688e2e53b"), // USDT/USD
-];
-
-/// Oracle client for fetching historical token prices
+/// Oracle client for fetching token prices via Jupiter Price API
 pub struct OracleClient {
     client: reqwest::Client,
     price_cache: Arc<DashMap<String, PriceData>>,
     timestamp: i64,
 }
 
+/// Jupiter Price API response for a single token
 #[derive(Debug, Deserialize)]
-struct HermesPriceUpdate {
-    price: PriceInfo,
+struct JupiterTokenPrice {
+    #[serde(rename = "id")]
+    pub mint: String,
+    pub price: f64,
 }
 
+/// Jupiter Price API response wrapper
 #[derive(Debug, Deserialize)]
-struct PriceInfo {
-    price: String,
-    expo: i32,
+struct JupiterPriceResponse {
+    pub data: HashMap<String, JupiterTokenPrice>,
+    #[serde(rename = "timeTaken")]
+    pub time_taken: Option<f64>,
 }
 
 impl OracleClient {
@@ -46,42 +44,42 @@ impl OracleClient {
         }
     }
 
-    /// Batch fetch prices for multiple mints concurrently
+    /// Batch fetch prices for multiple mints using Jupiter's batch API
     pub async fn batch_get_prices(&self, mints: &[&str]) -> Vec<(String, f64)> {
-        let futures: Vec<_> = mints.iter()
-            .map(|mint| {
-                let mint_str = mint.to_string();
-                let cache = self.price_cache.clone();
-                let client = self.client.clone();
-                let timestamp = self.timestamp;
+        if mints.is_empty() {
+            return Vec::new();
+        }
 
-                async move {
-                    // Check cache first
-                    if let Some(cached) = cache.get(&mint_str) {
-                        return (mint_str, cached.price_usd);
-                    }
+        // Separate cached and uncached mints
+        let mut results = Vec::with_capacity(mints.len());
+        let mut uncached_mints = Vec::new();
 
-                    // Fetch price
-                    let price = match Self::fetch_pyth_price_static(&client, &mint_str, timestamp).await {
-                        Ok(p) => p,
-                        Err(_) => Self::get_fallback_price_static(&mint_str),
-                    };
+        for &mint in mints {
+            if let Some(cached) = self.price_cache.get(mint) {
+                results.push((mint.to_string(), cached.price_usd));
+            } else {
+                uncached_mints.push(mint);
+            }
+        }
 
-                    // Cache it
-                    cache.insert(
-                        mint_str.clone(),
-                        PriceData {
-                            price_usd: price,
-                            timestamp,
-                        },
-                    );
+        // Fetch uncached prices from Jupiter in a single batch request
+        if !uncached_mints.is_empty() {
+            let fetched = self.fetch_jupiter_prices_batch(&uncached_mints).await;
 
-                    (mint_str, price)
-                }
-            })
-            .collect();
+            for (mint, price) in fetched {
+                // Cache the price
+                self.price_cache.insert(
+                    mint.clone(),
+                    PriceData {
+                        price_usd: price,
+                        timestamp: self.timestamp,
+                    },
+                );
+                results.push((mint, price));
+            }
+        }
 
-        join_all(futures).await
+        results
     }
 
     /// Get USD price for a token at the slot timestamp (single fetch)
@@ -91,11 +89,12 @@ impl OracleClient {
             return Ok(cached.price_usd);
         }
 
-        // Try to fetch from Pyth
-        let price = match self.fetch_pyth_price(mint).await {
-            Ok(p) => p,
-            Err(_) => Self::get_fallback_price_static(mint),
-        };
+        // Fetch from Jupiter (single token)
+        let prices = self.fetch_jupiter_prices_batch(&[mint]).await;
+
+        let price = prices.first()
+            .map(|(_, p)| *p)
+            .unwrap_or(0.0);
 
         // Cache the price
         self.price_cache.insert(
@@ -109,51 +108,57 @@ impl OracleClient {
         Ok(price)
     }
 
-    /// Fetch historical price from Pyth Hermes API
-    async fn fetch_pyth_price(&self, mint: &str) -> Result<f64> {
-        Self::fetch_pyth_price_static(&self.client, mint, self.timestamp).await
-    }
+    /// Fetch prices from Jupiter Price API v2 (batch request)
+    async fn fetch_jupiter_prices_batch(&self, mints: &[&str]) -> Vec<(String, f64)> {
+        // Jupiter API supports comma-separated IDs
+        let ids = mints.join(",");
 
-    /// Static version for concurrent use
-    async fn fetch_pyth_price_static(client: &reqwest::Client, mint: &str, timestamp: i64) -> Result<f64> {
-        // Find Pyth feed ID for this mint
-        let feed_id = PYTH_FEEDS
-            .iter()
-            .find(|(m, _)| *m == mint)
-            .map(|(_, id)| id)
-            .ok_or_else(|| anyhow::anyhow!("No Pyth feed for mint"))?;
+        // Jupiter Price API v2 endpoint
+        // Note: Jupiter doesn't support historical prices via timestamp in the public API
+        // For production, you'd want to use their paid API or cache prices at block time
+        let url = format!("https://api.jup.ag/price/v2?ids={}", ids);
 
-        // Hermes API endpoint for historical prices
-        let url = format!(
-            "https://hermes.pyth.network/v2/updates/price/{}?publish_time={}",
-            feed_id, timestamp
-        );
-
-        let response = client
+        let response = match self.client
             .get(&url)
-            .timeout(std::time::Duration::from_secs(2))
+            .timeout(std::time::Duration::from_secs(5))
             .send()
-            .await?
-            .json::<HermesPriceUpdate>()
-            .await?;
+            .await
+        {
+            Ok(resp) => resp,
+            Err(e) => {
+                tracing::error!("Jupiter API request failed: {:?}", e);
+                // Return 0.0 for all mints on API failure
+                return mints.iter()
+                    .map(|&m| (m.to_string(), 0.0))
+                    .collect();
+            }
+        };
 
-        let price = response.price.price.parse::<f64>()?;
-        let expo = response.price.expo;
+        let jupiter_response: JupiterPriceResponse = match response.json().await {
+            Ok(data) => data,
+            Err(e) => {
+                tracing::error!("Failed to parse Jupiter response: {:?}", e);
+                // Return 0.0 for all mints on parse failure
+                return mints.iter()
+                    .map(|&m| (m.to_string(), 0.0))
+                    .collect();
+            }
+        };
 
-        Ok(price * 10_f64.powi(expo))
-    }
+        // Extract prices from response
+        mints.iter()
+            .map(|&mint| {
+                let price = jupiter_response.data
+                    .get(mint)
+                    .map(|token_price| token_price.price)
+                    .unwrap_or_else(|| {
+                        tracing::warn!("No price available for token: {}", mint);
+                        0.0
+                    });
 
-    /// Fallback prices (for tokens without Pyth feeds)
-    fn get_fallback_price_static(mint: &str) -> f64 {
-        match mint {
-            "So11111111111111111111111111111111111111112" => 131.0,
-            "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" => 1.0,
-            "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB" => 1.0,
-            "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R" => 1.15,
-            "7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr" => 0.766,
-            "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU" => 0.0026,
-            _ => 0.0,
-        }
+                (mint.to_string(), price)
+            })
+            .collect()
     }
 
     /// Calculate USD value from token amount
