@@ -108,15 +108,17 @@ impl OracleClient {
         Ok(price)
     }
 
-    /// Fetch prices from Jupiter Price API v2 (batch request)
+    /// Fetch prices from Jupiter Price API v6 (batch request)
     async fn fetch_jupiter_prices_batch(&self, mints: &[&str]) -> Vec<(String, f64)> {
         // Jupiter API supports comma-separated IDs
         let ids = mints.join(",");
 
-        // Jupiter Price API v2 endpoint
-        // Note: Jupiter doesn't support historical prices via timestamp in the public API
-        // For production, you'd want to use their paid API or cache prices at block time
-        let url = format!("https://api.jup.ag/price/v2?ids={}", ids);
+        // Jupiter Price API v6 endpoint (current as of Dec 2025)
+        // Docs: https://station.jup.ag/api-v6/price-api
+        let url = format!("https://price.jup.ag/v6/price?ids={}", ids);
+
+        tracing::debug!("Fetching prices for {} tokens from Jupiter", mints.len());
+        tracing::debug!("Jupiter API URL: {}", url);
 
         let response = match self.client
             .get(&url)
@@ -124,41 +126,81 @@ impl OracleClient {
             .send()
             .await
         {
-            Ok(resp) => resp,
+            Ok(resp) => {
+                let status = resp.status();
+                tracing::debug!("Jupiter API response status: {}", status);
+
+                if !status.is_success() {
+                    tracing::error!(
+                        "Jupiter API returned error status {}: {}",
+                        status.as_u16(),
+                        status.canonical_reason().unwrap_or("Unknown")
+                    );
+                    return mints.iter()
+                        .map(|&m| {
+                            tracing::warn!("No price for {} (API error)", m);
+                            (m.to_string(), 0.0)
+                        })
+                        .collect();
+                }
+                resp
+            },
             Err(e) => {
-                tracing::error!("Jupiter API request failed: {:?}", e);
+                tracing::error!("Jupiter API network request failed: {:?}", e);
+                tracing::error!("This may be due to network restrictions or API unavailability");
                 // Return 0.0 for all mints on API failure
                 return mints.iter()
-                    .map(|&m| (m.to_string(), 0.0))
+                    .map(|&m| {
+                        tracing::warn!("No price for {} (network error)", m);
+                        (m.to_string(), 0.0)
+                    })
                     .collect();
             }
         };
 
-        let jupiter_response: JupiterPriceResponse = match response.json().await {
-            Ok(data) => data,
+        let jupiter_response: JupiterPriceResponse = match response.json::<JupiterPriceResponse>().await {
+            Ok(data) => {
+                tracing::debug!("Successfully parsed Jupiter response with {} prices", data.data.len());
+                data
+            },
             Err(e) => {
-                tracing::error!("Failed to parse Jupiter response: {:?}", e);
+                tracing::error!("Failed to parse Jupiter JSON response: {:?}", e);
                 // Return 0.0 for all mints on parse failure
                 return mints.iter()
-                    .map(|&m| (m.to_string(), 0.0))
+                    .map(|&m| {
+                        tracing::warn!("No price for {} (parse error)", m);
+                        (m.to_string(), 0.0)
+                    })
                     .collect();
             }
         };
 
         // Extract prices from response
-        mints.iter()
+        let results: Vec<(String, f64)> = mints.iter()
             .map(|&mint| {
                 let price = jupiter_response.data
                     .get(mint)
-                    .map(|token_price| token_price.price)
+                    .map(|token_price| {
+                        tracing::debug!("Price for {}: ${}", mint, token_price.price);
+                        token_price.price
+                    })
                     .unwrap_or_else(|| {
-                        tracing::warn!("No price available for token: {}", mint);
+                        tracing::warn!("No price data available for token: {}", mint);
                         0.0
                     });
 
                 (mint.to_string(), price)
             })
-            .collect()
+            .collect();
+
+        let successful_prices = results.iter().filter(|(_, p)| *p > 0.0).count();
+        tracing::info!(
+            "Fetched {}/{} prices successfully from Jupiter",
+            successful_prices,
+            mints.len()
+        );
+
+        results
     }
 
     /// Calculate USD value from token amount
