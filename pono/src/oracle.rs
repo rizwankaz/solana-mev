@@ -3,7 +3,6 @@ use reqwest;
 use serde::Deserialize;
 use anyhow::Result;
 use std::sync::Arc;
-use std::collections::HashMap;
 
 /// Price data from oracle
 #[derive(Debug, Clone)]
@@ -12,29 +11,30 @@ pub struct PriceData {
     pub timestamp: i64,
 }
 
-/// Oracle client for fetching token prices via Jupiter Price API
+/// Oracle client for fetching historical token prices via Birdeye API
 pub struct OracleClient {
     client: reqwest::Client,
     price_cache: Arc<DashMap<String, PriceData>>,
     timestamp: i64,
 }
 
-/// Jupiter Price API response for a single token
+/// Birdeye historical price API response
 #[derive(Debug, Deserialize)]
-struct JupiterTokenPrice {
-    #[serde(rename = "id")]
-    #[allow(dead_code)]
-    pub mint: String,
-    pub price: f64,
+struct BirdeyePriceResponse {
+    pub success: bool,
+    pub data: Option<BirdeyeHistoricalData>,
 }
 
-/// Jupiter Price API response wrapper
 #[derive(Debug, Deserialize)]
-struct JupiterPriceResponse {
-    pub data: HashMap<String, JupiterTokenPrice>,
-    #[serde(rename = "timeTaken")]
-    #[allow(dead_code)]
-    pub time_taken: Option<f64>,
+struct BirdeyeHistoricalData {
+    pub items: Vec<BirdeyePricePoint>,
+}
+
+#[derive(Debug, Deserialize)]
+struct BirdeyePricePoint {
+    #[serde(rename = "unixTime")]
+    pub unix_time: i64,
+    pub value: f64,
 }
 
 impl OracleClient {
@@ -46,7 +46,7 @@ impl OracleClient {
         }
     }
 
-    /// Batch fetch prices for multiple mints using Jupiter's batch API
+    /// Batch fetch historical prices for multiple mints using Birdeye API
     pub async fn batch_get_prices(&self, mints: &[&str]) -> Vec<(String, f64)> {
         if mints.is_empty() {
             return Vec::new();
@@ -64,9 +64,9 @@ impl OracleClient {
             }
         }
 
-        // Fetch uncached prices from Jupiter in a single batch request
+        // Fetch uncached prices from Birdeye (historical prices at timestamp)
         if !uncached_mints.is_empty() {
-            let fetched = self.fetch_jupiter_prices_batch(&uncached_mints).await;
+            let fetched = self.fetch_birdeye_prices_batch(&uncached_mints).await;
 
             for (mint, price) in fetched {
                 // Cache the price
@@ -91,8 +91,8 @@ impl OracleClient {
             return Ok(cached.price_usd);
         }
 
-        // Fetch from Jupiter (single token)
-        let prices = self.fetch_jupiter_prices_batch(&[mint]).await;
+        // Fetch from Birdeye (single token, historical price)
+        let prices = self.fetch_birdeye_prices_batch(&[mint]).await;
 
         let price = prices.first()
             .map(|(_, p)| *p)
@@ -110,99 +110,110 @@ impl OracleClient {
         Ok(price)
     }
 
-    /// Fetch prices from Jupiter Price API v6 (batch request)
-    async fn fetch_jupiter_prices_batch(&self, mints: &[&str]) -> Vec<(String, f64)> {
-        // Jupiter API supports comma-separated IDs
-        let ids = mints.join(",");
+    /// Fetch historical prices from Birdeye API (batch request)
+    /// Birdeye API docs: https://docs.birdeye.so/reference/get_defi-historical-price
+    async fn fetch_birdeye_prices_batch(&self, mints: &[&str]) -> Vec<(String, f64)> {
+        use futures::future::join_all;
 
-        // Jupiter Price API v6 endpoint (current as of Dec 2025)
-        // Docs: https://station.jup.ag/api-v6/price-api
-        let url = format!("https://price.jup.ag/v6/price?ids={}", ids);
+        tracing::debug!("Fetching historical prices for {} tokens from Birdeye at timestamp {}", mints.len(), self.timestamp);
 
-        tracing::debug!("Fetching prices for {} tokens from Jupiter", mints.len());
-        tracing::debug!("Jupiter API URL: {}", url);
-
-        let response = match self.client
-            .get(&url)
-            .timeout(std::time::Duration::from_secs(5))
-            .send()
-            .await
-        {
-            Ok(resp) => {
-                let status = resp.status();
-                tracing::debug!("Jupiter API response status: {}", status);
-
-                if !status.is_success() {
-                    tracing::error!(
-                        "Jupiter API returned error status {}: {}",
-                        status.as_u16(),
-                        status.canonical_reason().unwrap_or("Unknown")
-                    );
-                    return mints.iter()
-                        .map(|&m| {
-                            tracing::warn!("No price for {} (API error)", m);
-                            (m.to_string(), 0.0)
-                        })
-                        .collect();
-                }
-                resp
-            },
-            Err(e) => {
-                tracing::error!("Jupiter API network request failed: {:?}", e);
-                tracing::error!("This may be due to network restrictions or API unavailability");
-                // Return 0.0 for all mints on API failure
-                return mints.iter()
-                    .map(|&m| {
-                        tracing::warn!("No price for {} (network error)", m);
-                        (m.to_string(), 0.0)
-                    })
-                    .collect();
-            }
-        };
-
-        let jupiter_response: JupiterPriceResponse = match response.json::<JupiterPriceResponse>().await {
-            Ok(data) => {
-                tracing::debug!("Successfully parsed Jupiter response with {} prices", data.data.len());
-                data
-            },
-            Err(e) => {
-                tracing::error!("Failed to parse Jupiter JSON response: {:?}", e);
-                // Return 0.0 for all mints on parse failure
-                return mints.iter()
-                    .map(|&m| {
-                        tracing::warn!("No price for {} (parse error)", m);
-                        (m.to_string(), 0.0)
-                    })
-                    .collect();
-            }
-        };
-
-        // Extract prices from response
-        let results: Vec<(String, f64)> = mints.iter()
-            .map(|&mint| {
-                let price = jupiter_response.data
-                    .get(mint)
-                    .map(|token_price| {
-                        tracing::debug!("Price for {}: ${}", mint, token_price.price);
-                        token_price.price
-                    })
-                    .unwrap_or_else(|| {
-                        tracing::warn!("No price data available for token: {}", mint);
-                        0.0
-                    });
-
-                (mint.to_string(), price)
-            })
+        // Birdeye doesn't support batch requests, so we need to fetch individually
+        // But we can do it concurrently using join_all
+        let futures: Vec<_> = mints.iter()
+            .map(|&mint| self.fetch_single_birdeye_price(mint))
             .collect();
+
+        let results = join_all(futures).await;
 
         let successful_prices = results.iter().filter(|(_, p)| *p > 0.0).count();
         tracing::info!(
-            "Fetched {}/{} prices successfully from Jupiter",
+            "Fetched {}/{} historical prices successfully from Birdeye",
             successful_prices,
             mints.len()
         );
 
         results
+    }
+
+    /// Fetch a single historical price from Birdeye API
+    async fn fetch_single_birdeye_price(&self, mint: &str) -> (String, f64) {
+        // Birdeye historical price endpoint
+        // Note: Free tier has rate limits (10 requests/second)
+        let url = format!(
+            "https://public-api.birdeye.so/defi/historical_price?address={}&type=1m&time_from={}&time_to={}",
+            mint,
+            self.timestamp - 60,  // 1 minute before
+            self.timestamp + 60   // 1 minute after
+        );
+
+        tracing::debug!("Fetching price for {} at timestamp {}", mint, self.timestamp);
+
+        let response = match self.client
+            .get(&url)
+            .header("X-API-KEY", std::env::var("BIRDEYE_API_KEY").unwrap_or_default())
+            .timeout(std::time::Duration::from_secs(10))
+            .send()
+            .await
+        {
+            Ok(resp) => {
+                let status = resp.status();
+
+                if !status.is_success() {
+                    tracing::warn!(
+                        "Birdeye API error for {}: status {}",
+                        mint,
+                        status.as_u16()
+                    );
+                    return (mint.to_string(), 0.0);
+                }
+                resp
+            },
+            Err(e) => {
+                tracing::warn!("Birdeye API network error for {}: {:?}", mint, e);
+                return (mint.to_string(), 0.0);
+            }
+        };
+
+        // Parse response
+        let birdeye_response: BirdeyePriceResponse = match response.json().await {
+            Ok(data) => data,
+            Err(e) => {
+                tracing::warn!("Failed to parse Birdeye response for {}: {:?}", mint, e);
+                return (mint.to_string(), 0.0);
+            }
+        };
+
+        // Extract price - find the closest price point to our timestamp
+        let price = if birdeye_response.success {
+            birdeye_response.data
+                .and_then(|d| {
+                    if d.items.is_empty() {
+                        return None;
+                    }
+
+                    // Find the price point closest to our target timestamp
+                    let closest = d.items.iter()
+                        .min_by_key(|item| (item.unix_time - self.timestamp).abs())?;
+
+                    tracing::debug!(
+                        "Historical price for {} at timestamp {} (actual: {}): ${}",
+                        mint,
+                        self.timestamp,
+                        closest.unix_time,
+                        closest.value
+                    );
+                    Some(closest.value)
+                })
+                .unwrap_or_else(|| {
+                    tracing::warn!("No historical price data for {}", mint);
+                    0.0
+                })
+        } else {
+            tracing::warn!("Birdeye API returned success=false for {}", mint);
+            0.0
+        };
+
+        (mint.to_string(), price)
     }
 
     /// Calculate USD value from token amount
