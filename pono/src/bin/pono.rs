@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use pono::{BlockFetcher, FetcherConfig, MevDetector};
 use serde_json::json;
 use std::sync::Arc;
@@ -6,28 +6,16 @@ use std::sync::Arc;
 #[derive(Parser)]
 #[command(name = "pono")]
 #[command(about = "Solana MEV detection tool", long_about = None)]
+#[command(version)]
 struct Cli {
-    #[command(subcommand)]
-    command: Commands,
-}
-
-#[derive(Subcommand)]
-enum Commands {
-    /// Run MEV detection on a specific slot
-    Run {
-        /// Slot number to analyze
-        #[arg(short, long)]
-        slot: u64,
-    },
+    /// Slot number to analyze for MEV
+    slot: u64,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-
-    let slot = match cli.command {
-        Commands::Run { slot } => slot,
-    };
+    let slot = cli.slot;
 
     // Setup fetcher
     let config = FetcherConfig {
