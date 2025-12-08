@@ -23,6 +23,7 @@ pub struct OracleClient {
 #[derive(Debug, Deserialize)]
 struct JupiterTokenPrice {
     #[serde(rename = "id")]
+    #[allow(dead_code)]
     pub mint: String,
     pub price: f64,
 }
@@ -32,6 +33,7 @@ struct JupiterTokenPrice {
 struct JupiterPriceResponse {
     pub data: HashMap<String, JupiterTokenPrice>,
     #[serde(rename = "timeTaken")]
+    #[allow(dead_code)]
     pub time_taken: Option<f64>,
 }
 

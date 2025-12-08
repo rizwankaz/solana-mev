@@ -2,6 +2,7 @@ use clap::Parser;
 use pono::{BlockFetcher, FetcherConfig, MevDetector};
 use serde_json::json;
 use std::sync::Arc;
+use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
 #[command(name = "pono")]
@@ -14,6 +15,14 @@ struct Cli {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Initialize tracing subscriber with env filter support (RUST_LOG)
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| EnvFilter::new("info"))
+        )
+        .init();
+
     let cli = Cli::parse();
     let slot = cli.slot;
 
