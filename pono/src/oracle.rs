@@ -2,45 +2,31 @@ use dashmap::DashMap;
 use anyhow::Result;
 use std::sync::Arc;
 use std::collections::HashMap;
-use solana_sdk::commitment_config::CommitmentConfig;
+use serde::Deserialize;
 
-/// Pyth price feed information for major Solana tokens
-/// Source: https://pyth.network/developers/price-feed-ids#solana-mainnet
-const PYTH_FEEDS: &[(&str, &str, &str)] = &[
-    // (Mint Address, Feed ID, On-chain Price Account)
-    // Native SOL
-    ("So11111111111111111111111111111111111111112",
-     "0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d",
-     "H6ARHf6YXhGYeQfUzQNGk6rDNnLBQKrenN712K4QJGVX"), // SOL/USD
-    // USDC
-    ("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-     "0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a",
-     "Gnt27xtC473ZT2Mw5u8wZ68Z3gULkSTb5DuxJy7eJotD"), // USDC/USD
-    // USDT
-    ("Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
-     "0x2b89b9dc8fdf9f34709a5b106b472f0f39bb6ca9ce04b0fd7f2e971688e2e53b",
-     "3vxLXJqLqF3JG5TCbYycbKWRBbCJQLxQmBGCkyqEEefL"), // USDT/USD
-    // BONK
-    ("DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
-     "0x72b021217ca3fe68922a19aaf990109cb9d84e9ad004b4d2025ad6f529314419",
-     "8ihFLu5FimgTQ1Unh4dVyEHUGodJ5gJQCrQf4KUVB9bN"), // BONK/USD
-    // JTO
-    ("jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL",
-     "0xb43660a5f790c69354b0729a5ef9d50d68f1df92107540210b9cccba1f947cc2",
-     "D8UUgr8a3aR3yUeHLu7v8FWK7E8Y5sSU7qrYBXUJXBQ5"), // JTO/USD
-    // PYTH
-    ("HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3",
-     "0x0bbf28e9a841a1cc788f6a361b17ca072d0ea3098a1e5df1c3922d06719579ff",
-     "nrYkQQQur7z8rYTST3G9GqATviK5SxTDkrqd21MW6Ue"), // PYTH/USD
-    // JUP
-    ("JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
-     "0x0a0408d619e9380abad35060f9192039ed5042fa6f82301d0e48bb52be830996",
-     "g6eRCbboSwK4tSWngn773RCMexr1APQr4uA9bGZBYfo"), // JUP/USD
-    // WIF
-    ("EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm",
-     "0x4ca4beeca86f0d164160323817a4e42b10010a724c2217c6ee41b54cd4cc61fc",
-     "6x6KfE7nY4o1ag1Ru8LnwfR64BTfWyMzFE2s3dPhuMdQ"), // WIF/USD
+/// Pyth Benchmarks API symbols for major Solana tokens
+/// Source: https://benchmarks.pyth.network/docs
+const PYTH_FEEDS: &[(&str, &str)] = &[
+    // (Mint Address, Benchmarks Symbol)
+    ("So11111111111111111111111111111111111111112", "Crypto.SOL/USD"),
+    ("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "Crypto.USDC/USD"),
+    ("Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB", "Crypto.USDT/USD"),
+    ("DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", "Crypto.BONK/USD"),
+    ("jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL", "Crypto.JTO/USD"),
+    ("HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3", "Crypto.PYTH/USD"),
+    ("JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN", "Crypto.JUP/USD"),
+    ("EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm", "Crypto.WIF/USD"),
 ];
+
+/// Response from Pyth Benchmarks TradingView history API
+#[derive(Debug, Deserialize)]
+struct BenchmarksResponse {
+    #[serde(rename = "c")]
+    close: Vec<f64>,
+    #[serde(rename = "t")]
+    time: Vec<i64>,
+    s: String, // status: "ok" or "no_data"
+}
 
 /// Price data from oracle
 #[derive(Debug, Clone)]
@@ -49,34 +35,30 @@ pub struct PriceData {
     pub timestamp: i64,
 }
 
-/// Oracle client for fetching historical token prices via Pyth on-chain accounts
+/// Oracle client for fetching historical token prices via Pyth Benchmarks API
 pub struct OracleClient {
-    rpc_client: Arc<solana_client::rpc_client::RpcClient>,
+    http_client: reqwest::Client,
     price_cache: Arc<DashMap<String, PriceData>>,
-    slot: u64,
     timestamp: i64,
-    pyth_account_map: HashMap<String, String>,  // mint -> price account
+    symbol_map: HashMap<String, String>,  // mint -> Benchmarks symbol
 }
 
 impl OracleClient {
-    pub fn new(slot: u64, timestamp: i64, rpc_url: String) -> Self {
-        // Build the Pyth account map (mint -> on-chain price account)
-        let pyth_account_map: HashMap<String, String> = PYTH_FEEDS.iter()
-            .map(|(mint, _feed_id, account)| (mint.to_string(), account.to_string()))
+    pub fn new(_slot: u64, timestamp: i64, _rpc_url: String) -> Self {
+        // Build the symbol map (mint -> Benchmarks symbol)
+        let symbol_map: HashMap<String, String> = PYTH_FEEDS.iter()
+            .map(|(mint, symbol)| (mint.to_string(), symbol.to_string()))
             .collect();
 
-        let rpc_client = Arc::new(solana_client::rpc_client::RpcClient::new(rpc_url));
-
         Self {
-            rpc_client,
+            http_client: reqwest::Client::new(),
             price_cache: Arc::new(DashMap::new()),
-            slot,
             timestamp,
-            pyth_account_map,
+            symbol_map,
         }
     }
 
-    /// Batch fetch historical prices for multiple mints using Pyth on-chain accounts
+    /// Batch fetch historical prices for multiple mints using Pyth Benchmarks API
     pub async fn batch_get_prices(&self, mints: &[&str]) -> Vec<(String, f64)> {
         if mints.is_empty() {
             return Vec::new();
@@ -94,9 +76,9 @@ impl OracleClient {
             }
         }
 
-        // Fetch uncached prices from Pyth on-chain accounts at the specific slot
+        // Fetch uncached prices from Pyth Benchmarks API at the specific timestamp
         if !uncached_mints.is_empty() {
-            let fetched = self.fetch_pyth_onchain_prices(&uncached_mints);
+            let fetched = self.fetch_benchmarks_prices(&uncached_mints).await;
 
             for (mint, price) in fetched {
                 // Cache the price
@@ -121,8 +103,8 @@ impl OracleClient {
             return Ok(cached.price_usd);
         }
 
-        // Fetch from Pyth on-chain account (single token, historical price)
-        let prices = self.fetch_pyth_onchain_prices(&[mint]);
+        // Fetch from Pyth Benchmarks API (single token, historical price)
+        let prices = self.fetch_benchmarks_prices(&[mint]).await;
 
         let price = prices.first()
             .map(|(_, p)| *p)
@@ -140,93 +122,93 @@ impl OracleClient {
         Ok(price)
     }
 
-    /// Fetch historical prices from Pyth on-chain accounts at specific slot
-    /// Queries Pyth price accounts directly from Solana at the target slot
-    fn fetch_pyth_onchain_prices(&self, mints: &[&str]) -> Vec<(String, f64)> {
-        use pyth_sdk_solana::state::load_price_account;
-        use solana_sdk::pubkey::Pubkey;
-        use std::str::FromStr;
-
+    /// Fetch historical prices from Pyth Benchmarks API at specific timestamp
+    /// Uses TradingView-style history endpoint for accurate historical prices
+    async fn fetch_benchmarks_prices(&self, mints: &[&str]) -> Vec<(String, f64)> {
         tracing::debug!(
-            "Fetching historical prices for {} tokens from Pyth on-chain at slot {}",
+            "Fetching historical prices for {} tokens from Pyth Benchmarks at timestamp {}",
             mints.len(),
-            self.slot
+            self.timestamp
         );
 
         let mut results = Vec::with_capacity(mints.len());
 
         for &mint in mints {
-            // Check if we have a Pyth price account for this mint
-            let price_account_str = match self.pyth_account_map.get(mint) {
-                Some(account) => account,
+            // Check if we have a Benchmarks symbol for this mint
+            let symbol = match self.symbol_map.get(mint) {
+                Some(s) => s,
                 None => {
-                    tracing::warn!("No Pyth price account for token: {}", mint);
+                    tracing::warn!("No Pyth Benchmarks symbol for token: {}", mint);
                     results.push((mint.to_string(), 0.0));
                     continue;
                 }
             };
 
-            // Parse the price account pubkey
-            let price_account_pubkey = match Pubkey::from_str(price_account_str) {
-                Ok(pubkey) => pubkey,
-                Err(e) => {
-                    tracing::error!("Invalid Pyth price account pubkey for {}: {:?}", mint, e);
-                    results.push((mint.to_string(), 0.0));
-                    continue;
-                }
-            };
+            // Query a small time window around the target timestamp (±5 minutes)
+            let from = self.timestamp - 300;
+            let to = self.timestamp + 300;
 
-            // Get account info at the specific slot
-            let account_data = match self.rpc_client.get_account_with_commitment(
-                &price_account_pubkey,
-                CommitmentConfig {
-                    commitment: solana_sdk::commitment_config::CommitmentLevel::Confirmed,
-                },
-            ) {
-                Ok(response) => {
-                    if let Some(account) = response.value {
-                        account.data
-                    } else {
-                        tracing::warn!("Pyth price account not found for {}", mint);
-                        results.push((mint.to_string(), 0.0));
-                        continue;
-                    }
-                }
-                Err(e) => {
-                    tracing::error!("Failed to fetch Pyth price account for {}: {:?}", mint, e);
-                    results.push((mint.to_string(), 0.0));
-                    continue;
-                }
-            };
-
-            // Parse the Pyth price account data
-            let price_account: &pyth_sdk_solana::state::SolanaPriceAccount = match load_price_account(&account_data) {
-                Ok(account) => account,
-                Err(e) => {
-                    tracing::error!("Failed to parse Pyth price account for {}: {:?}", mint, e);
-                    results.push((mint.to_string(), 0.0));
-                    continue;
-                }
-            };
-
-            // Get the current price
-            let current_price = price_account.to_price_feed(&price_account_pubkey).get_price_unchecked();
-            let price_usd = current_price.price as f64 * 10_f64.powi(current_price.expo);
-
-            tracing::debug!(
-                "Historical price for {} at slot {}: ${} (conf: ±{})",
-                mint,
-                self.slot,
-                price_usd,
-                current_price.conf as f64 * 10_f64.powi(current_price.expo)
+            // Build the Benchmarks API URL
+            let url = format!(
+                "https://benchmarks.pyth.network/v1/shims/tradingview/history?symbol={}&resolution=1&from={}&to={}",
+                symbol, from, to
             );
 
-            results.push((mint.to_string(), price_usd));
+            tracing::debug!("Requesting historical price from: {}", url);
+
+            // Make HTTP request
+            let response = match self.http_client.get(&url).send().await {
+                Ok(resp) => resp,
+                Err(e) => {
+                    tracing::error!("Failed to fetch price for {} ({}): {:?}", mint, symbol, e);
+                    results.push((mint.to_string(), 0.0));
+                    continue;
+                }
+            };
+
+            // Parse JSON response
+            let benchmarks_data: BenchmarksResponse = match response.json().await {
+                Ok(data) => data,
+                Err(e) => {
+                    tracing::error!("Failed to parse response for {} ({}): {:?}", mint, symbol, e);
+                    results.push((mint.to_string(), 0.0));
+                    continue;
+                }
+            };
+
+            // Check status and extract price
+            if benchmarks_data.s != "ok" || benchmarks_data.close.is_empty() {
+                tracing::warn!("No price data available for {} ({}) at timestamp {}", mint, symbol, self.timestamp);
+                results.push((mint.to_string(), 0.0));
+                continue;
+            }
+
+            // Find the price closest to our target timestamp
+            let mut best_price = benchmarks_data.close[0];
+            let mut best_diff = (benchmarks_data.time[0] - self.timestamp).abs();
+
+            for i in 1..benchmarks_data.close.len() {
+                let diff = (benchmarks_data.time[i] - self.timestamp).abs();
+                if diff < best_diff {
+                    best_diff = diff;
+                    best_price = benchmarks_data.close[i];
+                }
+            }
+
+            tracing::debug!(
+                "Historical price for {} ({}) at timestamp {}: ${}",
+                mint,
+                symbol,
+                self.timestamp,
+                best_price
+            );
+
+            results.push((mint.to_string(), best_price));
         }
 
         let successful_prices = results.iter().filter(|(_, p)| *p > 0.0).count();
         tracing::info!(
-            "Fetched {}/{} historical prices successfully from Pyth on-chain",
+            "Fetched {}/{} historical prices successfully from Pyth Benchmarks",
             successful_prices,
             mints.len()
         );

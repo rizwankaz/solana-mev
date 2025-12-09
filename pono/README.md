@@ -51,10 +51,16 @@ Set the RPC endpoint via environment variable:
 export SOLANA_RPC_URL="https://your-rpc-endpoint.com"
 ```
 
-#### Price Data: Pyth Network (Free)
-Pono queries Pyth's on-chain price accounts directly from Solana to fetch historical token prices at the exact block slot. This approach is completely free with no API key required!
+#### Price Data: Pyth Benchmarks API (Free)
+Pono uses Pyth's free Benchmarks API to fetch historical token prices at the exact block timestamp. This provides accurate price data for MEV profitability calculations with no API key required!
 
-**How it works**: Pyth publishes prices to on-chain accounts on Solana. By querying these accounts at specific historical slots, we get accurate price data at the exact moment MEV transactions occurred.
+**How it works**: The Benchmarks API provides historical price data through a TradingView-compatible HTTP endpoint. Pono queries prices at the block's timestamp to get accurate historical values for all profit calculations.
+
+**API Details**:
+- Endpoint: `https://benchmarks.pyth.network/v1/shims/tradingview/history`
+- Rate limit: 30 requests per 10 seconds (free tier)
+- No authentication required
+- Full historical data access
 
 **Coverage**: Currently supports 8 major Solana tokens:
 - SOL (Wrapped SOL)
@@ -73,7 +79,7 @@ Then run the analyzer:
 cargo run --bin pono -- 381165825
 ```
 
-**Note**: Historical prices are essential for MEV analysis. Pono queries Pyth's on-chain price accounts at the exact slot of the transaction to ensure accurate profitability calculations. Long-tail tokens without Pyth price feeds will be flagged in the `unsupported_profit_tokens` field.
+**Note**: Historical prices are essential for MEV analysis. Pono queries Pyth Benchmarks API at the exact block timestamp to ensure accurate profitability calculations. Long-tail tokens without Pyth price feeds will be flagged in the `unsupported_profit_tokens` field.
 
 ### JSON Output
 
@@ -187,10 +193,10 @@ RUST_LOG=pono=debug cargo run --bin pono -- 381165825
 ```
 
 This will show:
-- On-chain price account queries for each token
-- Historical price values fetched at the exact block slot
+- Benchmarks API HTTP requests for each token
+- Historical price values fetched at the exact block timestamp
 - Success/failure rate of price fetching
-- Pyth account parsing errors or RPC issues
+- API errors or network issues
 
 Build optimized binary:
 ```bash
