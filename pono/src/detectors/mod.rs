@@ -21,12 +21,12 @@ pub struct MevDetector {
 }
 
 impl MevDetector {
-    pub fn new(timestamp: i64) -> Self {
+    pub fn new(slot: u64, timestamp: i64, rpc_url: String) -> Self {
         Self {
             min_swap_count: 2,
             max_sandwich_distance: 5,
             swap_parser: Arc::new(SwapParser::new()),
-            oracle: OracleClient::new(timestamp),
+            oracle: OracleClient::new(slot, timestamp, rpc_url),
         }
     }
 
@@ -158,9 +158,13 @@ impl MevDetector {
 
         // Calculate profitability using pre-fetched prices
         let mut profit_usd = 0.0;
+        let mut unsupported_profit_tokens = Vec::new();
         for change in &signer_changes {
             if change.delta > 0 {
                 let price = price_map.get(&change.mint).copied().unwrap_or(0.0);
+                if price == 0.0 {
+                    unsupported_profit_tokens.push(change.mint.clone());
+                }
                 let amount = change.delta as f64 / 10_f64.powi(change.decimals as i32);
                 profit_usd += amount * price;
             }
@@ -188,6 +192,7 @@ impl MevDetector {
                 profit_usd,
                 fees_usd,
                 net_profit_usd,
+                unsupported_profit_tokens,
             },
         })
     }
@@ -268,9 +273,13 @@ impl MevDetector {
 
                 // Calculate profitability
                 let mut profit_usd = 0.0;
+                let mut unsupported_profit_tokens = Vec::new();
                 for change in &token_changes {
                     if change.delta > 0 {
                         let price = price_map.get(&change.mint).copied().unwrap_or(0.0);
+                        if price == 0.0 {
+                            unsupported_profit_tokens.push(change.mint.clone());
+                        }
                         let amount = change.delta as f64 / 10_f64.powi(change.decimals as i32);
                         profit_usd += amount * price;
                     }
@@ -317,6 +326,7 @@ impl MevDetector {
                         profit_usd,
                         fees_usd,
                         net_profit_usd,
+                        unsupported_profit_tokens,
                     },
                 });
             }

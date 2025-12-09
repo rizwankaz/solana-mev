@@ -44,8 +44,10 @@ async fn main() -> anyhow::Result<()> {
     // Get block timestamp
     let timestamp = block.timestamp().map(|t| t.timestamp()).unwrap_or(0);
 
-    // Detect MEV with historical prices
-    let mut detector = MevDetector::new(timestamp);
+    // Detect MEV with historical prices from Pyth on-chain
+    let rpc_url = std::env::var("SOLANA_RPC_URL")
+        .unwrap_or_else(|_| "https://api.mainnet-beta.solana.com".to_string());
+    let mut detector = MevDetector::new(slot, timestamp, rpc_url);
     let mev_events = detector.detect_mev(slot, &block.transactions).await;
 
     // Separate events by type and calculate totals
@@ -73,6 +75,7 @@ async fn main() -> anyhow::Result<()> {
                         "profit_usd": arb.profitability.profit_usd,
                         "fees_usd": arb.profitability.fees_usd,
                         "net_profit_usd": arb.profitability.net_profit_usd,
+                        "unsupported_profit_tokens": arb.profitability.unsupported_profit_tokens,
                     }
                 }));
             }
@@ -92,6 +95,7 @@ async fn main() -> anyhow::Result<()> {
                         "profit_usd": sand.profitability.profit_usd,
                         "fees_usd": sand.profitability.fees_usd,
                         "net_profit_usd": sand.profitability.net_profit_usd,
+                        "unsupported_profit_tokens": sand.profitability.unsupported_profit_tokens,
                     },
                     "front_run": {
                         "signature": sand.front_run.signature,

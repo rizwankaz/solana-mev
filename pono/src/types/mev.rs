@@ -58,4 +58,6 @@ pub struct Profitability {
     pub profit_usd: f64,
     pub fees_usd: f64,
     pub net_profit_usd: f64,
+    /// List of profit token mints that don't have Pyth price feeds
+    pub unsupported_profit_tokens: Vec<String>,
 }

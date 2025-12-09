@@ -52,16 +52,28 @@ export SOLANA_RPC_URL="https://your-rpc-endpoint.com"
 ```
 
 #### Price Data: Pyth Network (Free)
-Pono uses Pyth's Hermes API to fetch historical token prices at the exact block timestamp. Pyth is free to use with no API key required!
+Pono queries Pyth's on-chain price accounts directly from Solana to fetch historical token prices at the exact block slot. This approach is completely free with no API key required!
 
-**Coverage**: Pyth supports major Solana tokens including SOL, USDC, USDT, BONK, JTO, PYTH, JUP, WIF, and more. Tokens without Pyth feeds will show $0 profitability.
+**How it works**: Pyth publishes prices to on-chain accounts on Solana. By querying these accounts at specific historical slots, we get accurate price data at the exact moment MEV transactions occurred.
+
+**Coverage**: Currently supports 8 major Solana tokens:
+- SOL (Wrapped SOL)
+- USDC
+- USDT
+- BONK
+- JTO (Jito)
+- PYTH
+- JUP (Jupiter)
+- WIF (dogwifhat)
+
+**Unsupported Tokens**: Transactions with profit in tokens outside this list will have `unsupported_profit_tokens` populated in the output, indicating that profitability calculations are incomplete.
 
 Then run the analyzer:
 ```bash
 cargo run --bin pono -- 381165825
 ```
 
-**Note**: Historical prices are essential for MEV analysis. Without accurate prices at the transaction timestamp, profitability calculations will be incorrect. Long-tail tokens without Pyth feeds will not have price data.
+**Note**: Historical prices are essential for MEV analysis. Pono queries Pyth's on-chain price accounts at the exact slot of the transaction to ensure accurate profitability calculations. Long-tail tokens without Pyth price feeds will be flagged in the `unsupported_profit_tokens` field.
 
 ### JSON Output
 
@@ -175,10 +187,10 @@ RUST_LOG=pono=debug cargo run --bin pono -- 381165825
 ```
 
 This will show:
-- Historical price API requests for each token
-- Price values fetched at the block timestamp
+- On-chain price account queries for each token
+- Historical price values fetched at the exact block slot
 - Success/failure rate of price fetching
-- Network issues or API errors
+- Pyth account parsing errors or RPC issues
 
 Build optimized binary:
 ```bash

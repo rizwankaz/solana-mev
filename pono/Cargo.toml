@@ -26,6 +26,7 @@ reqwest = { version = "0.12", features = ["json"] }
 clap = { version = "4.5", features = ["derive"] }
 rayon = "1.10"
 dashmap = "6.1"
+pyth-sdk-solana = "0.10"
 
 [dev-dependencies]
 tokio-test = "0.4"
