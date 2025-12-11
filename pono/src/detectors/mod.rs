@@ -141,6 +141,13 @@ impl MevDetector {
             return None;
         }
 
+        // Filter out directional trades: check if this forms a cycle
+        // Arbitrage should start and end with the same token (completing a cycle)
+        // Directional trades have large net position changes without cycling back
+        let unique_tokens: std::collections::HashSet<&str> = swaps.iter()
+            .flat_map(|s| [s.token0.as_str(), s.token1.as_str()])
+            .collect();
+
         // Check for profit (any token with positive delta owned by signer)
         let signer_changes: Vec<_> = token_changes.iter()
             .filter(|tc| tc.owner == signer)
@@ -195,6 +202,23 @@ impl MevDetector {
 
         // Gross profit = revenue - cost (before fees)
         let profit_usd = revenue_usd - cost_usd;
+
+        // Filter out directional trades
+        // Directional trade: all swaps involve the same 2 tokens in the same direction
+        // Arbitrage: swaps form a cycle (tokens change direction or involve 3+ tokens)
+        if unique_tokens.len() == 2 && swaps.len() >= 2 {
+            // Check if all swaps have the same token pair in the same direction
+            let first_swap = &swaps[0];
+            let all_same_direction = swaps.iter().all(|swap| {
+                swap.token0 == first_swap.token0 && swap.token1 == first_swap.token1
+            });
+
+            if all_same_direction {
+                // This is a directional trade (e.g., selling WET for USDC across multiple venues)
+                // Not arbitrage - just breaking up a large trade across multiple venues
+                return None;
+            }
+        }
 
         let fee = tx.fee().unwrap_or(0);
         let compute_units = tx.compute_units_consumed().unwrap_or(0);
