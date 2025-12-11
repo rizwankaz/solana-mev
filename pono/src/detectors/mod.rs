@@ -168,18 +168,33 @@ impl MevDetector {
             .collect();
 
         // Calculate profitability using pre-fetched prices
-        let mut profit_usd = 0.0;
+        // Revenue = tokens gained, Cost = tokens spent
+        let mut revenue_usd = 0.0;
+        let mut cost_usd = 0.0;
         let mut unsupported_profit_tokens = Vec::new();
+
         for (mint, &(delta, decimals)) in &changes_by_mint {
+            let price = price_map.get(mint).copied().unwrap_or(0.0);
+            let amount = delta.abs() as f64 / 10_f64.powi(decimals as i32);
+            let value_usd = amount * price;
+
             if delta > 0 {
-                let price = price_map.get(mint).copied().unwrap_or(0.0);
+                // Token gained = revenue
                 if price == 0.0 {
                     unsupported_profit_tokens.push(mint.clone());
                 }
-                let amount = delta as f64 / 10_f64.powi(decimals as i32);
-                profit_usd += amount * price;
+                revenue_usd += value_usd;
+            } else if delta < 0 {
+                // Token spent = cost
+                if price == 0.0 {
+                    unsupported_profit_tokens.push(mint.clone());
+                }
+                cost_usd += value_usd;
             }
         }
+
+        // Gross profit = revenue - cost (before fees)
+        let profit_usd = revenue_usd - cost_usd;
 
         let fee = tx.fee().unwrap_or(0);
         let compute_units = tx.compute_units_consumed().unwrap_or(0);
@@ -284,19 +299,32 @@ impl MevDetector {
                 program_addresses.sort_unstable();
                 program_addresses.dedup();
 
-                // Calculate profitability
-                let mut profit_usd = 0.0;
+                // Calculate profitability (revenue - cost)
+                let mut revenue_usd = 0.0;
+                let mut cost_usd = 0.0;
                 let mut unsupported_profit_tokens = Vec::new();
+
                 for change in &token_changes {
+                    let price = price_map.get(&change.mint).copied().unwrap_or(0.0);
+                    let amount = change.delta.abs() as f64 / 10_f64.powi(change.decimals as i32);
+                    let value_usd = amount * price;
+
                     if change.delta > 0 {
-                        let price = price_map.get(&change.mint).copied().unwrap_or(0.0);
+                        // Token gained = revenue
                         if price == 0.0 {
                             unsupported_profit_tokens.push(change.mint.clone());
                         }
-                        let amount = change.delta as f64 / 10_f64.powi(change.decimals as i32);
-                        profit_usd += amount * price;
+                        revenue_usd += value_usd;
+                    } else if change.delta < 0 {
+                        // Token spent = cost
+                        if price == 0.0 {
+                            unsupported_profit_tokens.push(change.mint.clone());
+                        }
+                        cost_usd += value_usd;
                     }
                 }
+
+                let profit_usd = revenue_usd - cost_usd;
 
                 let total_fees = tx1.fee().unwrap_or(0) + tx2.fee().unwrap_or(0) + tx3.fee().unwrap_or(0);
                 let total_jito_tips = tx1.jito_tip().unwrap_or(0) + tx3.jito_tip().unwrap_or(0); // Only count attacker tips
