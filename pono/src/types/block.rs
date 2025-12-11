@@ -131,6 +131,74 @@ impl FetchedTransaction {
             _ => None,
         }
     }
+
+    /// Check if this is a vote transaction
+    pub fn is_vote(&self) -> bool {
+        const VOTE_PROGRAM_ID: &str = "Vote111111111111111111111111111111111111111";
+
+        match &self.transaction {
+            EncodedTransaction::Json(tx) => {
+                match &tx.message {
+                    solana_transaction_status::UiMessage::Parsed(parsed) => {
+                        parsed.account_keys.iter().any(|key| key.pubkey == VOTE_PROGRAM_ID)
+                    },
+                    solana_transaction_status::UiMessage::Raw(raw) => {
+                        raw.account_keys.iter().any(|key| key == VOTE_PROGRAM_ID)
+                    },
+                }
+            },
+            _ => false,
+        }
+    }
+
+    /// Detect Jito tip amount (transfer to Jito tip accounts)
+    /// Returns tip amount in lamports if found
+    pub fn jito_tip(&self) -> Option<u64> {
+        // Jito tip accounts (8 total tip accounts)
+        const JITO_TIP_ACCOUNTS: &[&str] = &[
+            "96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5",
+            "HFqU5x63VTqvQss8hp11i4wVV8bD44PvwucfZ2bU7gRe",
+            "Cw8CFyM9FkoMi7K7Crf6HNQqf4uEMzpKw6QNghXLvLkY",
+            "ADaUMid9yfUytqMBgopwjb2DTLSokTSzL1zt6iGPaS49",
+            "DfXygSm4jCyNCybVYYK6DwvWqjKee8pbDmJGcLWNDXjh",
+            "ADuUkR4vqLUMWXxW9gh6D6L8pMSawimctcNZ5pGwDcEt",
+            "DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL",
+            "3AVi9Tg9Uo68tJfuvoKvqKNWKkC5wPdSSdeBnizKZ6jT",
+        ];
+
+        let meta = self.meta.as_ref()?;
+
+        // Get account keys from transaction
+        let account_keys = match &self.transaction {
+            EncodedTransaction::Json(tx) => {
+                match &tx.message {
+                    solana_transaction_status::UiMessage::Parsed(parsed) => {
+                        parsed.account_keys.iter().map(|k| k.pubkey.as_str()).collect::<Vec<_>>()
+                    },
+                    solana_transaction_status::UiMessage::Raw(raw) => {
+                        raw.account_keys.iter().map(|k| k.as_str()).collect::<Vec<_>>()
+                    },
+                }
+            },
+            _ => return None,
+        };
+
+        // Look for SOL balance changes to Jito tip accounts
+        let pre_balances = &meta.pre_balances;
+        let post_balances = &meta.post_balances;
+
+        for (idx, account) in account_keys.iter().enumerate() {
+            if JITO_TIP_ACCOUNTS.contains(account) {
+                if let (Some(&pre), Some(&post)) = (pre_balances.get(idx), post_balances.get(idx)) {
+                    if post > pre {
+                        return Some(post - pre);
+                    }
+                }
+            }
+        }
+
+        None
+    }
 }
 
 /// Block reward

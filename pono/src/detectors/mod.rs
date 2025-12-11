@@ -151,21 +151,32 @@ impl MevDetector {
             return None;
         }
 
-        // Convert token changes to SimpleTokenChange format for output
-        let token_changes_output: Vec<SimpleTokenChange> = signer_changes.iter()
-            .map(|tc| tc.to_simple())
+        // Deduplicate token changes by mint (sum deltas for same mint)
+        let mut changes_by_mint: HashMap<String, (i64, u8)> = HashMap::new();
+        for change in &signer_changes {
+            let entry = changes_by_mint.entry(change.mint.clone()).or_insert((0, change.decimals));
+            entry.0 += change.delta;
+        }
+
+        // Convert to SimpleTokenChange format for output
+        let token_changes_output: Vec<SimpleTokenChange> = changes_by_mint.iter()
+            .map(|(mint, &(delta, decimals))| SimpleTokenChange {
+                mint: mint.clone(),
+                delta,
+                decimals,
+            })
             .collect();
 
         // Calculate profitability using pre-fetched prices
         let mut profit_usd = 0.0;
         let mut unsupported_profit_tokens = Vec::new();
-        for change in &signer_changes {
-            if change.delta > 0 {
-                let price = price_map.get(&change.mint).copied().unwrap_or(0.0);
+        for (mint, &(delta, decimals)) in &changes_by_mint {
+            if delta > 0 {
+                let price = price_map.get(mint).copied().unwrap_or(0.0);
                 if price == 0.0 {
-                    unsupported_profit_tokens.push(change.mint.clone());
+                    unsupported_profit_tokens.push(mint.clone());
                 }
-                let amount = change.delta as f64 / 10_f64.powi(change.decimals as i32);
+                let amount = delta as f64 / 10_f64.powi(decimals as i32);
                 profit_usd += amount * price;
             }
         }
@@ -173,9 +184,10 @@ impl MevDetector {
         let fee = tx.fee().unwrap_or(0);
         let compute_units = tx.compute_units_consumed().unwrap_or(0);
         let priority_fee = fee.saturating_sub(5000);
+        let jito_tip = tx.jito_tip().unwrap_or(0);
 
         let sol_price = price_map.get("So11111111111111111111111111111111111111112").copied().unwrap_or(131.0);
-        let fees_usd = fee as f64 / 1_000_000_000.0 * sol_price;
+        let fees_usd = (fee + jito_tip) as f64 / 1_000_000_000.0 * sol_price;
         let net_profit_usd = profit_usd - fees_usd;
 
         Some(ArbitrageEvent {
@@ -185,6 +197,7 @@ impl MevDetector {
             compute_units_consumed: compute_units,
             fee,
             priority_fee,
+            jito_tip,
             swaps: swaps.to_vec(),
             program_addresses: program_addresses.to_vec(),
             token_changes: token_changes_output,
@@ -286,8 +299,9 @@ impl MevDetector {
                 }
 
                 let total_fees = tx1.fee().unwrap_or(0) + tx2.fee().unwrap_or(0) + tx3.fee().unwrap_or(0);
+                let total_jito_tips = tx1.jito_tip().unwrap_or(0) + tx3.jito_tip().unwrap_or(0); // Only count attacker tips
                 let sol_price = price_map.get("So11111111111111111111111111111111111111112").copied().unwrap_or(131.0);
-                let fees_usd = total_fees as f64 / 1_000_000_000.0 * sol_price;
+                let fees_usd = (total_fees + total_jito_tips) as f64 / 1_000_000_000.0 * sol_price;
                 let net_profit_usd = profit_usd - fees_usd;
 
                 sandwiches.push(SandwichEvent {
@@ -319,6 +333,7 @@ impl MevDetector {
                         + tx2.compute_units_consumed().unwrap_or(0)
                         + tx3.compute_units_consumed().unwrap_or(0),
                     total_fees,
+                    total_jito_tips,
                     swaps: all_swaps,
                     program_addresses,
                     token_changes,

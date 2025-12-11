@@ -68,6 +68,7 @@ async fn main() -> anyhow::Result<()> {
                     "compute_units_consumed": arb.compute_units_consumed,
                     "fee": arb.fee,
                     "priority_fee": arb.priority_fee,
+                    "jito_tip": arb.jito_tip,
                     "swaps": arb.swaps,
                     "program_addresses": arb.program_addresses,
                     "token_changes": arb.token_changes,
@@ -88,6 +89,7 @@ async fn main() -> anyhow::Result<()> {
                     "victim_signature": sand.victim_signature,
                     "total_compute_units": sand.total_compute_units,
                     "total_fees": sand.total_fees,
+                    "total_jito_tips": sand.total_jito_tips,
                     "swaps": sand.swaps,
                     "program_addresses": sand.program_addresses,
                     "token_changes": sand.token_changes,
@@ -125,14 +127,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Count non-vote transactions
     let nonvote_transactions = block.transactions.iter()
-        .filter(|tx| {
-            // A simple heuristic: vote transactions typically have the vote program
-            if let Some(signer) = tx.signer() {
-                !signer.contains("Vote")
-            } else {
-                true
-            }
-        })
+        .filter(|tx| !tx.is_vote())
         .count();
 
     // Output JSON
