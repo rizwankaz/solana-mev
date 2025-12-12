@@ -24,7 +24,7 @@ impl MevDetector {
     pub fn new(slot: u64, timestamp: i64, rpc_url: String) -> Self {
         Self {
             min_swap_count: 2,
-            max_sandwich_distance: 10,  // Increased from 5 to catch more distant sandwiches
+            max_sandwich_distance: 1000,  // Increased to catch very distant sandwiches (e.g., patient attackers waiting 100+ txs)
             swap_parser: Arc::new(SwapParser::new()),
             oracle: OracleClient::new(slot, timestamp, rpc_url),
         }
@@ -425,6 +425,31 @@ impl MevDetector {
                     // Token1 is bought (positive position)
                     let entry1 = net_position.entry(swap.token1.clone()).or_insert((0.0, swap.decimals1));
                     entry1.0 += swap.amount1;
+                }
+
+                // 4. Filter out directional trades masquerading as sandwiches
+                // A proper sandwich cycles back to the starting token (small net position)
+                // Directional trades have large opposite-signed positions (bought one, sold another)
+                if net_position.len() == 2 {
+                    let positions: Vec<_> = net_position.iter().collect();
+                    let (mint1, (amount1, _)) = positions[0];
+                    let (mint2, (amount2, _)) = positions[1];
+
+                    // Get USD values to check if these are significant positions
+                    let price1 = price_map.get(mint1).copied().unwrap_or(0.0);
+                    let price2 = price_map.get(mint2).copied().unwrap_or(0.0);
+                    let value1_usd = amount1.abs() * price1;
+                    let value2_usd = amount2.abs() * price2;
+
+                    // Check for opposite signs with significant USD values (>$10 on both sides)
+                    let opposite_signs = (amount1 > &0.0 && amount2 < &0.0) || (amount1 < &0.0 && amount2 > &0.0);
+                    let both_significant = value1_usd > 10.0 && value2_usd > 10.0;
+
+                    if opposite_signs && both_significant {
+                        tracing::debug!("  Filtered: directional trade (opposite signs with ${:.2} and ${:.2})",
+                                      value1_usd, value2_usd);
+                        continue;
+                    }
                 }
 
                 // Calculate profit from net positions
