@@ -291,27 +291,46 @@ impl MevDetector {
         let mut sorted: Vec<_> = extracted_data.iter().collect();
         sorted.sort_by_key(|(tx, _, _, _)| tx.index);
 
-        // Look for sandwich pattern
-        for i in 0..sorted.len().saturating_sub(2) {
+        // Look for sandwich pattern: front_run, victim(s), back_run
+        // Search all combinations within max_sandwich_distance
+        for i in 0..sorted.len() {
             let (tx1, swaps1, changes1, progs1) = sorted[i];
-            let (tx2, _swaps2, _, progs2) = sorted[i + 1];
-            let (tx3, swaps3, changes3, progs3) = sorted[i + 2];
 
             let signer1 = match tx1.signer() {
                 Some(s) => s,
                 None => continue,
             };
-            let signer2 = match tx2.signer() {
-                Some(s) => s,
-                None => continue,
-            };
-            let signer3 = match tx3.signer() {
-                Some(s) => s,
-                None => continue,
-            };
 
-            // Check sandwich pattern
-            if signer1 == signer3 && signer1 != signer2 && tx3.index - tx1.index <= self.max_sandwich_distance {
+            // Look for potential back_runs within max_sandwich_distance
+            for j in (i + 2)..sorted.len().min(i + self.max_sandwich_distance + 1) {
+                let (tx3, swaps3, changes3, progs3) = sorted[j];
+
+                let signer3 = match tx3.signer() {
+                    Some(s) => s,
+                    None => continue,
+                };
+
+                // Check if front_run and back_run have same signer
+                if signer1 != signer3 {
+                    continue;
+                }
+
+                // Check if there's at least one transaction with different signer in between (victim)
+                let has_victim = (i + 1..j).any(|k| {
+                    sorted[k].0.signer()
+                        .map(|s| s != signer1)
+                        .unwrap_or(false)
+                });
+
+                if !has_victim {
+                    continue;
+                }
+
+                // Get all program addresses from transactions in between (for victim analysis)
+                let mut victim_progs: Vec<String> = Vec::new();
+                for k in (i + 1)..j {
+                    victim_progs.extend(sorted[k].3.iter().cloned());
+                }
                 // Identify sandwiched token (token that's not SOL appearing in swaps)
                 let mut tokens: std::collections::HashSet<String> = std::collections::HashSet::new();
                 const SOL: &str = "So11111111111111111111111111111111111111112";
@@ -348,7 +367,7 @@ impl MevDetector {
                 // Combine DEX programs
                 let mut program_addresses = Vec::new();
                 program_addresses.extend_from_slice(progs1);
-                program_addresses.extend_from_slice(progs2);
+                program_addresses.extend(victim_progs);
                 program_addresses.extend_from_slice(progs3);
                 program_addresses.sort_unstable();
                 program_addresses.dedup();
@@ -357,7 +376,7 @@ impl MevDetector {
                 // Build net position from swap flows: token0 is sold (-), token1 is bought (+)
                 let mut net_position: HashMap<String, (f64, u8)> = HashMap::new();
 
-                // Only include attacker's swaps (tx1 and tx3, not victim tx2)
+                // Only include attacker's swaps (tx1 and tx3, not victim transactions)
                 for swap in swaps1.iter().chain(swaps3.iter()) {
                     // Token0 is sold (negative position)
                     let entry0 = net_position.entry(swap.token0.clone()).or_insert((0.0, swap.decimals0));
@@ -398,8 +417,9 @@ impl MevDetector {
 
                 let profit_usd = revenue_usd - cost_usd;
 
-                let total_fees = tx1.fee().unwrap_or(0) + tx2.fee().unwrap_or(0) + tx3.fee().unwrap_or(0);
-                let total_jito_tips = tx1.jito_tip().unwrap_or(0) + tx3.jito_tip().unwrap_or(0); // Only count attacker tips
+                // Only count attacker's fees (front_run and back_run)
+                let total_fees = tx1.fee().unwrap_or(0) + tx3.fee().unwrap_or(0);
+                let total_jito_tips = tx1.jito_tip().unwrap_or(0) + tx3.jito_tip().unwrap_or(0);
                 let sol_price = price_map.get("So11111111111111111111111111111111111111112").copied().unwrap_or(131.0);
                 let fees_usd = (total_fees + total_jito_tips) as f64 / 1_000_000_000.0 * sol_price;
                 let net_profit_usd = profit_usd - fees_usd;
@@ -424,9 +444,15 @@ impl MevDetector {
                     },
                     front_run_swaps: swaps1.to_vec(),
                     back_run_swaps: swaps3.to_vec(),
-                    total_compute_units: tx1.compute_units_consumed().unwrap_or(0)
-                        + tx2.compute_units_consumed().unwrap_or(0)
-                        + tx3.compute_units_consumed().unwrap_or(0),
+                    total_compute_units: {
+                        let mut total = tx1.compute_units_consumed().unwrap_or(0)
+                            + tx3.compute_units_consumed().unwrap_or(0);
+                        // Add compute units from all victim transactions
+                        for k in (i + 1)..j {
+                            total += sorted[k].0.compute_units_consumed().unwrap_or(0);
+                        }
+                        total
+                    },
                     total_fees,
                     total_jito_tips,
                     program_addresses,
@@ -438,6 +464,9 @@ impl MevDetector {
                         unsupported_profit_tokens,
                     },
                 });
+
+                // Found a sandwich with this front_run, move to next front_run
+                break;
             }
         }
 
