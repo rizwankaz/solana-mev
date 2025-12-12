@@ -305,8 +305,8 @@ impl SwapParser {
             post_map.insert(b.account_index as usize, b);
         }
 
-        pre_map.keys()
-            .chain(post_map.keys())
+        // Use only post_map keys to avoid duplicates (accounts appear in both pre and post)
+        post_map.keys()
             .filter_map(|&idx| {
                 let (pre, post) = (pre_map.get(&idx)?, post_map.get(&idx)?);
                 let pre_amt = pre.ui_token_amount.amount.parse().ok()?;
