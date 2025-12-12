@@ -24,7 +24,7 @@ impl MevDetector {
     pub fn new(slot: u64, timestamp: i64, rpc_url: String) -> Self {
         Self {
             min_swap_count: 2,
-            max_sandwich_distance: 5,
+            max_sandwich_distance: 10,  // Increased from 5 to catch more distant sandwiches
             swap_parser: Arc::new(SwapParser::new()),
             oracle: OracleClient::new(slot, timestamp, rpc_url),
         }
@@ -41,6 +41,9 @@ impl MevDetector {
             .par_iter()
             .filter(|tx| tx.is_success() && Self::has_potential_mev(tx))
             .collect();
+
+        tracing::debug!("Slot {}: {} transactions passed initial MEV filter out of {} total",
+                    slot, candidates.len(), transactions.len());
 
         if candidates.is_empty() {
             return Vec::new();
@@ -291,6 +294,14 @@ impl MevDetector {
         let mut sorted: Vec<_> = extracted_data.iter().collect();
         sorted.sort_by_key(|(tx, _, _, _)| tx.index);
 
+        tracing::debug!("Sandwich detection: analyzing {} transactions with max_distance={}",
+                    sorted.len(), self.max_sandwich_distance);
+
+        // Log transaction signatures and indices for debugging
+        for (tx, swaps, _, _) in &sorted {
+            tracing::debug!("  TX idx={}: sig={} swaps={}", tx.index, &tx.signature, swaps.len());
+        }
+
         // Look for sandwich pattern: front_run, victim(s), back_run
         // Search all combinations within max_sandwich_distance
         for i in 0..sorted.len() {
@@ -325,6 +336,35 @@ impl MevDetector {
                 if !has_victim {
                     continue;
                 }
+
+                // Log potential sandwich candidate
+                tracing::debug!("Potential sandwich: TX {} (idx={}) -> TX {} (idx={}), same signer, victim present",
+                           &tx1.signature, tx1.index,
+                           &tx3.signature, tx3.index);
+
+                // Filter out invalid sandwiches:
+                // 1. Both front and back must have swaps
+                // 2. Must involve actual trading (not just failed transactions)
+                if swaps1.is_empty() || swaps3.is_empty() {
+                    tracing::debug!("  Filtered: empty swaps (front={}, back={})", swaps1.len(), swaps3.len());
+                    continue;
+                }
+
+                // 3. Check that swaps involve the same tokens (required for sandwich pattern)
+                let tokens1: std::collections::HashSet<_> = swaps1.iter()
+                    .flat_map(|s| [&s.token0, &s.token1])
+                    .collect();
+                let tokens3: std::collections::HashSet<_> = swaps3.iter()
+                    .flat_map(|s| [&s.token0, &s.token1])
+                    .collect();
+
+                // Must have at least one token in common (the sandwiched token or base currency)
+                if tokens1.is_disjoint(&tokens3) {
+                    tracing::debug!("  Filtered: disjoint tokens");
+                    continue;
+                }
+
+                tracing::debug!("  Valid sandwich found!");
 
                 // Get all program addresses from transactions in between (for victim analysis)
                 let mut victim_progs: Vec<String> = Vec::new();
