@@ -117,12 +117,22 @@ impl SwapParser {
                     .unwrap_or("")
                     .to_string();
 
-                // Look up mint/decimals from either source or destination
+                // Look up mint/decimals from token_map first
                 let token_info = info_obj.get("source")
                     .or_else(|| info_obj.get("account"))
                     .or_else(|| info_obj.get("destination"))
                     .and_then(|v| v.as_str())
                     .and_then(|s| token_map.get(s));
+
+                // For transferChecked, mint and decimals are in the instruction
+                let mint_from_instruction = info_obj.get("mint")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+
+                let decimals_from_instruction = info_obj.get("tokenAmount")
+                    .and_then(|v| v.get("decimals"))
+                    .and_then(|v| v.as_u64())
+                    .map(|d| d as u8);
 
                 let amount = info_obj.get("amount")
                     .or_else(|| info_obj.get("tokenAmount").and_then(|v| v.get("amount")))
@@ -130,16 +140,25 @@ impl SwapParser {
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(0);
 
-                if let Some((mint, decimals)) = token_info {
-                    if amount > 0 {
-                        transfers.push((Transfer {
-                            mint: mint.clone(),
-                            amount,
-                            decimals: *decimals,
-                            source: source.clone(),
-                            destination: destination.clone(),
-                        }, current_dex.clone()));
+                // Use token_map if available, otherwise fall back to instruction data
+                let (mint, decimals) = match token_info {
+                    Some((m, d)) => (m.clone(), *d),
+                    None => {
+                        match (mint_from_instruction, decimals_from_instruction) {
+                            (Some(m), Some(d)) => (m, d),
+                            _ => continue,
+                        }
                     }
+                };
+
+                if amount > 0 {
+                    transfers.push((Transfer {
+                        mint,
+                        amount,
+                        decimals,
+                        source: source.clone(),
+                        destination: destination.clone(),
+                    }, current_dex.clone()));
                 }
             }
         }
@@ -171,11 +190,14 @@ impl SwapParser {
                         (t2.mint.clone(), t2.amount, t2.decimals, t1.mint.clone(), t1.amount, t1.decimals)
                     };
 
+                let amt0_f = amount0 as f64 / 10_f64.powi(decimals0 as i32);
+                let amt1_f = amount1 as f64 / 10_f64.powi(decimals1 as i32);
+
                 swaps.push(SwapInfo {
                     token0,
-                    amount0: amount0 as f64 / 10_f64.powi(decimals0 as i32),
+                    amount0: amt0_f,
                     token1,
-                    amount1: amount1 as f64 / 10_f64.powi(decimals1 as i32),
+                    amount1: amt1_f,
                     dex: dex1.clone(),
                     decimals0,
                     decimals1,
