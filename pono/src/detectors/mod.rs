@@ -221,29 +221,36 @@ impl MevDetector {
 
         // Filter out directional trades by checking if swaps form a cycle
         // Arbitrage: cycles back to starting token, so one token has ~zero net change
-        // Directional trade: both tokens have large net changes (sold A for B)
+        // Directional trade: sell A to buy B, resulting in -A and +B positions
         if unique_tokens.len() == 2 && swaps.len() >= 2 {
-            // Count tokens with significant net position change (in USD terms)
-            // For arbitrage: USDC → WET → USDC results in ~0 WET, small USDC profit
-            // For directional: WET → USDC results in large negative WET, large positive USDC
-            let large_changes = net_position.iter()
-                .filter(|(mint, (amount, _decimals))| {
-                    let price = price_map.get(*mint).copied().unwrap_or(0.0);
-                    let value_usd = amount.abs() * price;
+            // Check if we have opposite-signed positions (one positive, one negative)
+            // This indicates a directional trade: sold one thing to buy another
+            let positions: Vec<_> = net_position.iter().collect();
+            if positions.len() == 2 {
+                let (mint1, (amount1, _)) = positions[0];
+                let (mint2, (amount2, _)) = positions[1];
 
-                    // Check USD value if we have price data
-                    if price > 0.0 {
-                        value_usd > 10.0  // More than $10 position change
-                    } else {
-                        // For tokens without price data, check token amount
-                        amount.abs() > 100.0  // More than 100 tokens (conservative threshold)
+                // Check if positions have opposite signs
+                let opposite_signs = (amount1 > &0.0 && amount2 < &0.0) || (amount1 < &0.0 && amount2 > &0.0);
+
+                if opposite_signs {
+                    // Check if at least one position is significant
+                    for (mint, (amount, _decimals)) in &positions {
+                        let price = price_map.get(*mint).copied().unwrap_or(0.0);
+                        let value_usd = amount.abs() * price;
+
+                        let is_significant = if price > 0.0 {
+                            value_usd > 1.0  // More than $1 position change
+                        } else {
+                            amount.abs() > 100.0  // More than 100 tokens
+                        };
+
+                        if is_significant {
+                            // Directional trade: sold one token to buy another
+                            return None;
+                        }
                     }
-                })
-                .count();
-
-            // If both tokens have large changes, it's directional (not cycling back)
-            if large_changes >= 2 {
-                return None;
+                }
             }
         }
 
