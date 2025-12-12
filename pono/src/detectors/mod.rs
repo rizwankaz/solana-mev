@@ -197,15 +197,19 @@ impl MevDetector {
             let price = price_map.get(mint).copied().unwrap_or(0.0);
             let value_usd = amount.abs() * price;
 
+            // Only flag unsupported tokens if they have significant position (>1 token)
+            // Ignore near-zero positions from rounding in cycled tokens
+            let is_significant = amount.abs() > 1.0;
+
             if *amount > 0.0 {
                 // Net positive = revenue
-                if price == 0.0 {
+                if price == 0.0 && is_significant {
                     unsupported_profit_tokens.push(mint.clone());
                 }
                 revenue_usd += value_usd;
             } else if *amount < 0.0 {
                 // Net negative = cost
-                if price == 0.0 {
+                if price == 0.0 && is_significant {
                     unsupported_profit_tokens.push(mint.clone());
                 }
                 cost_usd += value_usd;
@@ -371,15 +375,19 @@ impl MevDetector {
                     let price = price_map.get(mint).copied().unwrap_or(0.0);
                     let value_usd = amount.abs() * price;
 
+                    // Only flag unsupported tokens if they have significant position (>1 token)
+                    // Ignore near-zero positions from rounding in cycled tokens
+                    let is_significant = amount.abs() > 1.0;
+
                     if *amount > 0.0 {
                         // Net positive = revenue
-                        if price == 0.0 {
+                        if price == 0.0 && is_significant {
                             unsupported_profit_tokens.push(mint.clone());
                         }
                         revenue_usd += value_usd;
                     } else if *amount < 0.0 {
                         // Net negative = cost
-                        if price == 0.0 {
+                        if price == 0.0 && is_significant {
                             unsupported_profit_tokens.push(mint.clone());
                         }
                         cost_usd += value_usd;
