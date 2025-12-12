@@ -114,8 +114,11 @@ impl SwapParser {
         }
 
         // Pair consecutive transfers with different tokens as swaps
-        for i in (0..transfers.len()).step_by(2) {
-            if let (Some((t1, dex1)), Some((t2, _dex2))) = (transfers.get(i), transfers.get(i + 1)) {
+        // Use chunks to handle both even and odd numbers of transfers
+        for chunk in transfers.chunks(2) {
+            if chunk.len() == 2 {
+                let (t1, dex1) = &chunk[0];
+                let (t2, _dex2) = &chunk[1];
                 if t1.mint != t2.mint {
                     swaps.push(SwapInfo {
                         token0: t1.mint.clone(),
@@ -128,6 +131,8 @@ impl SwapParser {
                     });
                 }
             }
+            // If chunk has 1 element, it's unpaired - might indicate parsing issue
+            // For now, skip it (could log warning in production)
         }
 
         swaps
