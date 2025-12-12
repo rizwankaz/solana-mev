@@ -223,12 +223,21 @@ impl MevDetector {
         // Arbitrage: cycles back to starting token, so one token has ~zero net change
         // Directional trade: both tokens have large net changes (sold A for B)
         if unique_tokens.len() == 2 && swaps.len() >= 2 {
-            // Count tokens with significant net position change
+            // Count tokens with significant net position change (in USD terms)
             // For arbitrage: USDC → WET → USDC results in ~0 WET, small USDC profit
             // For directional: WET → USDC results in large negative WET, large positive USDC
             let large_changes = net_position.iter()
-                .filter(|(_mint, (amount, _decimals))| {
-                    amount.abs() > 1.0  // More than 1 token unit
+                .filter(|(mint, (amount, _decimals))| {
+                    let price = price_map.get(*mint).copied().unwrap_or(0.0);
+                    let value_usd = amount.abs() * price;
+
+                    // Check USD value if we have price data
+                    if price > 0.0 {
+                        value_usd > 10.0  // More than $10 position change
+                    } else {
+                        // For tokens without price data, check token amount
+                        amount.abs() > 100.0  // More than 100 tokens (conservative threshold)
+                    }
                 })
                 .count();
 
