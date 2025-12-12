@@ -174,25 +174,37 @@ impl MevDetector {
             })
             .collect();
 
-        // Calculate profitability using pre-fetched prices
-        // Revenue = tokens gained, Cost = tokens spent
+        // Calculate profitability from swaps (more accurate than token_changes)
+        // Build net position from swap flows: token0 is sold (-), token1 is bought (+)
+        let mut net_position: HashMap<String, (f64, u8)> = HashMap::new();
+
+        for swap in swaps {
+            // Token0 is sold (negative position)
+            let entry0 = net_position.entry(swap.token0.clone()).or_insert((0.0, swap.decimals0));
+            entry0.0 -= swap.amount0;
+
+            // Token1 is bought (positive position)
+            let entry1 = net_position.entry(swap.token1.clone()).or_insert((0.0, swap.decimals1));
+            entry1.0 += swap.amount1;
+        }
+
+        // Calculate profit from net positions
         let mut revenue_usd = 0.0;
         let mut cost_usd = 0.0;
         let mut unsupported_profit_tokens = Vec::new();
 
-        for (mint, &(delta, decimals)) in &changes_by_mint {
+        for (mint, (amount, _decimals)) in &net_position {
             let price = price_map.get(mint).copied().unwrap_or(0.0);
-            let amount = delta.abs() as f64 / 10_f64.powi(decimals as i32);
-            let value_usd = amount * price;
+            let value_usd = amount.abs() * price;
 
-            if delta > 0 {
-                // Token gained = revenue
+            if *amount > 0.0 {
+                // Net positive = revenue
                 if price == 0.0 {
                     unsupported_profit_tokens.push(mint.clone());
                 }
                 revenue_usd += value_usd;
-            } else if delta < 0 {
-                // Token spent = cost
+            } else if *amount < 0.0 {
+                // Net negative = cost
                 if price == 0.0 {
                     unsupported_profit_tokens.push(mint.clone());
                 }
@@ -210,10 +222,9 @@ impl MevDetector {
             // Count tokens with significant net position change
             // For arbitrage: USDC → WET → USDC results in ~0 WET, small USDC profit
             // For directional: WET → USDC results in large negative WET, large positive USDC
-            let large_changes = changes_by_mint.iter()
-                .filter(|(_mint, (delta, decimals))| {
-                    let amount = delta.abs() as f64 / 10_f64.powi(*decimals as i32);
-                    amount > 1.0  // More than 1 token unit
+            let large_changes = net_position.iter()
+                .filter(|(_mint, (amount, _decimals))| {
+                    amount.abs() > 1.0  // More than 1 token unit
                 })
                 .count();
 
@@ -326,26 +337,40 @@ impl MevDetector {
                 program_addresses.sort_unstable();
                 program_addresses.dedup();
 
-                // Calculate profitability (revenue - cost)
+                // Calculate profitability from swaps (front_run + back_run only)
+                // Build net position from swap flows: token0 is sold (-), token1 is bought (+)
+                let mut net_position: HashMap<String, (f64, u8)> = HashMap::new();
+
+                // Only include attacker's swaps (tx1 and tx3, not victim tx2)
+                for swap in swaps1.iter().chain(swaps3.iter()) {
+                    // Token0 is sold (negative position)
+                    let entry0 = net_position.entry(swap.token0.clone()).or_insert((0.0, swap.decimals0));
+                    entry0.0 -= swap.amount0;
+
+                    // Token1 is bought (positive position)
+                    let entry1 = net_position.entry(swap.token1.clone()).or_insert((0.0, swap.decimals1));
+                    entry1.0 += swap.amount1;
+                }
+
+                // Calculate profit from net positions
                 let mut revenue_usd = 0.0;
                 let mut cost_usd = 0.0;
                 let mut unsupported_profit_tokens = Vec::new();
 
-                for change in &token_changes {
-                    let price = price_map.get(&change.mint).copied().unwrap_or(0.0);
-                    let amount = change.delta.abs() as f64 / 10_f64.powi(change.decimals as i32);
-                    let value_usd = amount * price;
+                for (mint, (amount, _decimals)) in &net_position {
+                    let price = price_map.get(mint).copied().unwrap_or(0.0);
+                    let value_usd = amount.abs() * price;
 
-                    if change.delta > 0 {
-                        // Token gained = revenue
+                    if *amount > 0.0 {
+                        // Net positive = revenue
                         if price == 0.0 {
-                            unsupported_profit_tokens.push(change.mint.clone());
+                            unsupported_profit_tokens.push(mint.clone());
                         }
                         revenue_usd += value_usd;
-                    } else if change.delta < 0 {
-                        // Token spent = cost
+                    } else if *amount < 0.0 {
+                        // Net negative = cost
                         if price == 0.0 {
-                            unsupported_profit_tokens.push(change.mint.clone());
+                            unsupported_profit_tokens.push(mint.clone());
                         }
                         cost_usd += value_usd;
                     }
