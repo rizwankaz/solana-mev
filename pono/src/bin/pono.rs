@@ -86,11 +86,26 @@ async fn main() -> anyhow::Result<()> {
                 sandwiches.push(json!({
                     "slot": sand.slot,
                     "signer": sand.signer,
-                    "victim_signature": sand.victim_signature,
+                    "sandwiched_token": sand.sandwiched_token,
                     "total_compute_units": sand.total_compute_units,
                     "total_fees": sand.total_fees,
                     "total_jito_tips": sand.total_jito_tips,
-                    "swaps": sand.swaps,
+                    "front_run": {
+                        "signature": sand.front_run.signature,
+                        "index": sand.front_run.index,
+                        "signer": sand.front_run.signer,
+                        "compute_units": sand.front_run.compute_units,
+                        "fee": sand.front_run.fee,
+                    },
+                    "back_run": {
+                        "signature": sand.back_run.signature,
+                        "index": sand.back_run.index,
+                        "signer": sand.back_run.signer,
+                        "compute_units": sand.back_run.compute_units,
+                        "fee": sand.back_run.fee,
+                    },
+                    "front_run_swaps": sand.front_run_swaps,
+                    "back_run_swaps": sand.back_run_swaps,
                     "program_addresses": sand.program_addresses,
                     "token_changes": sand.token_changes,
                     "profitability": {
@@ -99,27 +114,6 @@ async fn main() -> anyhow::Result<()> {
                         "net_profit_usd": sand.profitability.net_profit_usd,
                         "unsupported_profit_tokens": sand.profitability.unsupported_profit_tokens,
                     },
-                    "front_run": {
-                        "signature": sand.front_run.signature,
-                        "index": sand.front_run.index,
-                        "signer": sand.front_run.signer,
-                        "compute_units": sand.front_run.compute_units,
-                        "fee": sand.front_run.fee,
-                    },
-                    "victim": {
-                        "signature": sand.victim.signature,
-                        "index": sand.victim.index,
-                        "signer": sand.victim.signer,
-                        "compute_units": sand.victim.compute_units,
-                        "fee": sand.victim.fee,
-                    },
-                    "back_run": {
-                        "signature": sand.back_run.signature,
-                        "index": sand.back_run.index,
-                        "signer": sand.back_run.signer,
-                        "compute_units": sand.back_run.compute_units,
-                        "fee": sand.back_run.fee,
-                    }
                 }));
             }
         }

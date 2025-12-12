@@ -31,14 +31,14 @@ pub struct ArbitrageEvent {
 pub struct SandwichEvent {
     pub slot: u64,
     pub signer: String,
-    pub victim_signature: String,
+    pub sandwiched_token: String,  // The token being price-manipulated
     pub front_run: SandwichTransaction,
-    pub victim: SandwichTransaction,
     pub back_run: SandwichTransaction,
+    pub front_run_swaps: Vec<SwapInfo>,
+    pub back_run_swaps: Vec<SwapInfo>,
     pub total_compute_units: u64,
     pub total_fees: u64,
     pub total_jito_tips: u64,
-    pub swaps: Vec<SwapInfo>,
     pub program_addresses: Vec<String>,
     pub token_changes: Vec<SimpleTokenChange>,
     pub profitability: Profitability,

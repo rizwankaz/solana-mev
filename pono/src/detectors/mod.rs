@@ -288,7 +288,7 @@ impl MevDetector {
         // Look for sandwich pattern
         for i in 0..sorted.len().saturating_sub(2) {
             let (tx1, swaps1, changes1, progs1) = sorted[i];
-            let (tx2, swaps2, _, progs2) = sorted[i + 1];
+            let (tx2, _swaps2, _, progs2) = sorted[i + 1];
             let (tx3, swaps3, changes3, progs3) = sorted[i + 2];
 
             let signer1 = match tx1.signer() {
@@ -306,11 +306,21 @@ impl MevDetector {
 
             // Check sandwich pattern
             if signer1 == signer3 && signer1 != signer2 && tx3.index - tx1.index <= self.max_sandwich_distance {
-                // Combine swaps
-                let mut all_swaps = Vec::with_capacity(swaps1.len() + swaps2.len() + swaps3.len());
-                all_swaps.extend_from_slice(swaps1);
-                all_swaps.extend_from_slice(swaps2);
-                all_swaps.extend_from_slice(swaps3);
+                // Identify sandwiched token (token that's not SOL appearing in swaps)
+                let mut tokens: std::collections::HashSet<String> = std::collections::HashSet::new();
+                const SOL: &str = "So11111111111111111111111111111111111111112";
+
+                for swap in swaps1.iter().chain(swaps3.iter()) {
+                    if swap.token0 != SOL {
+                        tokens.insert(swap.token0.clone());
+                    }
+                    if swap.token1 != SOL {
+                        tokens.insert(swap.token1.clone());
+                    }
+                }
+
+                // Sandwiched token is the most common non-SOL token
+                let sandwiched_token = tokens.into_iter().next().unwrap_or_else(|| "Unknown".to_string());
 
                 // Combine token changes
                 let mut combined_changes: HashMap<String, (i64, u8)> = HashMap::new();
@@ -387,20 +397,13 @@ impl MevDetector {
                 sandwiches.push(SandwichEvent {
                     slot,
                     signer: signer1.clone(),
-                    victim_signature: tx2.signature.clone(),
+                    sandwiched_token,
                     front_run: SandwichTransaction {
                         signature: tx1.signature.clone(),
                         index: tx1.index,
                         signer: signer1.clone(),
                         compute_units: tx1.compute_units_consumed().unwrap_or(0),
                         fee: tx1.fee().unwrap_or(0),
-                    },
-                    victim: SandwichTransaction {
-                        signature: tx2.signature.clone(),
-                        index: tx2.index,
-                        signer: signer2,
-                        compute_units: tx2.compute_units_consumed().unwrap_or(0),
-                        fee: tx2.fee().unwrap_or(0),
                     },
                     back_run: SandwichTransaction {
                         signature: tx3.signature.clone(),
@@ -409,12 +412,13 @@ impl MevDetector {
                         compute_units: tx3.compute_units_consumed().unwrap_or(0),
                         fee: tx3.fee().unwrap_or(0),
                     },
+                    front_run_swaps: swaps1.to_vec(),
+                    back_run_swaps: swaps3.to_vec(),
                     total_compute_units: tx1.compute_units_consumed().unwrap_or(0)
                         + tx2.compute_units_consumed().unwrap_or(0)
                         + tx3.compute_units_consumed().unwrap_or(0),
                     total_fees,
                     total_jito_tips,
-                    swaps: all_swaps,
                     program_addresses,
                     token_changes,
                     profitability: Profitability {
