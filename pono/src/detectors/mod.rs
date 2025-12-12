@@ -437,14 +437,31 @@ impl MevDetector {
                     let value1_usd = amount1.abs() * price1;
                     let value2_usd = amount2.abs() * price2;
 
-                    // Check for opposite signs with significant USD values (>$10 on both sides)
+                    // Check for opposite signs
                     let opposite_signs = (amount1 > &0.0 && amount2 < &0.0) || (amount1 < &0.0 && amount2 > &0.0);
-                    let both_significant = value1_usd > 10.0 && value2_usd > 10.0;
 
-                    if opposite_signs && both_significant {
-                        tracing::debug!("  Filtered: directional trade (opposite signs with ${:.2} and ${:.2})",
-                                      value1_usd, value2_usd);
-                        continue;
+                    if opposite_signs {
+                        let both_have_prices = price1 > 0.0 && price2 > 0.0;
+
+                        let is_directional = if both_have_prices {
+                            // Use USD-based filter for tokens with price data (>$10 on both sides)
+                            value1_usd > 10.0 && value2_usd > 10.0
+                        } else {
+                            // Fall back to token amount filter for tokens without price data
+                            // Use a conservative threshold of 1000 tokens on both sides
+                            amount1.abs() > 1000.0 && amount2.abs() > 1000.0
+                        };
+
+                        if is_directional {
+                            if both_have_prices {
+                                tracing::debug!("  Filtered: directional trade with ${:.2} and ${:.2}",
+                                              value1_usd, value2_usd);
+                            } else {
+                                tracing::debug!("  Filtered: directional trade with {:.2} and {:.2} tokens (no price data)",
+                                              amount1.abs(), amount2.abs());
+                            }
+                            continue;
+                        }
                     }
                 }
 
