@@ -11,6 +11,8 @@ struct Transfer {
     mint: String,
     amount: u64,
     decimals: u8,
+    source: String,
+    destination: String,
 }
 
 /// Swap parser for extracting swap details from transactions
@@ -32,12 +34,20 @@ impl SwapParser {
         };
 
         let token_map = self.build_token_map(tx);
+        let owner_map = self.build_owner_map(tx);
         let account_keys = self.get_account_keys(tx);
+        let signer = tx.signer().unwrap_or_default();
         let mut swaps = Vec::new();
 
         for inner_set in inner_instructions {
             // Extract swaps with DEX attribution from inner instructions
-            let inner_swaps = self.extract_swaps_from_inner_set(&inner_set.instructions, &token_map, &account_keys);
+            let inner_swaps = self.extract_swaps_from_inner_set(
+                &inner_set.instructions,
+                &token_map,
+                &owner_map,
+                &account_keys,
+                &signer,
+            );
             swaps.extend(inner_swaps);
         }
 
@@ -45,7 +55,14 @@ impl SwapParser {
     }
 
     /// Extract swaps from an inner instruction set, tracking which program invoked each swap
-    fn extract_swaps_from_inner_set(&self, instructions: &[UiInstruction], token_map: &HashMap<String, (String, u8)>, account_keys: &[String]) -> Vec<SwapInfo> {
+    fn extract_swaps_from_inner_set(
+        &self,
+        instructions: &[UiInstruction],
+        token_map: &HashMap<String, (String, u8)>,
+        owner_map: &HashMap<String, String>,
+        account_keys: &[String],
+        signer: &str,
+    ) -> Vec<SwapInfo> {
         let mut swaps = Vec::new();
         let mut transfers = Vec::new();
         let mut current_dex = String::new();
@@ -89,7 +106,19 @@ impl SwapParser {
                     continue;
                 };
 
-                let account = info_obj.get("source")
+                let source = info_obj.get("source")
+                    .or_else(|| info_obj.get("account"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+
+                let destination = info_obj.get("destination")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+
+                // Look up mint/decimals from either source or destination
+                let token_info = info_obj.get("source")
                     .or_else(|| info_obj.get("account"))
                     .or_else(|| info_obj.get("destination"))
                     .and_then(|v| v.as_str())
@@ -101,12 +130,14 @@ impl SwapParser {
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(0);
 
-                if let Some((mint, decimals)) = account {
+                if let Some((mint, decimals)) = token_info {
                     if amount > 0 {
                         transfers.push((Transfer {
                             mint: mint.clone(),
                             amount,
                             decimals: *decimals,
+                            source: source.clone(),
+                            destination: destination.clone(),
                         }, current_dex.clone()));
                     }
                 }
@@ -114,26 +145,49 @@ impl SwapParser {
         }
 
         // Pair consecutive transfers with different tokens as swaps
-        // Use chunks to handle both even and odd numbers of transfers
-        for chunk in transfers.chunks(2) {
-            if chunk.len() == 2 {
-                let (t1, dex1) = &chunk[0];
-                let (t2, _dex2) = &chunk[1];
-                if t1.mint != t2.mint {
-                    swaps.push(SwapInfo {
-                        token0: t1.mint.clone(),
-                        amount0: t1.amount as f64 / 10_f64.powi(t1.decimals as i32),
-                        token1: t2.mint.clone(),
-                        amount1: t2.amount as f64 / 10_f64.powi(t2.decimals as i32),
-                        dex: dex1.clone(),
-                        decimals0: t1.decimals,
-                        decimals1: t2.decimals,
-                    });
-                }
+        // Handle complex routing where same token might appear consecutively
+        let mut i = 0;
+        while i + 1 < transfers.len() {
+            let (t1, dex1) = &transfers[i];
+            let (t2, _dex2) = &transfers[i + 1];
+
+            if t1.mint != t2.mint {
+                // Different tokens = likely a swap
+                // Determine correct direction: token sold (input) should be token0
+                let t1_source_owner = owner_map.get(&t1.source).map(|s| s.as_str());
+                let t2_dest_owner = owner_map.get(&t2.destination).map(|s| s.as_str());
+
+                // Check if t1 is from signer (user sending) and t2 is to signer (user receiving)
+                let t1_is_input = t1_source_owner == Some(signer);
+                let t2_is_output = t2_dest_owner == Some(signer);
+
+                let (token0, amount0, decimals0, token1, amount1, decimals1) =
+                    if t1_is_input && t2_is_output {
+                        // Normal order: t1 is input (sold), t2 is output (bought)
+                        (t1.mint.clone(), t1.amount, t1.decimals, t2.mint.clone(), t2.amount, t2.decimals)
+                    } else {
+                        // Reverse order: t2 is input, t1 is output
+                        // (Happens when instruction order is different)
+                        (t2.mint.clone(), t2.amount, t2.decimals, t1.mint.clone(), t1.amount, t1.decimals)
+                    };
+
+                swaps.push(SwapInfo {
+                    token0,
+                    amount0: amount0 as f64 / 10_f64.powi(decimals0 as i32),
+                    token1,
+                    amount1: amount1 as f64 / 10_f64.powi(decimals1 as i32),
+                    dex: dex1.clone(),
+                    decimals0,
+                    decimals1,
+                });
+                i += 2; // Move past both transfers
+            } else {
+                // Same token = intermediate transfer (e.g., WET out from pool A, WET in to pool B)
+                // Skip the first one and try pairing the second with the next transfer
+                i += 1;
             }
-            // If chunk has 1 element, it's unpaired - might indicate parsing issue
-            // For now, skip it (could log warning in production)
         }
+
 
         swaps
     }
@@ -185,6 +239,31 @@ impl SwapParser {
                             account.clone(),
                             (balance.mint.clone(), balance.ui_token_amount.decimals)
                         );
+                    }
+                }
+            }
+        }
+
+        map
+    }
+
+    /// Build token account to owner map
+    fn build_owner_map(&self, tx: &FetchedTransaction) -> HashMap<String, String> {
+        let Some(meta) = &tx.meta else {
+            return HashMap::new();
+        };
+
+        let keys = self.get_account_keys(tx);
+        let mut map = HashMap::new();
+
+        let balances = [&meta.pre_token_balances, &meta.post_token_balances];
+        for balance_set in balances {
+            if let OptionSerializer::Some(balances) = balance_set {
+                for balance in balances {
+                    if let Some(account) = keys.get(balance.account_index as usize) {
+                        if let OptionSerializer::Some(owner) = &balance.owner {
+                            map.insert(account.clone(), owner.clone());
+                        }
                     }
                 }
             }
