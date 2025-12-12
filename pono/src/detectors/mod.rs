@@ -227,29 +227,15 @@ impl MevDetector {
             // This indicates a directional trade: sold one thing to buy another
             let positions: Vec<_> = net_position.iter().collect();
             if positions.len() == 2 {
-                let (mint1, (amount1, _)) = positions[0];
-                let (mint2, (amount2, _)) = positions[1];
+                let (_mint1, (amount1, _)) = positions[0];
+                let (_mint2, (amount2, _)) = positions[1];
 
-                // Check if positions have opposite signs
+                // If positions have opposite signs, it's a directional trade
+                // (sold one token to buy another, not cycling back)
                 let opposite_signs = (amount1 > &0.0 && amount2 < &0.0) || (amount1 < &0.0 && amount2 > &0.0);
 
                 if opposite_signs {
-                    // Check if at least one position is significant
-                    for (mint, (amount, _decimals)) in &positions {
-                        let price = price_map.get(*mint).copied().unwrap_or(0.0);
-                        let value_usd = amount.abs() * price;
-
-                        let is_significant = if price > 0.0 {
-                            value_usd > 1.0  // More than $1 position change
-                        } else {
-                            amount.abs() > 100.0  // More than 100 tokens
-                        };
-
-                        if is_significant {
-                            // Directional trade: sold one token to buy another
-                            return None;
-                        }
-                    }
+                    return None;
                 }
             }
         }
