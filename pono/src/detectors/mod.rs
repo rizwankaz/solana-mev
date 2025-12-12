@@ -12,8 +12,6 @@ use std::sync::Arc;
 pub struct MevDetector {
     /// Minimum swap count for arbitrage
     pub min_swap_count: usize,
-    /// Maximum block distance for sandwich detection
-    pub max_sandwich_distance: usize,
     /// Swap parser for extracting swap information
     swap_parser: Arc<SwapParser>,
     /// Oracle client for price data
@@ -24,7 +22,6 @@ impl MevDetector {
     pub fn new(slot: u64, timestamp: i64, rpc_url: String) -> Self {
         Self {
             min_swap_count: 2,
-            max_sandwich_distance: 1000,  // Increased to catch very distant sandwiches (e.g., patient attackers waiting 100+ txs)
             swap_parser: Arc::new(SwapParser::new()),
             oracle: OracleClient::new(slot, timestamp, rpc_url),
         }
@@ -294,8 +291,7 @@ impl MevDetector {
         let mut sorted: Vec<_> = extracted_data.iter().collect();
         sorted.sort_by_key(|(tx, _, _, _)| tx.index);
 
-        tracing::debug!("Sandwich detection: analyzing {} transactions with max_distance={}",
-                    sorted.len(), self.max_sandwich_distance);
+        tracing::debug!("Sandwich detection: analyzing {} transactions", sorted.len());
 
         // Log transaction signatures and indices for debugging
         for (tx, swaps, _, _) in &sorted {
@@ -303,7 +299,7 @@ impl MevDetector {
         }
 
         // Look for sandwich pattern: front_run, victim(s), back_run
-        // Search all combinations within max_sandwich_distance
+        // Search all combinations (no distance limit - patient sandwiches can span hundreds of txs)
         for i in 0..sorted.len() {
             let (tx1, swaps1, changes1, progs1) = sorted[i];
 
@@ -312,8 +308,8 @@ impl MevDetector {
                 None => continue,
             };
 
-            // Look for potential back_runs within max_sandwich_distance
-            for j in (i + 2)..sorted.len().min(i + self.max_sandwich_distance + 1) {
+            // Look for potential back_runs (check all remaining transactions)
+            for j in (i + 2)..sorted.len() {
                 let (tx3, swaps3, changes3, progs3) = sorted[j];
 
                 let signer3 = match tx3.signer() {
