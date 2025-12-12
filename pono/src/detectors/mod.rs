@@ -203,19 +203,22 @@ impl MevDetector {
         // Gross profit = revenue - cost (before fees)
         let profit_usd = revenue_usd - cost_usd;
 
-        // Filter out directional trades
-        // Directional trade: all swaps involve the same 2 tokens in the same direction
-        // Arbitrage: swaps form a cycle (tokens change direction or involve 3+ tokens)
+        // Filter out directional trades by checking if swaps form a cycle
+        // Arbitrage: cycles back to starting token, so one token has ~zero net change
+        // Directional trade: both tokens have large net changes (sold A for B)
         if unique_tokens.len() == 2 && swaps.len() >= 2 {
-            // Check if all swaps have the same token pair in the same direction
-            let first_swap = &swaps[0];
-            let all_same_direction = swaps.iter().all(|swap| {
-                swap.token0 == first_swap.token0 && swap.token1 == first_swap.token1
-            });
+            // Count tokens with significant net position change
+            // For arbitrage: USDC → WET → USDC results in ~0 WET, small USDC profit
+            // For directional: WET → USDC results in large negative WET, large positive USDC
+            let large_changes = changes_by_mint.iter()
+                .filter(|(_mint, (delta, decimals))| {
+                    let amount = delta.abs() as f64 / 10_f64.powi(*decimals as i32);
+                    amount > 1.0  // More than 1 token unit
+                })
+                .count();
 
-            if all_same_direction {
-                // This is a directional trade (e.g., selling WET for USDC across multiple venues)
-                // Not arbitrage - just breaking up a large trade across multiple venues
+            // If both tokens have large changes, it's directional (not cycling back)
+            if large_changes >= 2 {
                 return None;
             }
         }
