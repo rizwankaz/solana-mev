@@ -37,9 +37,18 @@ impl SwapParser {
         let owner_map = self.build_owner_map(tx);
         let account_keys = self.get_account_keys(tx);
         let signer = tx.signer().unwrap_or_default();
+
+        // Get outer instructions to determine DEX programs
+        let outer_instructions = self.get_outer_instructions(tx);
         let mut swaps = Vec::new();
 
         for inner_set in inner_instructions {
+            // Get the program ID of the outer instruction that generated these inner instructions
+            let outer_dex = outer_instructions
+                .get(inner_set.index as usize)
+                .map(|program_id| program_id.clone())
+                .unwrap_or_default();
+
             // Extract swaps with DEX attribution from inner instructions
             let inner_swaps = self.extract_swaps_from_inner_set(
                 &inner_set.instructions,
@@ -47,6 +56,7 @@ impl SwapParser {
                 &owner_map,
                 &account_keys,
                 &signer,
+                &outer_dex,
             );
             swaps.extend(inner_swaps);
         }
@@ -62,10 +72,12 @@ impl SwapParser {
         owner_map: &HashMap<String, String>,
         account_keys: &[String],
         signer: &str,
+        outer_dex: &str,
     ) -> Vec<SwapInfo> {
         let mut swaps = Vec::new();
         let mut transfers = Vec::new();
-        let mut current_dex = String::new();
+        // Start with the outer instruction's program as the DEX
+        let mut current_dex = outer_dex.to_string();
 
         for inst in instructions {
             // Extract program ID from this instruction
@@ -303,6 +315,46 @@ impl SwapParser {
         match &ui_tx.message {
             UiMessage::Parsed(p) => p.account_keys.iter().map(|k| k.pubkey.clone()).collect(),
             UiMessage::Raw(r) => r.account_keys.clone(),
+        }
+    }
+
+    /// Get program IDs from outer (top-level) instructions
+    fn get_outer_instructions(&self, tx: &FetchedTransaction) -> Vec<String> {
+        let EncodedTransaction::Json(ui_tx) = &tx.transaction else {
+            return Vec::new();
+        };
+
+        match &ui_tx.message {
+            UiMessage::Parsed(parsed) => {
+                parsed.instructions.iter().map(|inst| {
+                    match inst {
+                        UiInstruction::Parsed(UiParsedInstruction::Parsed(_)) => {
+                            // For fully parsed instructions, we can't get the program ID easily
+                            // These are typically system/token programs, not DEXes
+                            String::new()
+                        }
+                        UiInstruction::Parsed(UiParsedInstruction::PartiallyDecoded(partial)) => {
+                            partial.program_id.clone()
+                        }
+                        UiInstruction::Compiled(compiled) => {
+                            parsed.account_keys
+                                .get(compiled.program_id_index as usize)
+                                .map(|k| k.pubkey.clone())
+                                .unwrap_or_default()
+                        }
+                    }
+                }).collect()
+            }
+            UiMessage::Raw(raw) => {
+                raw.instructions.iter()
+                    .map(|inst| {
+                        raw.account_keys
+                            .get(inst.program_id_index as usize)
+                            .cloned()
+                            .unwrap_or_default()
+                    })
+                    .collect()
+            }
         }
     }
 
