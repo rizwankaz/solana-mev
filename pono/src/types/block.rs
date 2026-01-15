@@ -200,7 +200,7 @@ pub struct Reward {
 #[derive(Debug, thiserror::Error)]
 pub enum FetcherError {
     #[error("RPC error: {0}")]
-    RpcError(#[from] solana_client::client_error::ClientError),
+    RpcError(Box<solana_client::client_error::ClientError>),
 
     #[error("block not available at slot {slot}")]
     BlockNotAvailable { slot: u64 },
@@ -217,6 +217,12 @@ pub enum FetcherError {
 
     #[error("join error: {0}")]
     JoinError(#[from] tokio::task::JoinError),
+}
+
+impl From<solana_client::client_error::ClientError> for FetcherError {
+    fn from(e: solana_client::client_error::ClientError) -> Self {
+        FetcherError::RpcError(Box::new(e))
+    }
 }
 
 pub type Result<T> = std::result::Result<T, FetcherError>;

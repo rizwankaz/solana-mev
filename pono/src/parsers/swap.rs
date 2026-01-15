@@ -45,7 +45,7 @@ impl SwapParser {
         for inner_set in inner_instructions {
             let outer_dex = outer_instructions
                 .get(inner_set.index as usize)
-                .map(|program_id| program_id.clone())
+                .cloned()
                 .unwrap_or_default();
 
             let inner_swaps = self.extract_swaps_from_inner_set(

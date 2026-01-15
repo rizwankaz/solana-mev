@@ -102,7 +102,7 @@ impl BlockFetcher {
                 {
                     Err(FetcherError::BlockNotAvailable { slot })
                 } else {
-                    Err(FetcherError::RpcError(e))
+                    Err(FetcherError::RpcError(Box::new(e)))
                 }
             }
         }
