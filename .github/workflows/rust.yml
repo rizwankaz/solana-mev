@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ "main", "claude/**" ]
+    branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
 
@@ -41,7 +41,7 @@ jobs:
           toolchain: ${{ matrix.rust }}
 
       - name: Cache cargo registry
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/bin/
@@ -63,7 +63,7 @@ jobs:
         run: cd pono && cargo build --release --bin pono
 
       - name: Upload pono binary
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: pono-${{ matrix.os }}
           path: pono/target/release/pono${{ matrix.os == 'windows-latest' && '.exe' || '' }}
