@@ -28,9 +28,7 @@ enum Commands {
 #[derive(Subcommand)]
 enum RunMode {
     /// summary mode
-    Slot {
-        slot_spec: String,
-    },
+    Slot { slot_spec: String },
 }
 
 fn parse_slot_spec(spec: &str) -> anyhow::Result<(u64, u64)> {
@@ -52,9 +50,10 @@ async fn analyze_slot_mev(
     fetcher: &Arc<BlockFetcher>,
     rpc_url: &str,
 ) -> anyhow::Result<serde_json::Value> {
-    let block = fetcher.fetch_block(slot).await.map_err(|e| {
-        anyhow::anyhow!("Failed to fetch block {}: {:?}", slot, e)
-    })?;
+    let block = fetcher
+        .fetch_block(slot)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to fetch block {}: {:?}", slot, e))?;
 
     let timestamp = block.timestamp().map(|t| t.timestamp()).unwrap_or(0);
     let mut detector = MevInspector::new(slot, timestamp, rpc_url.to_string());
@@ -126,9 +125,7 @@ async fn analyze_slot_mev(
         }
     }
 
-    let nonvote_transactions = block.transactions.iter()
-        .filter(|tx| !tx.is_vote())
-        .count();
+    let nonvote_transactions = block.transactions.iter().filter(|tx| !tx.is_vote()).count();
 
     Ok(json!({
         "slot": block.slot,
@@ -153,9 +150,10 @@ async fn analyze_slot_summary(
     fetcher: &Arc<BlockFetcher>,
     rpc_url: &str,
 ) -> anyhow::Result<serde_json::Value> {
-    let block = fetcher.fetch_block(slot).await.map_err(|e| {
-        anyhow::anyhow!("Failed to fetch block {}: {:?}", slot, e)
-    })?;
+    let block = fetcher
+        .fetch_block(slot)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to fetch block {}: {:?}", slot, e))?;
 
     let timestamp = block.timestamp().map(|t| t.timestamp()).unwrap_or(0);
     let mut detector = MevInspector::new(slot, timestamp, rpc_url.to_string());
@@ -181,9 +179,7 @@ async fn analyze_slot_summary(
         }
     }
 
-    let nonvote_transactions = block.transactions.iter()
-        .filter(|tx| !tx.is_vote())
-        .count();
+    let nonvote_transactions = block.transactions.iter().filter(|tx| !tx.is_vote()).count();
 
     Ok(json!({
         "slot": block.slot,
@@ -205,8 +201,7 @@ async fn analyze_slot_summary(
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("info"))
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
         )
         .init();
 
@@ -256,8 +251,15 @@ async fn main() -> anyhow::Result<()> {
                         }
 
                         if !mev_events.is_empty() {
-                            println!("Slot {}: {} MEV txs ({} arb, {} sandwich) | ${:.2} profit | {} CU",
-                                slot, mev_events.len(), arb_count, sandwich_count, total_profit, mev_compute_units);
+                            println!(
+                                "Slot {}: {} MEV txs ({} arb, {} sandwich) | ${:.2} profit | {} CU",
+                                slot,
+                                mev_events.len(),
+                                arb_count,
+                                sandwich_count,
+                                total_profit,
+                                mev_compute_units
+                            );
                         }
                     }
                     Err(e) => {

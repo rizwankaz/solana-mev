@@ -1,9 +1,9 @@
+use crate::oracle::OracleClient;
+use crate::parsers::SwapParser;
 use crate::types::{
     ArbitrageEvent, FetchedTransaction, MevEvent, Profitability, SandwichEvent,
     SandwichTransaction, SimpleTokenChange, TokenChange,
 };
-use crate::parsers::SwapParser;
-use crate::oracle::OracleClient;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -66,7 +66,8 @@ impl MevInspector {
 
                 let signer = tx.signer()?;
                 let token_changes = swap_parser.extract_token_changes(tx);
-                let has_profit = token_changes.iter()
+                let has_profit = token_changes
+                    .iter()
                     .any(|tc| tc.owner == signer && tc.delta > 0);
 
                 if has_profit {
@@ -91,8 +92,12 @@ impl MevInspector {
             return Vec::new();
         }
 
-        tracing::debug!("found {} arb and {} sw candidates in slot {}",
-            slot, arbitrage_candidates.len(), sandwich_candidates.len());
+        tracing::debug!(
+            "found {} arb and {} sw candidates in slot {}",
+            slot,
+            arbitrage_candidates.len(),
+            sandwich_candidates.len()
+        );
 
         // pricing tokens; please get an api
         let mut unique_mints = HashSet::new();
@@ -123,7 +128,8 @@ impl MevInspector {
 
         // batch fetch price
         let mints_vec: Vec<&str> = unique_mints.into_iter().collect();
-        let price_map: HashMap<String, f64> = self.oracle
+        let price_map: HashMap<String, f64> = self
+            .oracle
             .batch_get_prices(&mints_vec)
             .await
             .into_iter()
@@ -144,7 +150,7 @@ impl MevInspector {
                     self.min_swap_count,
                 )
             })
-            .filter(|arb| arb.profitability.profit_usd > 0.0)  // Only include profitable arbitrages
+            .filter(|arb| arb.profitability.profit_usd > 0.0) // Only include profitable arbitrages
             .collect();
 
         for arb in arbitrages {
@@ -152,7 +158,9 @@ impl MevInspector {
         }
 
         // only profitable sws
-        for sandwich in Self::calculate_sandwich_profitability(slot, sandwich_candidates, &price_map) {
+        for sandwich in
+            Self::calculate_sandwich_profitability(slot, sandwich_candidates, &price_map)
+        {
             events.push(MevEvent::Sandwich(sandwich));
         }
 
@@ -172,11 +180,11 @@ impl MevInspector {
 
             if let OptionSerializer::Some(logs) = &meta.log_messages {
                 return logs.iter().any(|msg| {
-                    msg.contains("Instruction: Swap") ||
-                    msg.contains("Instruction: Transfer") ||
-                    msg.contains("Program log: Instruction: Swap") ||
-                    msg.contains("swap") || 
-                    msg.contains("Swap")
+                    msg.contains("Instruction: Swap")
+                        || msg.contains("Instruction: Transfer")
+                        || msg.contains("Program log: Instruction: Swap")
+                        || msg.contains("swap")
+                        || msg.contains("Swap")
                 });
             }
         }
@@ -198,12 +206,14 @@ impl MevInspector {
         }
 
         // no directional trades
-        let unique_tokens: std::collections::HashSet<&str> = swaps.iter()
+        let unique_tokens: std::collections::HashSet<&str> = swaps
+            .iter()
             .flat_map(|s| [s.token0.as_str(), s.token1.as_str()])
             .collect();
 
         // profit please
-        let signer_changes: Vec<_> = token_changes.iter()
+        let signer_changes: Vec<_> = token_changes
+            .iter()
             .filter(|tc| tc.owner == signer)
             .collect();
 
@@ -215,12 +225,15 @@ impl MevInspector {
         // dedupe token changes
         let mut changes_by_mint: HashMap<String, (i64, u8)> = HashMap::new();
         for change in &signer_changes {
-            let entry = changes_by_mint.entry(change.mint.clone()).or_insert((0, change.decimals));
+            let entry = changes_by_mint
+                .entry(change.mint.clone())
+                .or_insert((0, change.decimals));
             entry.0 += change.delta;
         }
 
         // SimpleTokenChange format for output
-        let token_changes_output: Vec<SimpleTokenChange> = changes_by_mint.iter()
+        let token_changes_output: Vec<SimpleTokenChange> = changes_by_mint
+            .iter()
             .map(|(mint, &(delta, decimals))| SimpleTokenChange {
                 mint: mint.clone(),
                 delta,
@@ -265,7 +278,8 @@ impl MevInspector {
             if positions.len() == 2 {
                 let (_mint1, (amount1, _)) = positions[0];
                 let (_mint2, (amount2, _)) = positions[1];
-                let opposite_signs = (amount1 > &0.0 && amount2 < &0.0) || (amount1 < &0.0 && amount2 > &0.0);
+                let opposite_signs =
+                    (amount1 > &0.0 && amount2 < &0.0) || (amount1 < &0.0 && amount2 > &0.0);
 
                 if opposite_signs {
                     return None;
@@ -277,7 +291,10 @@ impl MevInspector {
         let compute_units = tx.compute_units_consumed().unwrap_or(0);
         let priority_fee = fee.saturating_sub(5000);
         let jito_tip = tx.jito_tip().unwrap_or(0);
-        let sol_price = price_map.get("So11111111111111111111111111111111111111112").copied().unwrap_or(130.0);
+        let sol_price = price_map
+            .get("So11111111111111111111111111111111111111112")
+            .copied()
+            .unwrap_or(130.0);
         let fees_usd = (fee + jito_tip) as f64 / 1_000_000_000.0 * sol_price;
         let profit_usd = revenue_usd - fees_usd;
 
@@ -338,7 +355,8 @@ impl MevInspector {
 
                     let front_run_tx = txs[i];
                     let back_run_tx = txs[j];
-                    let has_victim = transactions.iter()
+                    let has_victim = transactions
+                        .iter()
                         .filter(|tx| tx.index > front_run_tx.index && tx.index < back_run_tx.index)
                         .any(|tx| tx.signer().map(|s| s != *signer).unwrap_or(false));
 
@@ -371,7 +389,8 @@ impl MevInspector {
                         continue;
                     }
 
-                    let same_direction = front_swap.token0 == back_swap.token0 && front_swap.token1 == back_swap.token1;
+                    let same_direction = front_swap.token0 == back_swap.token0
+                        && front_swap.token1 == back_swap.token1;
                     if same_direction {
                         continue;
                     }
@@ -436,27 +455,45 @@ impl MevInspector {
         let mut sandwiches = Vec::new();
 
         for candidate in candidates {
-            tracing::debug!("  sandwich candidate: front={} back={}",
-                &candidate.front_run_tx.signature[..12], &candidate.back_run_tx.signature[..12]);
+            tracing::debug!(
+                "  sandwich candidate: front={} back={}",
+                &candidate.front_run_tx.signature[..12],
+                &candidate.back_run_tx.signature[..12]
+            );
 
             let front_swap = &candidate.front_run_swaps[0];
             let back_swap = &candidate.back_run_swaps[0];
 
-            tracing::debug!("    front swap: token0={} amount0={}, token1={} amount1={}",
-                &front_swap.token0[..8], front_swap.amount0, &front_swap.token1[..8], front_swap.amount1);
-            tracing::debug!("    back swap: token0={} amount0={}, token1={} amount1={}",
-                &back_swap.token0[..8], back_swap.amount0, &back_swap.token1[..8], back_swap.amount1);
+            tracing::debug!(
+                "    front swap: token0={} amount0={}, token1={} amount1={}",
+                &front_swap.token0[..8],
+                front_swap.amount0,
+                &front_swap.token1[..8],
+                front_swap.amount1
+            );
+            tracing::debug!(
+                "    back swap: token0={} amount0={}, token1={} amount1={}",
+                &back_swap.token0[..8],
+                back_swap.amount0,
+                &back_swap.token1[..8],
+                back_swap.amount1
+            );
 
-            let payment_token = if front_swap.token0 == "So11111111111111111111111111111111111111112"
-                || front_swap.token1 == "So11111111111111111111111111111111111111112" {
-                "So11111111111111111111111111111111111111112"  // SOL
+            let payment_token = if front_swap.token0
+                == "So11111111111111111111111111111111111111112"
+                || front_swap.token1 == "So11111111111111111111111111111111111111112"
+            {
+                "So11111111111111111111111111111111111111112" // SOL
             } else {
                 &front_swap.token0
             };
 
             tracing::debug!("    payment token: {}", &payment_token[..8]);
-            tracing::debug!("    front_swap.token0 ({}) == payment_token? {}",
-                &front_swap.token0[..8], front_swap.token0 == payment_token);
+            tracing::debug!(
+                "    front_swap.token0 ({}) == payment_token? {}",
+                &front_swap.token0[..8],
+                front_swap.token0 == payment_token
+            );
 
             let (spent, received) = if front_swap.token0 == payment_token {
                 tracing::debug!("    branch 1: spent=front.amount0, received=back.amount1");
@@ -472,29 +509,44 @@ impl MevInspector {
 
             let profit_in_token = received - spent;
 
-            tracing::debug!("    swap-based profit: spent={:.6} {}, received={:.6} {}, profit={:.6}",
-                spent, &payment_token[..8], received, &payment_token[..8], profit_in_token);
+            tracing::debug!(
+                "    swap-based profit: spent={:.6} {}, received={:.6} {}, profit={:.6}",
+                spent,
+                &payment_token[..8],
+                received,
+                &payment_token[..8],
+                profit_in_token
+            );
 
             let token_price = price_map.get(payment_token).copied().unwrap_or_else(|| {
                 if payment_token == "So11111111111111111111111111111111111111112" {
                     130.0 // default?
                 } else {
-                    1.0  // probably a stable
+                    1.0 // probably a stable
                 }
             });
 
             let revenue_usd = profit_in_token.max(0.0) * token_price;
 
             // fees!
-            let total_fees = candidate.front_run_tx.fee().unwrap_or(0) + candidate.back_run_tx.fee().unwrap_or(0);
-            let total_jito_tips = candidate.front_run_tx.jito_tip().unwrap_or(0) + candidate.back_run_tx.jito_tip().unwrap_or(0);
-            let sol_price = price_map.get("So11111111111111111111111111111111111111112").copied().unwrap_or(127.0);
+            let total_fees = candidate.front_run_tx.fee().unwrap_or(0)
+                + candidate.back_run_tx.fee().unwrap_or(0);
+            let total_jito_tips = candidate.front_run_tx.jito_tip().unwrap_or(0)
+                + candidate.back_run_tx.jito_tip().unwrap_or(0);
+            let sol_price = price_map
+                .get("So11111111111111111111111111111111111111112")
+                .copied()
+                .unwrap_or(127.0);
             let fees_usd = (total_fees + total_jito_tips) as f64 / 1_000_000_000.0 * sol_price;
             let profit_usd = revenue_usd - fees_usd;
             let unsupported_profit_tokens: Vec<String> = vec![];
 
-            tracing::debug!("  profitability: revenue=${:.4}, fees=${:.4}, profit=${:.4}",
-                revenue_usd, fees_usd, profit_usd);
+            tracing::debug!(
+                "  profitability: revenue=${:.4}, fees=${:.4}, profit=${:.4}",
+                revenue_usd,
+                fees_usd,
+                profit_usd
+            );
 
             if profit_usd <= 0.0 {
                 tracing::debug!("  filtered: unprofitable (profit=${:.4})", profit_usd);
@@ -504,14 +556,21 @@ impl MevInspector {
             tracing::info!("  sandwich detected; profit: ${:.4}", profit_usd);
 
             let mut combined_changes: HashMap<String, (i64, u8)> = HashMap::new();
-            for change in candidate.front_run_changes.iter().chain(candidate.back_run_changes.iter()) {
+            for change in candidate
+                .front_run_changes
+                .iter()
+                .chain(candidate.back_run_changes.iter())
+            {
                 if change.owner == candidate.signer {
-                    let entry = combined_changes.entry(change.mint.clone()).or_insert((0, change.decimals));
+                    let entry = combined_changes
+                        .entry(change.mint.clone())
+                        .or_insert((0, change.decimals));
                     entry.0 += change.delta;
                 }
             }
 
-            let token_changes: Vec<SimpleTokenChange> = combined_changes.iter()
+            let token_changes: Vec<SimpleTokenChange> = combined_changes
+                .iter()
                 .map(|(mint, (delta, decimals))| SimpleTokenChange {
                     mint: mint.clone(),
                     delta: *delta,

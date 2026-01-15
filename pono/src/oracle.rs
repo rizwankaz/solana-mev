@@ -1,8 +1,8 @@
-use dashmap::DashMap;
 use anyhow::Result;
-use std::sync::Arc;
-use std::collections::HashMap;
+use dashmap::DashMap;
 use serde::Deserialize;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 // claude wrote this because i cannot pay for an oracle atm
 // revisit
@@ -11,14 +11,38 @@ use serde::Deserialize;
 /// Source: https://benchmarks.pyth.network/docs
 const PYTH_FEEDS: &[(&str, &str)] = &[
     // (Mint Address, Benchmarks Symbol)
-    ("So11111111111111111111111111111111111111112", "Crypto.SOL/USD"),
-    ("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "Crypto.USDC/USD"),
-    ("Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB", "Crypto.USDT/USD"),
-    ("DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", "Crypto.BONK/USD"),
-    ("jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL", "Crypto.JTO/USD"),
-    ("HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3", "Crypto.PYTH/USD"),
-    ("JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN", "Crypto.JUP/USD"),
-    ("EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm", "Crypto.WIF/USD"),
+    (
+        "So11111111111111111111111111111111111111112",
+        "Crypto.SOL/USD",
+    ),
+    (
+        "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "Crypto.USDC/USD",
+    ),
+    (
+        "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+        "Crypto.USDT/USD",
+    ),
+    (
+        "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+        "Crypto.BONK/USD",
+    ),
+    (
+        "jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL",
+        "Crypto.JTO/USD",
+    ),
+    (
+        "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3",
+        "Crypto.PYTH/USD",
+    ),
+    (
+        "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
+        "Crypto.JUP/USD",
+    ),
+    (
+        "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm",
+        "Crypto.WIF/USD",
+    ),
 ];
 
 /// Response from Pyth Benchmarks TradingView history API
@@ -43,13 +67,14 @@ pub struct OracleClient {
     http_client: reqwest::Client,
     price_cache: Arc<DashMap<String, PriceData>>,
     timestamp: i64,
-    symbol_map: HashMap<String, String>,  // mint -> Benchmarks symbol
+    symbol_map: HashMap<String, String>, // mint -> Benchmarks symbol
 }
 
 impl OracleClient {
     pub fn new(_slot: u64, timestamp: i64, _rpc_url: String) -> Self {
         // Build the symbol map (mint -> Benchmarks symbol)
-        let symbol_map: HashMap<String, String> = PYTH_FEEDS.iter()
+        let symbol_map: HashMap<String, String> = PYTH_FEEDS
+            .iter()
             .map(|(mint, symbol)| (mint.to_string(), symbol.to_string()))
             .collect();
 
@@ -109,9 +134,7 @@ impl OracleClient {
         // Fetch from Pyth Benchmarks API (single token, historical price)
         let prices = self.fetch_benchmarks_prices(&[mint]).await;
 
-        let price = prices.first()
-            .map(|(_, p)| *p)
-            .unwrap_or(0.0);
+        let price = prices.first().map(|(_, p)| *p).unwrap_or(0.0);
 
         // Cache the price
         self.price_cache.insert(

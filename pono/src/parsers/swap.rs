@@ -1,9 +1,9 @@
 use crate::types::{FetchedTransaction, SwapInfo, TokenChange};
-use std::collections::HashMap;
 use solana_transaction_status::{
+    EncodedTransaction, UiInstruction, UiMessage, UiParsedInstruction,
     option_serializer::OptionSerializer,
-    EncodedTransaction, UiMessage, UiInstruction, UiParsedInstruction,
 };
+use std::collections::HashMap;
 
 /// token transfer within inner instructions
 #[derive(Debug)]
@@ -78,7 +78,9 @@ impl SwapParser {
         for inst in instructions {
             let program_id = self.get_instruction_program_id(inst, account_keys);
             let is_token_program = match inst {
-                UiInstruction::Parsed(UiParsedInstruction::Parsed(info)) => info.program == "spl-token",
+                UiInstruction::Parsed(UiParsedInstruction::Parsed(info)) => {
+                    info.program == "spl-token"
+                }
                 _ => program_id == "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
             };
 
@@ -107,33 +109,39 @@ impl SwapParser {
                     continue;
                 };
 
-                let source = info_obj.get("source")
+                let source = info_obj
+                    .get("source")
                     .or_else(|| info_obj.get("account"))
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
                     .to_string();
 
-                let destination = info_obj.get("destination")
+                let destination = info_obj
+                    .get("destination")
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
                     .to_string();
 
-                let token_info = info_obj.get("source")
+                let token_info = info_obj
+                    .get("source")
                     .or_else(|| info_obj.get("account"))
                     .or_else(|| info_obj.get("destination"))
                     .and_then(|v| v.as_str())
                     .and_then(|s| token_map.get(s));
 
-                let mint_from_instruction = info_obj.get("mint")
+                let mint_from_instruction = info_obj
+                    .get("mint")
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string());
 
-                let decimals_from_instruction = info_obj.get("tokenAmount")
+                let decimals_from_instruction = info_obj
+                    .get("tokenAmount")
                     .and_then(|v| v.get("decimals"))
                     .and_then(|v| v.as_u64())
                     .map(|d| d as u8);
 
-                let amount = info_obj.get("amount")
+                let amount = info_obj
+                    .get("amount")
                     .or_else(|| info_obj.get("tokenAmount").and_then(|v| v.get("amount")))
                     .and_then(|v| v.as_str())
                     .and_then(|s| s.parse().ok())
@@ -141,22 +149,23 @@ impl SwapParser {
 
                 let (mint, decimals) = match token_info {
                     Some((m, d)) => (m.clone(), *d),
-                    None => {
-                        match (mint_from_instruction, decimals_from_instruction) {
-                            (Some(m), Some(d)) => (m, d),
-                            _ => continue,
-                        }
-                    }
+                    None => match (mint_from_instruction, decimals_from_instruction) {
+                        (Some(m), Some(d)) => (m, d),
+                        _ => continue,
+                    },
                 };
 
                 if amount > 0 {
-                    transfers.push((Transfer {
-                        mint,
-                        amount,
-                        decimals,
-                        source: source.clone(),
-                        destination: destination.clone(),
-                    }, current_dex.clone()));
+                    transfers.push((
+                        Transfer {
+                            mint,
+                            amount,
+                            decimals,
+                            source: source.clone(),
+                            destination: destination.clone(),
+                        },
+                        current_dex.clone(),
+                    ));
                 }
             }
         }
@@ -178,11 +187,32 @@ impl SwapParser {
 
                 let (token0, amount0, decimals0, token1, amount1, decimals1) =
                     if t1_is_input && t2_is_output {
-                        (t1.mint.clone(), t1.amount, t1.decimals, t2.mint.clone(), t2.amount, t2.decimals)
+                        (
+                            t1.mint.clone(),
+                            t1.amount,
+                            t1.decimals,
+                            t2.mint.clone(),
+                            t2.amount,
+                            t2.decimals,
+                        )
                     } else if t2_is_input && t1_is_output {
-                        (t2.mint.clone(), t2.amount, t2.decimals, t1.mint.clone(), t1.amount, t1.decimals)
+                        (
+                            t2.mint.clone(),
+                            t2.amount,
+                            t2.decimals,
+                            t1.mint.clone(),
+                            t1.amount,
+                            t1.decimals,
+                        )
                     } else {
-                        (t1.mint.clone(), t1.amount, t1.decimals, t2.mint.clone(), t2.amount, t2.decimals)
+                        (
+                            t1.mint.clone(),
+                            t1.amount,
+                            t1.decimals,
+                            t2.mint.clone(),
+                            t2.amount,
+                            t2.decimals,
+                        )
                     };
 
                 let amt0_f = amount0 as f64 / 10_f64.powi(decimals0 as i32);
@@ -203,33 +233,30 @@ impl SwapParser {
             }
         }
 
-
         swaps
     }
 
     fn get_instruction_program_id(&self, inst: &UiInstruction, account_keys: &[String]) -> String {
         match inst {
-            UiInstruction::Parsed(UiParsedInstruction::Parsed(_info)) => {
-                String::new()
-            }
+            UiInstruction::Parsed(UiParsedInstruction::Parsed(_info)) => String::new(),
             UiInstruction::Parsed(UiParsedInstruction::PartiallyDecoded(partial)) => {
                 partial.program_id.clone()
             }
-            UiInstruction::Compiled(compiled) => {
-                account_keys.get(compiled.program_id_index as usize)
-                    .cloned()
-                    .unwrap_or_default()
-            }
+            UiInstruction::Compiled(compiled) => account_keys
+                .get(compiled.program_id_index as usize)
+                .cloned()
+                .unwrap_or_default(),
         }
     }
 
     /// no system programs lol
     fn is_system_program(&self, program_id: &str) -> bool {
-        matches!(program_id,
-            "11111111111111111111111111111111" |
-            "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" |
-            "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL" |
-            "ComputeBudget111111111111111111111111111111"
+        matches!(
+            program_id,
+            "11111111111111111111111111111111"
+                | "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+                | "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+                | "ComputeBudget111111111111111111111111111111"
         )
     }
 
@@ -248,7 +275,7 @@ impl SwapParser {
                     if let Some(account) = keys.get(balance.account_index as usize) {
                         map.insert(
                             account.clone(),
-                            (balance.mint.clone(), balance.ui_token_amount.decimals)
+                            (balance.mint.clone(), balance.ui_token_amount.decimals),
                         );
                     }
                 }
@@ -299,34 +326,31 @@ impl SwapParser {
         };
 
         match &ui_tx.message {
-            UiMessage::Parsed(parsed) => {
-                parsed.instructions.iter().map(|inst| {
-                    match inst {
-                        UiInstruction::Parsed(UiParsedInstruction::Parsed(_)) => {
-                            String::new()
-                        }
-                        UiInstruction::Parsed(UiParsedInstruction::PartiallyDecoded(partial)) => {
-                            partial.program_id.clone()
-                        }
-                        UiInstruction::Compiled(compiled) => {
-                            parsed.account_keys
-                                .get(compiled.program_id_index as usize)
-                                .map(|k| k.pubkey.clone())
-                                .unwrap_or_default()
-                        }
+            UiMessage::Parsed(parsed) => parsed
+                .instructions
+                .iter()
+                .map(|inst| match inst {
+                    UiInstruction::Parsed(UiParsedInstruction::Parsed(_)) => String::new(),
+                    UiInstruction::Parsed(UiParsedInstruction::PartiallyDecoded(partial)) => {
+                        partial.program_id.clone()
                     }
-                }).collect()
-            }
-            UiMessage::Raw(raw) => {
-                raw.instructions.iter()
-                    .map(|inst| {
-                        raw.account_keys
-                            .get(inst.program_id_index as usize)
-                            .cloned()
-                            .unwrap_or_default()
-                    })
-                    .collect()
-            }
+                    UiInstruction::Compiled(compiled) => parsed
+                        .account_keys
+                        .get(compiled.program_id_index as usize)
+                        .map(|k| k.pubkey.clone())
+                        .unwrap_or_default(),
+                })
+                .collect(),
+            UiMessage::Raw(raw) => raw
+                .instructions
+                .iter()
+                .map(|inst| {
+                    raw.account_keys
+                        .get(inst.program_id_index as usize)
+                        .cloned()
+                        .unwrap_or_default()
+                })
+                .collect(),
         }
     }
 
@@ -335,10 +359,13 @@ impl SwapParser {
             return Vec::new();
         };
 
-        let (pre_balances, post_balances) = match (&meta.pre_token_balances, &meta.post_token_balances) {
-            (OptionSerializer::Some(pre), OptionSerializer::Some(post)) => (pre.as_slice(), post.as_slice()),
-            _ => return Vec::new(),
-        };
+        let (pre_balances, post_balances) =
+            match (&meta.pre_token_balances, &meta.post_token_balances) {
+                (OptionSerializer::Some(pre), OptionSerializer::Some(post)) => {
+                    (pre.as_slice(), post.as_slice())
+                }
+                _ => return Vec::new(),
+            };
 
         let mut pre_map: HashMap<usize, _> = HashMap::new();
         let mut post_map: HashMap<usize, _> = HashMap::new();
@@ -350,7 +377,8 @@ impl SwapParser {
             post_map.insert(b.account_index as usize, b);
         }
 
-        post_map.keys()
+        post_map
+            .keys()
             .filter_map(|&idx| {
                 let (pre, post) = (pre_map.get(&idx)?, post_map.get(&idx)?);
                 let pre_amt = pre.ui_token_amount.amount.parse().ok()?;
@@ -384,20 +412,31 @@ impl SwapParser {
         };
 
         let mut programs: Vec<String> = match &ui_tx.message {
-            UiMessage::Parsed(parsed) => {
-                parsed.instructions.iter().filter_map(|inst| match inst {
-                    UiInstruction::Parsed(UiParsedInstruction::Parsed(info)) => Some(info.program.clone()),
-                    UiInstruction::Parsed(UiParsedInstruction::PartiallyDecoded(p)) => Some(p.program_id.clone()),
-                    UiInstruction::Compiled(c) => {
-                        parsed.account_keys.get(c.program_id_index as usize).map(|k| k.pubkey.clone())
+            UiMessage::Parsed(parsed) => parsed
+                .instructions
+                .iter()
+                .filter_map(|inst| match inst {
+                    UiInstruction::Parsed(UiParsedInstruction::Parsed(info)) => {
+                        Some(info.program.clone())
                     }
-                }).collect()
-            }
-            UiMessage::Raw(raw) => {
-                raw.instructions.iter()
-                    .filter_map(|inst| raw.account_keys.get(inst.program_id_index as usize).cloned())
-                    .collect()
-            }
+                    UiInstruction::Parsed(UiParsedInstruction::PartiallyDecoded(p)) => {
+                        Some(p.program_id.clone())
+                    }
+                    UiInstruction::Compiled(c) => parsed
+                        .account_keys
+                        .get(c.program_id_index as usize)
+                        .map(|k| k.pubkey.clone()),
+                })
+                .collect(),
+            UiMessage::Raw(raw) => raw
+                .instructions
+                .iter()
+                .filter_map(|inst| {
+                    raw.account_keys
+                        .get(inst.program_id_index as usize)
+                        .cloned()
+                })
+                .collect(),
         };
 
         programs.sort_unstable();

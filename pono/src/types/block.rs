@@ -1,23 +1,21 @@
 use serde::{Deserialize, Serialize};
-use solana_transaction_status::{
-    EncodedTransaction, UiTransactionStatusMeta,
-};
+use solana_transaction_status::{EncodedTransaction, UiTransactionStatusMeta};
 
 /// block fetcher config
 #[derive(Debug, Clone)]
 pub struct FetcherConfig {
     /// RPC endpoint URL
     pub rpc_url: String,
-    
+
     /// maximum retries for failed requests
     pub max_retries: u32,
-    
+
     /// delay between retries
     pub retry_delay_ms: u64,
-    
+
     /// rate limit: max requests per second
     pub rate_limit: u32,
-    
+
     /// request timeout
     pub timeout_secs: u64,
 }
@@ -50,11 +48,10 @@ pub struct FetchedBlock {
 impl FetchedBlock {
     /// get block timestamp
     pub fn timestamp(&self) -> Option<chrono::DateTime<chrono::Utc>> {
-        self.block_time.and_then(|ts| {
-            chrono::DateTime::from_timestamp(ts, 0)
-        })
+        self.block_time
+            .and_then(|ts| chrono::DateTime::from_timestamp(ts, 0))
     }
-    
+
     /// count successful txs
     pub fn successful_tx_count(&self) -> usize {
         self.transactions
@@ -62,7 +59,7 @@ impl FetchedBlock {
             .filter(|tx| tx.is_success())
             .count()
     }
-    
+
     /// total cus consumed
     pub fn total_compute_units(&self) -> u64 {
         self.transactions
@@ -70,13 +67,10 @@ impl FetchedBlock {
             .filter_map(|tx| tx.compute_units_consumed())
             .sum()
     }
-    
+
     /// total fees paid
     pub fn total_fees(&self) -> u64 {
-        self.transactions
-            .iter()
-            .filter_map(|tx| tx.fee())
-            .sum()
+        self.transactions.iter().filter_map(|tx| tx.fee()).sum()
     }
 }
 
@@ -92,40 +86,35 @@ pub struct FetchedTransaction {
 impl FetchedTransaction {
     /// successful?
     pub fn is_success(&self) -> bool {
-        self.meta
-            .as_ref()
-            .map(|m| m.err.is_none())
-            .unwrap_or(false)
+        self.meta.as_ref().map(|m| m.err.is_none()).unwrap_or(false)
     }
-    
+
     /// cus
     pub fn compute_units_consumed(&self) -> Option<u64> {
-        self.meta.as_ref().and_then(|m| {
-            match m.compute_units_consumed {
-                solana_transaction_status::option_serializer::OptionSerializer::Some(units) => Some(units),
+        self.meta
+            .as_ref()
+            .and_then(|m| match m.compute_units_consumed {
+                solana_transaction_status::option_serializer::OptionSerializer::Some(units) => {
+                    Some(units)
+                }
                 solana_transaction_status::option_serializer::OptionSerializer::None => None,
                 solana_transaction_status::option_serializer::OptionSerializer::Skip => None,
-            }
-        })
+            })
     }
-    
+
     /// fee
     pub fn fee(&self) -> Option<u64> {
         self.meta.as_ref().map(|m| m.fee)
     }
-    
+
     /// signer
     pub fn signer(&self) -> Option<String> {
         match &self.transaction {
-            EncodedTransaction::Json(tx) => {
-                match &tx.message {
-                    solana_transaction_status::UiMessage::Parsed(parsed) => {
-                        parsed.account_keys.first().map(|key| key.pubkey.clone())
-                    },
-                    solana_transaction_status::UiMessage::Raw(raw) => {
-                        raw.account_keys.first().cloned()
-                    },
+            EncodedTransaction::Json(tx) => match &tx.message {
+                solana_transaction_status::UiMessage::Parsed(parsed) => {
+                    parsed.account_keys.first().map(|key| key.pubkey.clone())
                 }
+                solana_transaction_status::UiMessage::Raw(raw) => raw.account_keys.first().cloned(),
             },
             _ => None,
         }
@@ -136,14 +125,13 @@ impl FetchedTransaction {
         const VOTE_PROGRAM_ID: &str = "Vote111111111111111111111111111111111111111";
 
         match &self.transaction {
-            EncodedTransaction::Json(tx) => {
-                match &tx.message {
-                    solana_transaction_status::UiMessage::Parsed(parsed) => {
-                        parsed.account_keys.iter().any(|key| key.pubkey == VOTE_PROGRAM_ID)
-                    },
-                    solana_transaction_status::UiMessage::Raw(raw) => {
-                        raw.account_keys.iter().any(|key| key == VOTE_PROGRAM_ID)
-                    },
+            EncodedTransaction::Json(tx) => match &tx.message {
+                solana_transaction_status::UiMessage::Parsed(parsed) => parsed
+                    .account_keys
+                    .iter()
+                    .any(|key| key.pubkey == VOTE_PROGRAM_ID),
+                solana_transaction_status::UiMessage::Raw(raw) => {
+                    raw.account_keys.iter().any(|key| key == VOTE_PROGRAM_ID)
                 }
             },
             _ => false,
@@ -167,15 +155,17 @@ impl FetchedTransaction {
         let meta = self.meta.as_ref()?;
 
         let account_keys = match &self.transaction {
-            EncodedTransaction::Json(tx) => {
-                match &tx.message {
-                    solana_transaction_status::UiMessage::Parsed(parsed) => {
-                        parsed.account_keys.iter().map(|k| k.pubkey.as_str()).collect::<Vec<_>>()
-                    },
-                    solana_transaction_status::UiMessage::Raw(raw) => {
-                        raw.account_keys.iter().map(|k| k.as_str()).collect::<Vec<_>>()
-                    },
-                }
+            EncodedTransaction::Json(tx) => match &tx.message {
+                solana_transaction_status::UiMessage::Parsed(parsed) => parsed
+                    .account_keys
+                    .iter()
+                    .map(|k| k.pubkey.as_str())
+                    .collect::<Vec<_>>(),
+                solana_transaction_status::UiMessage::Raw(raw) => raw
+                    .account_keys
+                    .iter()
+                    .map(|k| k.as_str())
+                    .collect::<Vec<_>>(),
             },
             _ => return None,
         };
@@ -211,20 +201,20 @@ pub struct Reward {
 pub enum FetcherError {
     #[error("RPC error: {0}")]
     RpcError(#[from] solana_client::client_error::ClientError),
-    
+
     #[error("block not available at slot {slot}")]
     BlockNotAvailable { slot: u64 },
-    
+
     // please for the love of god get a better api
     #[error("rate limit exceeded")]
     RateLimitExceeded,
-    
+
     #[error("max retries exceeded for slot {slot}")]
     MaxRetriesExceeded { slot: u64 },
-    
+
     #[error("invalid block data: {0}")]
     InvalidBlockData(String),
-    
+
     #[error("join error: {0}")]
     JoinError(#[from] tokio::task::JoinError),
 }

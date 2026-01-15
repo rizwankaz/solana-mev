@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
 use super::swap::SwapInfo;
 use super::token::SimpleTokenChange;
+use serde::{Deserialize, Serialize};
 
 /// event type: (atomic) arbitrages and sandwiches
 /// upcoming: liquidations? cex-dex? jit?
