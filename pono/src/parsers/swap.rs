@@ -3,6 +3,7 @@ use solana_transaction_status::{
     EncodedTransaction, UiInstruction, UiMessage, UiParsedInstruction,
     option_serializer::OptionSerializer,
 };
+use std::cmp::min;
 use std::collections::HashMap;
 
 /// token transfer within inner instructions
@@ -176,98 +177,85 @@ impl SwapParser {
             signer
         );
         for (idx, (t, dex)) in transfers.iter().enumerate() {
+            let src_owner = owner_map.get(&t.source).map(|s| s.as_str()).unwrap_or("?");
+            let dst_owner = owner_map.get(&t.destination).map(|s| s.as_str()).unwrap_or("?");
             tracing::debug!(
-                "Transfer {}: {} {} (mint: {}) via dex: {}",
+                "Transfer {}: {} {} from {} to {} (src_owner={}, dst_owner={}) via dex: {}",
                 idx,
                 t.amount,
-                &t.mint[..12],
-                &t.mint[..8],
-                &dex[..12]
+                &t.mint[..min(12, t.mint.len())],
+                &t.source[..min(8, t.source.len())],
+                &t.destination[..min(8, t.destination.len())],
+                &src_owner[..min(8, src_owner.len())],
+                &dst_owner[..min(8, dst_owner.len())],
+                &dex[..min(12, dex.len())]
             );
         }
 
-        let mut i = 0;
-        while i + 1 < transfers.len() {
-            let (t1, dex1) = &transfers[i];
-            let (t2, _dex2) = &transfers[i + 1];
+        // Separate signer's outgoing and incoming transfers
+        let mut outgoing: Vec<(usize, &Transfer, &String)> = Vec::new();
+        let mut incoming: Vec<(usize, &Transfer, &String)> = Vec::new();
 
-            if t1.mint != t2.mint {
-                let t1_source_owner = owner_map.get(&t1.source).map(|s| s.as_str());
-                let t1_dest_owner = owner_map.get(&t1.destination).map(|s| s.as_str());
-                let t2_source_owner = owner_map.get(&t2.source).map(|s| s.as_str());
-                let t2_dest_owner = owner_map.get(&t2.destination).map(|s| s.as_str());
-                let t1_is_input = t1_source_owner == Some(signer);
-                let t2_is_output = t2_dest_owner == Some(signer);
-                let t2_is_input = t2_source_owner == Some(signer);
-                let t1_is_output = t1_dest_owner == Some(signer);
+        for (idx, (t, dex)) in transfers.iter().enumerate() {
+            let src_owner = owner_map.get(&t.source).map(|s| s.as_str());
+            let dst_owner = owner_map.get(&t.destination).map(|s| s.as_str());
 
-                tracing::debug!(
-                    "Pairing transfers: t1[mint={}, amt={}, src_owner={:?}, dst_owner={:?}] t2[mint={}, amt={}, src_owner={:?}, dst_owner={:?}]",
-                    &t1.mint[..8],
-                    t1.amount,
-                    t1_source_owner,
-                    t1_dest_owner,
-                    &t2.mint[..8],
-                    t2.amount,
-                    t2_source_owner,
-                    t2_dest_owner
-                );
-                tracing::debug!(
-                    "Direction check: t1_is_input={}, t2_is_output={}, t2_is_input={}, t1_is_output={}",
-                    t1_is_input,
-                    t2_is_output,
-                    t2_is_input,
-                    t1_is_output
-                );
+            if src_owner == Some(signer) {
+                outgoing.push((idx, t, dex));
+            }
+            if dst_owner == Some(signer) {
+                incoming.push((idx, t, dex));
+            }
+        }
 
-                let (token0, amount0, decimals0, token1, amount1, decimals1) =
-                    if t1_is_input && t2_is_output {
-                        tracing::debug!("Using branch 1: t1_is_input && t2_is_output");
-                        (
-                            t1.mint.clone(),
-                            t1.amount,
-                            t1.decimals,
-                            t2.mint.clone(),
-                            t2.amount,
-                            t2.decimals,
-                        )
-                    } else if t2_is_input && t1_is_output {
-                        tracing::debug!("Using branch 2: t2_is_input && t1_is_output");
-                        (
-                            t2.mint.clone(),
-                            t2.amount,
-                            t2.decimals,
-                            t1.mint.clone(),
-                            t1.amount,
-                            t1.decimals,
-                        )
+        tracing::debug!(
+            "Signer transfers: {} outgoing, {} incoming",
+            outgoing.len(),
+            incoming.len()
+        );
+
+        // Match outgoing with incoming transfers to form swaps
+        let mut used_incoming = vec![false; incoming.len()];
+
+        for (out_idx, out_transfer, out_dex) in &outgoing {
+            // Find the nearest unused incoming transfer with a different mint
+            if let Some((inc_pos, (in_idx, in_transfer, _in_dex))) = incoming
+                .iter()
+                .enumerate()
+                .filter(|(pos, _)| !used_incoming[*pos])
+                .filter(|(_, (_, t, _))| t.mint != out_transfer.mint)
+                .min_by_key(|(_, (idx, _, _))| {
+                    if idx > out_idx {
+                        idx - out_idx
                     } else {
-                        tracing::debug!("Using default branch: no ownership match");
-                        (
-                            t1.mint.clone(),
-                            t1.amount,
-                            t1.decimals,
-                            t2.mint.clone(),
-                            t2.amount,
-                            t2.decimals,
-                        )
-                    };
+                        out_idx - idx
+                    }
+                })
+            {
+                used_incoming[inc_pos] = true;
 
-                let amt0_f = amount0 as f64 / 10_f64.powi(decimals0 as i32);
-                let amt1_f = amount1 as f64 / 10_f64.powi(decimals1 as i32);
+                tracing::debug!(
+                    "Matched swap: outgoing[{}] {} {} -> incoming[{}] {} {}",
+                    out_idx,
+                    out_transfer.amount,
+                    &out_transfer.mint[..8],
+                    in_idx,
+                    in_transfer.amount,
+                    &in_transfer.mint[..8]
+                );
+
+                let amt0_f = out_transfer.amount as f64 / 10_f64.powi(out_transfer.decimals as i32);
+                let amt1_f = in_transfer.amount as f64 / 10_f64.powi(in_transfer.decimals as i32);
 
                 swaps.push(SwapInfo {
-                    token0,
+                    token0: out_transfer.mint.clone(),
                     amount0: amt0_f,
-                    token1,
+                    token1: in_transfer.mint.clone(),
                     amount1: amt1_f,
-                    dex: dex1.clone(),
-                    decimals0,
-                    decimals1,
+                    dex: (*out_dex).clone(),
+                    decimals0: out_transfer.decimals,
+                    decimals1: in_transfer.decimals,
                 });
-                i += 2;
-            } else {
-                i += 1;
             }
         }
 
