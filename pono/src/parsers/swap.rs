@@ -170,6 +170,22 @@ impl SwapParser {
             }
         }
 
+        tracing::debug!(
+            "Total transfers detected: {}, signer: {}",
+            transfers.len(),
+            signer
+        );
+        for (idx, (t, dex)) in transfers.iter().enumerate() {
+            tracing::debug!(
+                "Transfer {}: {} {} (mint: {}) via dex: {}",
+                idx,
+                t.amount,
+                &t.mint[..12],
+                &t.mint[..8],
+                &dex[..12]
+            );
+        }
+
         let mut i = 0;
         while i + 1 < transfers.len() {
             let (t1, dex1) = &transfers[i];
@@ -185,8 +201,28 @@ impl SwapParser {
                 let t2_is_input = t2_source_owner == Some(signer);
                 let t1_is_output = t1_dest_owner == Some(signer);
 
+                tracing::debug!(
+                    "Pairing transfers: t1[mint={}, amt={}, src_owner={:?}, dst_owner={:?}] t2[mint={}, amt={}, src_owner={:?}, dst_owner={:?}]",
+                    &t1.mint[..8],
+                    t1.amount,
+                    t1_source_owner,
+                    t1_dest_owner,
+                    &t2.mint[..8],
+                    t2.amount,
+                    t2_source_owner,
+                    t2_dest_owner
+                );
+                tracing::debug!(
+                    "Direction check: t1_is_input={}, t2_is_output={}, t2_is_input={}, t1_is_output={}",
+                    t1_is_input,
+                    t2_is_output,
+                    t2_is_input,
+                    t1_is_output
+                );
+
                 let (token0, amount0, decimals0, token1, amount1, decimals1) =
                     if t1_is_input && t2_is_output {
+                        tracing::debug!("Using branch 1: t1_is_input && t2_is_output");
                         (
                             t1.mint.clone(),
                             t1.amount,
@@ -196,6 +232,7 @@ impl SwapParser {
                             t2.decimals,
                         )
                     } else if t2_is_input && t1_is_output {
+                        tracing::debug!("Using branch 2: t2_is_input && t1_is_output");
                         (
                             t2.mint.clone(),
                             t2.amount,
@@ -205,6 +242,7 @@ impl SwapParser {
                             t1.decimals,
                         )
                     } else {
+                        tracing::debug!("Using default branch: no ownership match");
                         (
                             t1.mint.clone(),
                             t1.amount,
