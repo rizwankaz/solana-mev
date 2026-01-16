@@ -12,6 +12,15 @@ pub enum MevEvent {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ArbitrageType {
+    TriangleArbitrage,
+    StablecoinArbitrage,
+    CrossPairArbitrage,
+    LongTail,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArbitrageEvent {
     pub signature: String,
     pub signer: String,
@@ -23,6 +32,7 @@ pub struct ArbitrageEvent {
     pub program_addresses: Vec<String>,
     pub token_changes: Vec<SimpleTokenChange>,
     pub profitability: Profitability,
+    pub arbitrage_type: ArbitrageType,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

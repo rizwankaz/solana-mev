@@ -1,8 +1,8 @@
 use crate::oracle::OracleClient;
 use crate::parsers::SwapParser;
 use crate::types::{
-    ArbitrageEvent, FetchedTransaction, MevEvent, Profitability, SandwichEvent,
-    SandwichTransaction, SimpleTokenChange, TokenChange,
+    ArbitrageEvent, ArbitrageType, FetchedTransaction, MevEvent, Profitability, SandwichEvent,
+    SandwichTransaction, SimpleTokenChange, SwapInfo, TokenChange,
 };
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
@@ -40,6 +40,93 @@ impl MevInspector {
             swap_parser: Arc::new(SwapParser::new()),
             oracle: OracleClient::new(slot, timestamp, rpc_url),
         }
+    }
+
+    /// Check if a token is a stablecoin based on its price from the oracle
+    /// A stablecoin is a token with a price close to $1 (within ±$0.05)
+    fn is_stablecoin(token: &str, price_map: &HashMap<String, f64>) -> bool {
+        if let Some(&price) = price_map.get(token) {
+            // Check if price is close to $1 (stablecoins typically trade around $1)
+            price >= 0.95 && price <= 1.05
+        } else {
+            false
+        }
+    }
+
+    /// Check if two tokens form a stable pair (both are stablecoins)
+    fn is_stable_pair(token1: &str, token2: &str, price_map: &HashMap<String, f64>) -> bool {
+        Self::is_stablecoin(token1, price_map) && Self::is_stablecoin(token2, price_map)
+    }
+
+    /// Classify arbitrage type based on swap patterns
+    fn classify_arbitrage(swaps: &[SwapInfo], price_map: &HashMap<String, f64>) -> ArbitrageType {
+        let swap_count = swaps.len();
+
+        if swap_count == 0 || swap_count == 1 {
+            return ArbitrageType::LongTail;
+        }
+
+        let first_swap = &swaps[0];
+        let last_swap = &swaps[swap_count - 1];
+        let first_token = &first_swap.token0;
+        let last_token = &last_swap.token1;
+
+        // Check if swaps are continuous (each swap's output matches next swap's input)
+        let is_continuous = swaps.windows(2).all(|pair| {
+            let current = &pair[0];
+            let next = &pair[1];
+            current.token1 == next.token0
+        });
+
+        if swap_count == 2 {
+            // Two Swaps Logic
+
+            // Triangle Arbitrage: Input token of Swap 1 matches output token of Swap 2, and swaps are continuous
+            if first_token == last_token && is_continuous {
+                return ArbitrageType::TriangleArbitrage;
+            }
+
+            // Stablecoin Arbitrage (Triangle): Both tokens are stablecoins and forms a cycle
+            if Self::is_stable_pair(first_token, last_token, price_map) && is_continuous {
+                return ArbitrageType::StablecoinArbitrage;
+            }
+
+            // Stablecoin Arbitrage (Non-Triangle): Input of Swap 1 and output of Swap 2 form a stable pair
+            if Self::is_stable_pair(first_token, last_token, price_map) {
+                return ArbitrageType::StablecoinArbitrage;
+            }
+
+            // Cross-Pair Arbitrage: Starts and ends with same token, but break in continuity
+            if first_token == last_token && !is_continuous {
+                return ArbitrageType::CrossPairArbitrage;
+            }
+
+            // Long Tail: Everything else
+            return ArbitrageType::LongTail;
+        }
+
+        // Three or More Swaps Logic
+        if swap_count >= 3 {
+            // Stablecoin Arbitrage: First and last tokens form a stable pair
+            if Self::is_stable_pair(first_token, last_token, price_map) {
+                return ArbitrageType::StablecoinArbitrage;
+            }
+
+            // Cross-Pair Arbitrage: Starts and ends with same token, but break in continuity
+            if first_token == last_token && !is_continuous {
+                return ArbitrageType::CrossPairArbitrage;
+            }
+
+            // Triangle Arbitrage: All swaps continuous and ends with starting token
+            if first_token == last_token && is_continuous {
+                return ArbitrageType::TriangleArbitrage;
+            }
+
+            // Long Tail: Everything else
+            return ArbitrageType::LongTail;
+        }
+
+        ArbitrageType::LongTail
     }
 
     /// find mev
@@ -205,11 +292,13 @@ impl MevInspector {
             return None;
         }
 
-        // no directional trades
-        let unique_tokens: std::collections::HashSet<&str> = swaps
-            .iter()
-            .flat_map(|s| [s.token0.as_str(), s.token1.as_str()])
-            .collect();
+        // Classify the arbitrage type
+        let arbitrage_type = Self::classify_arbitrage(swaps, price_map);
+
+        // Filter out Long Tail transactions (not true arbitrage)
+        if matches!(arbitrage_type, ArbitrageType::LongTail) {
+            return None;
+        }
 
         // profit please
         let signer_changes: Vec<_> = token_changes
@@ -273,19 +362,6 @@ impl MevInspector {
 
         let revenue_usd = revenue_usd - cost_usd;
 
-        if unique_tokens.len() == 2 && swaps.len() >= 2 {
-            let positions: Vec<_> = net_position.iter().collect();
-            if positions.len() == 2 {
-                let (_mint1, (amount1, _)) = positions[0];
-                let (_mint2, (amount2, _)) = positions[1];
-                let opposite_signs =
-                    (amount1 > &0.0 && amount2 < &0.0) || (amount1 < &0.0 && amount2 > &0.0);
-
-                if opposite_signs {
-                    return None;
-                }
-            }
-        }
         // consider defaults
         let fee = tx.fee().unwrap_or(0);
         let compute_units = tx.compute_units_consumed().unwrap_or(0);
@@ -314,6 +390,7 @@ impl MevInspector {
                 profit_usd,
                 unsupported_profit_tokens,
             },
+            arbitrage_type,
         })
     }
 

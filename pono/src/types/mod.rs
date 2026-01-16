@@ -5,7 +5,9 @@ mod token;
 
 pub use block::{FetchedBlock, FetchedTransaction, FetcherConfig, FetcherError, Result, Reward};
 
-pub use mev::{ArbitrageEvent, MevEvent, Profitability, SandwichEvent, SandwichTransaction};
+pub use mev::{
+    ArbitrageEvent, ArbitrageType, MevEvent, Profitability, SandwichEvent, SandwichTransaction,
+};
 
 pub use swap::SwapInfo;
 
