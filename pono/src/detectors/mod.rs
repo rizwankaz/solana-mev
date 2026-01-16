@@ -407,6 +407,11 @@ impl MevInspector {
 
         let mut tx_by_signer: HashMap<String, Vec<&FetchedTransaction>> = HashMap::new();
         for tx in transactions {
+            // Only consider successful transactions
+            if !tx.is_success() {
+                continue;
+            }
+
             if let Some(signer) = tx.signer() {
                 tx_by_signer.entry(signer.to_string()).or_default().push(tx);
             }
@@ -432,9 +437,12 @@ impl MevInspector {
 
                     let front_run_tx = txs[i];
                     let back_run_tx = txs[j];
+
+                    // Check for successful victim transaction between front-run and back-run
                     let has_victim = transactions
                         .iter()
                         .filter(|tx| tx.index > front_run_tx.index && tx.index < back_run_tx.index)
+                        .filter(|tx| tx.is_success())  // Only count successful victims
                         .any(|tx| tx.signer().map(|s| s != *signer).unwrap_or(false));
 
                     if !has_victim {
@@ -488,7 +496,10 @@ impl MevInspector {
 
                     let mut victim_progs = Vec::new();
                     for tx in transactions.iter() {
-                        if tx.index > front_run_tx.index && tx.index < back_run_tx.index {
+                        if tx.index > front_run_tx.index
+                            && tx.index < back_run_tx.index
+                            && tx.is_success()
+                        {
                             if let Some(victim_signer) = tx.signer() {
                                 if victim_signer != *signer {
                                     victim_progs.extend(swap_parser.extract_dex_programs(tx));
