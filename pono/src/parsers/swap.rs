@@ -85,11 +85,18 @@ impl SwapParser {
                 _ => program_id == "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
             };
 
-            if !is_token_program && !program_id.is_empty() && !self.is_system_program(&program_id) {
+            let is_system_program = match inst {
+                UiInstruction::Parsed(UiParsedInstruction::Parsed(info)) => {
+                    info.program == "system"
+                }
+                _ => program_id == "11111111111111111111111111111111",
+            };
+
+            if !is_token_program && !is_system_program && !program_id.is_empty() && !self.is_system_program(&program_id) {
                 current_dex = program_id;
             }
 
-            if !is_token_program {
+            if !is_token_program && !is_system_program {
                 continue;
             }
 
@@ -110,50 +117,82 @@ impl SwapParser {
                     continue;
                 };
 
-                let source = info_obj
-                    .get("source")
-                    .or_else(|| info_obj.get("account"))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string();
+                // Handle both token and SOL transfers
+                let (mint, decimals, amount, source, destination) = if is_system_program {
+                    // System program SOL transfer
+                    let lamports = info_obj
+                        .get("lamports")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0);
 
-                let destination = info_obj
-                    .get("destination")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string();
+                    let src = info_obj
+                        .get("source")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
 
-                let token_info = info_obj
-                    .get("source")
-                    .or_else(|| info_obj.get("account"))
-                    .or_else(|| info_obj.get("destination"))
-                    .and_then(|v| v.as_str())
-                    .and_then(|s| token_map.get(s));
+                    let dst = info_obj
+                        .get("destination")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
 
-                let mint_from_instruction = info_obj
-                    .get("mint")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
+                    (
+                        "So11111111111111111111111111111111111111112".to_string(),
+                        9u8,
+                        lamports,
+                        src,
+                        dst,
+                    )
+                } else {
+                    // Token program transfer
+                    let source = info_obj
+                        .get("source")
+                        .or_else(|| info_obj.get("account"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
 
-                let decimals_from_instruction = info_obj
-                    .get("tokenAmount")
-                    .and_then(|v| v.get("decimals"))
-                    .and_then(|v| v.as_u64())
-                    .map(|d| d as u8);
+                    let destination = info_obj
+                        .get("destination")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
 
-                let amount = info_obj
-                    .get("amount")
-                    .or_else(|| info_obj.get("tokenAmount").and_then(|v| v.get("amount")))
-                    .and_then(|v| v.as_str())
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(0);
+                    let token_info = info_obj
+                        .get("source")
+                        .or_else(|| info_obj.get("account"))
+                        .or_else(|| info_obj.get("destination"))
+                        .and_then(|v| v.as_str())
+                        .and_then(|s| token_map.get(s));
 
-                let (mint, decimals) = match token_info {
-                    Some((m, d)) => (m.clone(), *d),
-                    None => match (mint_from_instruction, decimals_from_instruction) {
-                        (Some(m), Some(d)) => (m, d),
-                        _ => continue,
-                    },
+                    let mint_from_instruction = info_obj
+                        .get("mint")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+
+                    let decimals_from_instruction = info_obj
+                        .get("tokenAmount")
+                        .and_then(|v| v.get("decimals"))
+                        .and_then(|v| v.as_u64())
+                        .map(|d| d as u8);
+
+                    let amount = info_obj
+                        .get("amount")
+                        .or_else(|| info_obj.get("tokenAmount").and_then(|v| v.get("amount")))
+                        .and_then(|v| v.as_str())
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(0);
+
+                    let (mint, decimals) = match token_info {
+                        Some((m, d)) => (m.clone(), *d),
+                        None => match (mint_from_instruction, decimals_from_instruction) {
+                            (Some(m), Some(d)) => (m, d),
+                            _ => continue,
+                        },
+                    };
+
+                    (mint, decimals, amount, source, destination)
                 };
 
                 if amount > 0 {
