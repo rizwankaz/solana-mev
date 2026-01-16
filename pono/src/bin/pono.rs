@@ -260,6 +260,8 @@ async fn main() -> anyhow::Result<()> {
                                 total_profit,
                                 mev_compute_units
                             );
+                        } else {
+                            println!("Slot {}: no MEV", slot);
                         }
                     }
                     Err(e) => {
