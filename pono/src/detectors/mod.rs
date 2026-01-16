@@ -193,7 +193,7 @@ impl MevInspector {
         for (tx, _swaps, token_changes, _progs) in &arbitrage_candidates {
             if let Some(signer) = tx.signer() {
                 for change in token_changes.iter() {
-                    if change.owner == signer && change.delta > 0 {
+                    if change.owner == signer && change.delta != 0 {
                         unique_mints.insert(change.mint.as_str());
                     }
                 }
