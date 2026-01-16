@@ -272,6 +272,8 @@ impl MevInspector {
                         || msg.contains("Program log: Instruction: Swap")
                         || msg.contains("swap")
                         || msg.contains("Swap")
+                        || msg.contains("Instruction: Buy")
+                        || msg.contains("Instruction: Sell")
                 });
             }
         }
