@@ -2,7 +2,7 @@ use crate::fetcher::BlockFetcher;
 use crate::types::{FetchedBlock, FetcherError, Result};
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 /// stream of blocks starting from given slot
 pub struct BlockStream {
@@ -45,7 +45,7 @@ impl BlockStream {
 
     /// create a stream that follows chain tip
     pub fn follow_tip(fetcher: Arc<BlockFetcher>) -> Self {
-        let (tx, rx) = mpsc::channel(10);
+        let (tx, rx) = mpsc::channel(50);
 
         let handle = tokio::spawn(async move {
             // get starting slot
@@ -59,24 +59,26 @@ impl BlockStream {
 
             info!("following chain tip starting from slot {}", current_slot);
 
-            let mut blocks_processed = 0u64;
+            let mut consecutive_unavailable = 0u32;
+            let mut last_latest_check = std::time::Instant::now();
 
             loop {
-                // Every 50 blocks, check if we're falling behind
-                if blocks_processed % 50 == 0 && blocks_processed > 0 {
+                // Check latest slot every 2 seconds to stay current
+                if last_latest_check.elapsed().as_secs() >= 2 {
                     if let Ok(latest_slot) = fetcher.get_current_slot().await {
                         let lag = latest_slot.saturating_sub(current_slot);
-                        if lag > 50 {
-                            // We're more than 50 slots behind, skip ahead
-                            info!(
-                                "Catching up: skipping from slot {} to {} ({} slots behind)",
+                        if lag > 20 {
+                            debug!(
+                                "Catching up: jumping from slot {} to {} ({} slots behind)",
                                 current_slot,
-                                latest_slot.saturating_sub(10),
+                                latest_slot.saturating_sub(5),
                                 lag
                             );
-                            current_slot = latest_slot.saturating_sub(10); // Leave small buffer
+                            current_slot = latest_slot.saturating_sub(5);
+                            consecutive_unavailable = 0;
                         }
                     }
+                    last_latest_check = std::time::Instant::now();
                 }
 
                 // fetch current block
@@ -86,12 +88,24 @@ impl BlockStream {
                             break;
                         }
                         current_slot += 1;
-                        blocks_processed += 1;
+                        consecutive_unavailable = 0;
                     }
                     Err(FetcherError::BlockNotAvailable { .. }) => {
-                        // block not produced yet, wait and retry
-                        tokio::time::sleep(tokio::time::Duration::from_millis(400)).await;
-                        // Don't skip slots - continue sequential processing
+                        consecutive_unavailable += 1;
+
+                        if consecutive_unavailable == 1 {
+                            // First time unavailable - slot might be skipped or not yet confirmed
+                            // Wait a short time for confirmation
+                            tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+                        } else if consecutive_unavailable >= 3 {
+                            // Slot was likely skipped (no leader, network issue, etc.)
+                            debug!("Skipping slot {} (not produced after {} attempts)", current_slot, consecutive_unavailable);
+                            current_slot += 1;
+                            consecutive_unavailable = 0;
+                        } else {
+                            // Wait a bit longer before next retry
+                            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                        }
                     }
                     Err(e) => {
                         warn!("error fetching slot {}: {:?}", current_slot, e);
@@ -99,7 +113,8 @@ impl BlockStream {
                             break;
                         }
                         current_slot += 1;
-                        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+                        consecutive_unavailable = 0;
+                        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
                     }
                 }
             }
