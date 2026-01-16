@@ -2662,6 +2662,7 @@ dependencies = [
  "serde",
  "serde_json",
  "solana-client",
+ "solana-pubsub-client",
  "solana-sdk",
  "solana-transaction-status",
  "thiserror 2.0.17",
