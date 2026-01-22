@@ -40,7 +40,7 @@ impl SwapParser {
         let signer = tx.signer().unwrap_or_default();
 
         // Extract balance changes as implicit transfers
-        let balance_change_transfers = self.extract_balance_change_transfers(tx, &token_map);
+        let balance_change_transfers = self.extract_balance_change_transfers(tx, &token_map, &owner_map, &signer);
 
         // get dex
         let outer_instructions = self.get_outer_instructions(tx);
@@ -80,6 +80,8 @@ impl SwapParser {
         &self,
         tx: &FetchedTransaction,
         token_map: &HashMap<String, (String, u8)>,
+        owner_map: &HashMap<String, String>,
+        signer: &str,
     ) -> Vec<(Transfer, String)> {
         let mut transfers = Vec::new();
 
@@ -88,7 +90,6 @@ impl SwapParser {
         };
 
         let account_keys = self.get_account_keys(tx);
-        let signer = tx.signer().unwrap_or_default();
 
         // Extract SOL balance changes
         let pre_balances = &meta.pre_balances;
@@ -182,36 +183,42 @@ impl SwapParser {
 
             // Create transfers for accounts owned by signer with significant changes
             for (account, (pre, post, mint, decimals)) in token_changes {
-                // Check if this account is owned by the signer via token_map
-                if let Some((account_mint, _)) = token_map.get(&account) {
-                    if account_mint == &mint {
-                        let change = (post as i64) - (pre as i64);
-                        if change != 0 {
-                            if change > 0 {
-                                // Received tokens
-                                transfers.push((
-                                    Transfer {
-                                        mint: mint.clone(),
-                                        amount: change as u64,
-                                        decimals,
-                                        source: "balance_change".to_string(),
-                                        destination: account.clone(),
-                                    },
-                                    "balance_change".to_string(),
-                                ));
-                            } else {
-                                // Sent tokens
-                                transfers.push((
-                                    Transfer {
-                                        mint: mint.clone(),
-                                        amount: (-change) as u64,
-                                        decimals,
-                                        source: account.clone(),
-                                        destination: "balance_change".to_string(),
-                                    },
-                                    "balance_change".to_string(),
-                                ));
-                            }
+                // Check if this account is owned by the signer
+                let account_owner = owner_map.get(&account).map(|s| s.as_str());
+                if account_owner == Some(signer) {
+                    // Verify the mint matches
+                    if let Some((account_mint, _)) = token_map.get(&account) {
+                        if account_mint != &mint {
+                            continue;
+                        }
+                    }
+
+                    let change = (post as i64) - (pre as i64);
+                    if change != 0 {
+                        if change > 0 {
+                            // Received tokens
+                            transfers.push((
+                                Transfer {
+                                    mint: mint.clone(),
+                                    amount: change as u64,
+                                    decimals,
+                                    source: "balance_change".to_string(),
+                                    destination: account.clone(),
+                                },
+                                "balance_change".to_string(),
+                            ));
+                        } else {
+                            // Sent tokens
+                            transfers.push((
+                                Transfer {
+                                    mint: mint.clone(),
+                                    amount: (-change) as u64,
+                                    decimals,
+                                    source: account.clone(),
+                                    destination: "balance_change".to_string(),
+                                },
+                                "balance_change".to_string(),
+                            ));
                         }
                     }
                 }
