@@ -45,12 +45,20 @@ impl SwapParser {
         // get dex
         let outer_instructions = self.get_outer_instructions(tx);
         let mut swaps = Vec::new();
+        let empty_balance_transfers = Vec::new();
 
-        for inner_set in inner_instructions {
+        for (idx, inner_set) in inner_instructions.iter().enumerate() {
             let outer_dex = outer_instructions
                 .get(inner_set.index as usize)
                 .cloned()
                 .unwrap_or_default();
+
+            // Only add balance change transfers to the first inner set to avoid duplicates
+            let balance_transfers = if idx == 0 {
+                &balance_change_transfers
+            } else {
+                &empty_balance_transfers
+            };
 
             let inner_swaps = self.extract_swaps_from_inner_set(
                 &inner_set.instructions,
@@ -59,7 +67,7 @@ impl SwapParser {
                 &account_keys,
                 &signer,
                 &outer_dex,
-                &balance_change_transfers,
+                balance_transfers,
             );
             swaps.extend(inner_swaps);
         }
