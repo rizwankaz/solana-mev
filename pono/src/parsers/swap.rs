@@ -7,7 +7,7 @@ use std::cmp::min;
 use std::collections::HashMap;
 
 /// token transfer within inner instructions
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Transfer {
     mint: String,
     amount: u64,
@@ -24,7 +24,7 @@ impl SwapParser {
         Self
     }
 
-    /// extract all swaps from a transaction by parsing inner instructions
+    /// extract all swaps from a transaction by parsing inner instructions and balance changes
     pub fn extract_swaps(&self, tx: &FetchedTransaction) -> Vec<SwapInfo> {
         let Some(meta) = &tx.meta else {
             return Vec::new();
@@ -38,6 +38,9 @@ impl SwapParser {
         let owner_map = self.build_owner_map(tx);
         let account_keys = self.get_account_keys(tx);
         let signer = tx.signer().unwrap_or_default();
+
+        // Extract balance changes as implicit transfers
+        let balance_change_transfers = self.extract_balance_change_transfers(tx, &token_map);
 
         // get dex
         let outer_instructions = self.get_outer_instructions(tx);
@@ -56,11 +59,158 @@ impl SwapParser {
                 &account_keys,
                 &signer,
                 &outer_dex,
+                &balance_change_transfers,
             );
             swaps.extend(inner_swaps);
         }
 
         swaps
+    }
+
+    /// Extract balance changes (SOL and token) as implicit transfers
+    fn extract_balance_change_transfers(
+        &self,
+        tx: &FetchedTransaction,
+        token_map: &HashMap<String, (String, u8)>,
+    ) -> Vec<(Transfer, String)> {
+        let mut transfers = Vec::new();
+
+        let Some(meta) = &tx.meta else {
+            return transfers;
+        };
+
+        let account_keys = self.get_account_keys(tx);
+        let signer = tx.signer().unwrap_or_default();
+
+        // Extract SOL balance changes
+        let pre_balances = &meta.pre_balances;
+        let post_balances = &meta.post_balances;
+
+        if pre_balances.len() == post_balances.len() {
+            for (idx, (pre, post)) in pre_balances.iter().zip(post_balances.iter()).enumerate() {
+                if idx >= account_keys.len() {
+                    break;
+                }
+
+                let account = &account_keys[idx];
+                let change = (*post as i64) - (*pre as i64);
+
+                // Only track significant balance changes for the signer (ignoring small fee changes)
+                if *account == signer && change.abs() > 10_000_000 {
+                    // > 0.01 SOL
+                    if change > 0 {
+                        // Received SOL - create incoming transfer
+                        transfers.push((
+                            Transfer {
+                                mint: "So11111111111111111111111111111111111111112".to_string(),
+                                amount: change as u64,
+                                decimals: 9,
+                                source: "balance_change".to_string(),
+                                destination: signer.to_string(),
+                            },
+                            "balance_change".to_string(),
+                        ));
+                    } else {
+                        // Sent SOL - create outgoing transfer
+                        transfers.push((
+                            Transfer {
+                                mint: "So11111111111111111111111111111111111111112".to_string(),
+                                amount: (-change) as u64,
+                                decimals: 9,
+                                source: signer.to_string(),
+                                destination: "balance_change".to_string(),
+                            },
+                            "balance_change".to_string(),
+                        ));
+                    }
+                }
+            }
+        }
+
+        // Extract token balance changes
+        if let (
+            OptionSerializer::Some(pre_token_balances),
+            OptionSerializer::Some(post_token_balances),
+        ) = (&meta.pre_token_balances, &meta.post_token_balances)
+        {
+            // Build map of account -> (pre_balance, post_balance, mint, decimals)
+            let mut token_changes: HashMap<String, (u64, u64, String, u8)> = HashMap::new();
+
+            for pre in pre_token_balances {
+                let account_index = pre.account_index as usize;
+                if account_index < account_keys.len() {
+                    let account = &account_keys[account_index];
+                    // Parse amount from string
+                    let amount = pre
+                        .ui_token_amount
+                        .amount
+                        .parse::<u64>()
+                        .unwrap_or(0);
+                    token_changes
+                        .entry(account.clone())
+                        .or_insert((0, 0, pre.mint.clone(), pre.ui_token_amount.decimals as u8))
+                        .0 = amount;
+                }
+            }
+
+            for post in post_token_balances {
+                let account_index = post.account_index as usize;
+                if account_index < account_keys.len() {
+                    let account = &account_keys[account_index];
+                    // Parse amount from string
+                    let amount = post
+                        .ui_token_amount
+                        .amount
+                        .parse::<u64>()
+                        .unwrap_or(0);
+                    let entry = token_changes
+                        .entry(account.clone())
+                        .or_insert((0, 0, post.mint.clone(), post.ui_token_amount.decimals as u8));
+                    entry.1 = amount;
+                    entry.2 = post.mint.clone();
+                    entry.3 = post.ui_token_amount.decimals as u8;
+                }
+            }
+
+            // Create transfers for accounts owned by signer with significant changes
+            for (account, (pre, post, mint, decimals)) in token_changes {
+                // Check if this account is owned by the signer via token_map
+                if let Some((account_mint, _)) = token_map.get(&account) {
+                    if account_mint == &mint {
+                        let change = (post as i64) - (pre as i64);
+                        if change != 0 {
+                            if change > 0 {
+                                // Received tokens
+                                transfers.push((
+                                    Transfer {
+                                        mint: mint.clone(),
+                                        amount: change as u64,
+                                        decimals,
+                                        source: "balance_change".to_string(),
+                                        destination: account.clone(),
+                                    },
+                                    "balance_change".to_string(),
+                                ));
+                            } else {
+                                // Sent tokens
+                                transfers.push((
+                                    Transfer {
+                                        mint: mint.clone(),
+                                        amount: (-change) as u64,
+                                        decimals,
+                                        source: account.clone(),
+                                        destination: "balance_change".to_string(),
+                                    },
+                                    "balance_change".to_string(),
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        transfers
     }
 
     fn extract_swaps_from_inner_set(
@@ -71,10 +221,16 @@ impl SwapParser {
         account_keys: &[String],
         signer: &str,
         outer_dex: &str,
+        balance_change_transfers: &[(Transfer, String)],
     ) -> Vec<SwapInfo> {
         let mut swaps = Vec::new();
         let mut transfers = Vec::new();
         let mut current_dex = outer_dex.to_string();
+
+        // Add balance change transfers first (they act as implicit transfers)
+        for (transfer, dex) in balance_change_transfers {
+            transfers.push((transfer.clone(), dex.clone()));
+        }
 
         for inst in instructions {
             let program_id = self.get_instruction_program_id(inst, account_keys);
