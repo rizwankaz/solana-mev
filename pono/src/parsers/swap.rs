@@ -239,10 +239,14 @@ impl SwapParser {
             let src_owner = owner_map.get(&t.source).map(|s| s.as_str());
             let dst_owner = owner_map.get(&t.destination).map(|s| s.as_str());
 
-            if src_owner == Some(signer) {
+            // For token transfers, check owner. For SOL transfers, check address directly
+            let is_outgoing = src_owner == Some(signer) || t.source == signer;
+            let is_incoming = dst_owner == Some(signer) || t.destination == signer;
+
+            if is_outgoing {
                 outgoing.push((idx, t, dex));
             }
-            if dst_owner == Some(signer) {
+            if is_incoming {
                 incoming.push((idx, t, dex));
             }
         }
