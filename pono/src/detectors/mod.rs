@@ -761,3 +761,279 @@ impl MevInspector {
         sandwiches
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── helpers ──────────────────────────────────────────────────────────────
+
+    fn swap(token0: &str, token1: &str) -> SwapInfo {
+        SwapInfo {
+            token0: token0.to_string(),
+            amount0: 1.0,
+            token1: token1.to_string(),
+            amount1: 1.0,
+            dex: "test_dex".to_string(),
+            decimals0: 6,
+            decimals1: 6,
+        }
+    }
+
+    fn stable_prices() -> HashMap<String, f64> {
+        let mut m = HashMap::new();
+        m.insert("USDC".to_string(), 1.00);
+        m.insert("USDT".to_string(), 1.00);
+        m.insert("DAI".to_string(), 1.00);
+        m.insert("SOL".to_string(), 150.0);
+        m
+    }
+
+    // ── classify_arbitrage: 0 / 1 swap → LongTail ────────────────────────────
+
+    #[test]
+    fn zero_swaps_is_longtail() {
+        let result = MevInspector::classify_arbitrage(&[], &stable_prices());
+        assert!(matches!(result, ArbitrageType::LongTail));
+    }
+
+    #[test]
+    fn one_swap_is_longtail() {
+        let swaps = vec![swap("SOL", "USDC")];
+        let result = MevInspector::classify_arbitrage(&swaps, &stable_prices());
+        assert!(matches!(result, ArbitrageType::LongTail));
+    }
+
+    // ── 2-swap: TriangleArbitrage ─────────────────────────────────────────────
+
+    #[test]
+    fn two_swaps_triangle_continuous_same_token() {
+        // SOL → USDC → SOL (classic 2-hop cycle, continuous)
+        let swaps = vec![swap("SOL", "USDC"), swap("USDC", "SOL")];
+        let result = MevInspector::classify_arbitrage(&swaps, &stable_prices());
+        assert!(
+            matches!(result, ArbitrageType::TriangleArbitrage),
+            "expected TriangleArbitrage, got {:?}",
+            result
+        );
+    }
+
+    // ── 2-swap: StablecoinArbitrage ───────────────────────────────────────────
+
+    #[test]
+    fn two_swaps_stablecoin_continuous_different_endpoints() {
+        // USDC → USDT → DAI (continuous, both endpoints are stablecoins, start ≠ end)
+        let swaps = vec![swap("USDC", "USDT"), swap("USDT", "DAI")];
+        let result = MevInspector::classify_arbitrage(&swaps, &stable_prices());
+        assert!(
+            matches!(result, ArbitrageType::StablecoinArbitrage),
+            "expected StablecoinArbitrage, got {:?}",
+            result
+        );
+    }
+
+    // ── 2-swap: FALSE POSITIVE regression — non-continuous stablecoin pair ───
+    //
+    // Before the fix this returned StablecoinArbitrage. The two swaps have
+    // stable endpoints but no token flow between them (USDC→X, Y→USDT where
+    // X ≠ Y). That is not arbitrage.
+
+    #[test]
+    fn two_swaps_stablecoin_non_continuous_is_longtail() {
+        // USDC → SOL, then USDT → DAI — disconnected, both "endpoints" happen
+        // to be stablecoins but there is no arb cycle.
+        let swaps = vec![swap("USDC", "SOL"), swap("USDT", "DAI")];
+        let result = MevInspector::classify_arbitrage(&swaps, &stable_prices());
+        assert!(
+            matches!(result, ArbitrageType::LongTail),
+            "expected LongTail for non-continuous stable pair, got {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn two_swaps_stablecoin_non_continuous_same_start_end_is_cross_pair() {
+        // USDC → SOL, then BONK → USDC — same start/end token (USDC) but
+        // the path is broken (SOL ≠ BONK). CrossPair, not StablecoinArbitrage.
+        let swaps = vec![swap("USDC", "SOL"), swap("BONK", "USDC")];
+        let mut prices = stable_prices();
+        prices.insert("BONK".to_string(), 0.00001);
+        let result = MevInspector::classify_arbitrage(&swaps, &prices);
+        assert!(
+            matches!(result, ArbitrageType::CrossPairArbitrage),
+            "expected CrossPairArbitrage, got {:?}",
+            result
+        );
+    }
+
+    // ── 2-swap: CrossPairArbitrage ────────────────────────────────────────────
+
+    #[test]
+    fn two_swaps_cross_pair_same_token_non_continuous() {
+        // SOL → USDC, BONK → SOL — starts and ends with SOL but SOL ≠ BONK
+        let swaps = vec![swap("SOL", "USDC"), swap("BONK", "SOL")];
+        let result = MevInspector::classify_arbitrage(&swaps, &stable_prices());
+        assert!(
+            matches!(result, ArbitrageType::CrossPairArbitrage),
+            "expected CrossPairArbitrage, got {:?}",
+            result
+        );
+    }
+
+    // ── 2-swap: LongTail ──────────────────────────────────────────────────────
+
+    #[test]
+    fn two_swaps_different_tokens_no_stable_is_longtail() {
+        // SOL → USDC, BONK → RAY — nothing in common
+        let swaps = vec![swap("SOL", "USDC"), swap("BONK", "RAY")];
+        let result = MevInspector::classify_arbitrage(&swaps, &stable_prices());
+        assert!(
+            matches!(result, ArbitrageType::LongTail),
+            "expected LongTail, got {:?}",
+            result
+        );
+    }
+
+    // ── 3-swap: TriangleArbitrage ─────────────────────────────────────────────
+
+    #[test]
+    fn three_swaps_triangle_continuous() {
+        // SOL → USDC → BONK → SOL (full cycle, continuous)
+        let swaps = vec![
+            swap("SOL", "USDC"),
+            swap("USDC", "BONK"),
+            swap("BONK", "SOL"),
+        ];
+        let result = MevInspector::classify_arbitrage(&swaps, &stable_prices());
+        assert!(
+            matches!(result, ArbitrageType::TriangleArbitrage),
+            "expected TriangleArbitrage, got {:?}",
+            result
+        );
+    }
+
+    // ── 3-swap: CrossPairArbitrage ────────────────────────────────────────────
+
+    #[test]
+    fn three_swaps_cross_pair_non_continuous() {
+        // SOL → USDC → BONK → SOL but with a break (BONK ≠ RAY)
+        let swaps = vec![
+            swap("SOL", "USDC"),
+            swap("USDC", "RAY"),  // RAY ≠ BONK — chain is broken
+            swap("BONK", "SOL"),
+        ];
+        let result = MevInspector::classify_arbitrage(&swaps, &stable_prices());
+        assert!(
+            matches!(result, ArbitrageType::CrossPairArbitrage),
+            "expected CrossPairArbitrage, got {:?}",
+            result
+        );
+    }
+
+    // ── 3-swap: StablecoinArbitrage ───────────────────────────────────────────
+
+    #[test]
+    fn three_swaps_stablecoin_both_endpoints_stable() {
+        // USDC → SOL → BONK → USDT (first and last are stablecoins)
+        let swaps = vec![
+            swap("USDC", "SOL"),
+            swap("SOL", "BONK"),
+            swap("BONK", "USDT"),
+        ];
+        let result = MevInspector::classify_arbitrage(&swaps, &stable_prices());
+        assert!(
+            matches!(result, ArbitrageType::StablecoinArbitrage),
+            "expected StablecoinArbitrage, got {:?}",
+            result
+        );
+    }
+
+    // ── 3-swap: LongTail ──────────────────────────────────────────────────────
+
+    #[test]
+    fn three_swaps_no_cycle_no_stable_endpoints_is_longtail() {
+        // SOL → BONK → RAY → JUP — no cycle, no stable endpoints
+        let swaps = vec![
+            swap("SOL", "BONK"),
+            swap("BONK", "RAY"),
+            swap("RAY", "JUP"),
+        ];
+        let result = MevInspector::classify_arbitrage(&swaps, &stable_prices());
+        assert!(
+            matches!(result, ArbitrageType::LongTail),
+            "expected LongTail, got {:?}",
+            result
+        );
+    }
+
+    // ── is_stablecoin ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn stablecoin_within_range() {
+        let prices = stable_prices();
+        assert!(MevInspector::is_stablecoin("USDC", &prices));
+        assert!(MevInspector::is_stablecoin("USDT", &prices));
+    }
+
+    #[test]
+    fn volatile_token_not_stablecoin() {
+        let prices = stable_prices();
+        assert!(!MevInspector::is_stablecoin("SOL", &prices));
+    }
+
+    #[test]
+    fn unknown_token_not_stablecoin() {
+        let prices = stable_prices();
+        assert!(!MevInspector::is_stablecoin("UNKNOWN", &prices));
+    }
+
+    #[test]
+    fn depegged_stablecoin_not_classified_as_stable() {
+        let mut prices = stable_prices();
+        prices.insert("DEPEGGED".to_string(), 0.50); // 50 cents — clearly depegged
+        assert!(!MevInspector::is_stablecoin("DEPEGGED", &prices));
+    }
+
+    // ── sandwich pair matching ────────────────────────────────────────────────
+    //
+    // Tests for the normalised-pair + opposite-direction logic used in
+    // identify_sandwiches_lazy.
+
+    fn norm_pair<'a>(t0: &'a str, t1: &'a str) -> (&'a str, &'a str) {
+        if t0 <= t1 { (t0, t1) } else { (t1, t0) }
+    }
+
+    #[test]
+    fn sandwich_pair_matching_same_pair_opposite_direction() {
+        let front = swap("SOL", "BONK"); // buy BONK with SOL
+        let back  = swap("BONK", "SOL"); // sell BONK for SOL
+
+        let fp = norm_pair(&front.token0, &front.token1);
+        let bp = norm_pair(&back.token0, &back.token1);
+
+        assert_eq!(fp, bp, "normalised pairs should match");
+
+        let same_dir = front.token0 == back.token0 && front.token1 == back.token1;
+        assert!(!same_dir, "front and back should be in opposite directions");
+    }
+
+    #[test]
+    fn sandwich_pair_matching_same_direction_rejected() {
+        let front = swap("SOL", "BONK");
+        let back  = swap("SOL", "BONK"); // same direction — not a sandwich
+
+        let same_dir = front.token0 == back.token0 && front.token1 == back.token1;
+        assert!(same_dir, "same-direction pair should be filtered out");
+    }
+
+    #[test]
+    fn sandwich_pair_matching_different_pairs_rejected() {
+        let front = swap("SOL", "BONK");
+        let back  = swap("SOL", "RAY"); // different non-SOL token
+
+        let fp = norm_pair(&front.token0, &front.token1);
+        let bp = norm_pair(&back.token0, &back.token1);
+
+        assert_ne!(fp, bp, "different pairs should not match");
+    }
+}
