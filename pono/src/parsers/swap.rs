@@ -105,8 +105,8 @@ impl SwapParser {
                 let change = (*post as i64) - (*pre as i64);
 
                 // Only track significant balance changes for the signer (ignoring small fee changes)
-                if *account == signer && change.abs() > 10_000_000 {
-                    // > 0.01 SOL
+                if *account == signer && change.abs() > 1_000_000 {
+                    // > 0.001 SOL
                     if change > 0 {
                         // Received SOL - create incoming transfer
                         transfers.push((
@@ -251,9 +251,12 @@ impl SwapParser {
             let program_id = self.get_instruction_program_id(inst, account_keys);
             let is_token_program = match inst {
                 UiInstruction::Parsed(UiParsedInstruction::Parsed(info)) => {
-                    info.program == "spl-token"
+                    info.program == "spl-token" || info.program == "spl-token-2022"
                 }
-                _ => program_id == "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+                _ => {
+                    program_id == "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+                        || program_id == "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+                }
             };
 
             let is_system_program = match inst {
@@ -495,6 +498,7 @@ impl SwapParser {
             program_id,
             "11111111111111111111111111111111"
                 | "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+                | "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb" // Token-2022
                 | "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
                 | "ComputeBudget111111111111111111111111111111"
         )

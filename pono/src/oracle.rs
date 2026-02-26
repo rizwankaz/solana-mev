@@ -9,6 +9,10 @@ use std::sync::Arc;
 
 /// Pyth Benchmarks API symbols for major Solana tokens
 /// Source: https://benchmarks.pyth.network/docs
+///
+/// NOTE: This list only covers tokens with Pyth price feeds. For comprehensive
+/// historical pricing across all SPL / Token-2022 tokens, consider switching to
+/// Birdeye (GET /defi/history_price) which covers the full long-tail.
 const PYTH_FEEDS: &[(&str, &str)] = &[
     // (Mint Address, Benchmarks Symbol)
     (
@@ -42,6 +46,19 @@ const PYTH_FEEDS: &[(&str, &str)] = &[
     (
         "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm",
         "Crypto.WIF/USD",
+    ),
+    // Additional major MEV targets
+    (
+        "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So",
+        "Crypto.MSOL/USD",
+    ),
+    (
+        "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+        "Crypto.RAY/USD",
+    ),
+    (
+        "orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE",
+        "Crypto.ORCA/USD",
     ),
 ];
 

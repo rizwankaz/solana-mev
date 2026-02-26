@@ -22,8 +22,12 @@ pub struct MevInspector {
 struct OwnedSandwich<'a> {
     front_run_tx: &'a FetchedTransaction,
     back_run_tx: &'a FetchedTransaction,
+    /// all swaps in each leg (stored for output transparency)
     front_run_swaps: Vec<crate::types::SwapInfo>,
     back_run_swaps: Vec<crate::types::SwapInfo>,
+    /// the specific swap from each leg that forms the sandwich pattern
+    front_sandwich_swap: crate::types::SwapInfo,
+    back_sandwich_swap: crate::types::SwapInfo,
     front_run_changes: Vec<TokenChange>,
     back_run_changes: Vec<TokenChange>,
     front_run_progs: Vec<String>,
@@ -86,13 +90,10 @@ impl MevInspector {
                 return ArbitrageType::TriangleArbitrage;
             }
 
-            // Stablecoin Arbitrage (Triangle): Both tokens are stablecoins and forms a cycle
+            // Stablecoin Arbitrage: Both endpoints are stablecoins and swaps are continuous
+            // (e.g. USDC→USDT, USDT→DAI — a valid stablecoin arb path)
+            // Non-continuous stable pairs are NOT arbitrage: they're two unrelated swaps.
             if Self::is_stable_pair(first_token, last_token, price_map) && is_continuous {
-                return ArbitrageType::StablecoinArbitrage;
-            }
-
-            // Stablecoin Arbitrage (Non-Triangle): Input of Swap 1 and output of Swap 2 form a stable pair
-            if Self::is_stable_pair(first_token, last_token, price_map) {
                 return ArbitrageType::StablecoinArbitrage;
             }
 
@@ -454,31 +455,74 @@ impl MevInspector {
                     let front_swaps = swap_parser.extract_swaps(front_run_tx);
                     let back_swaps = swap_parser.extract_swaps(back_run_tx);
 
-                    if front_swaps.len() != 1 || back_swaps.len() != 1 {
+                    // Require at least 1 swap per leg; cap at 3 to avoid matching
+                    // unrelated multi-action transactions.
+                    if front_swaps.is_empty()
+                        || back_swaps.is_empty()
+                        || front_swaps.len() > 3
+                        || back_swaps.len() > 3
+                    {
                         continue;
                     }
 
-                    let front_swap = &front_swaps[0];
-                    let back_swap = &back_swaps[0];
+                    // Find the pair of swaps (one from each leg) that form the sandwich:
+                    // same normalised token pair, opposite directions.
+                    let sandwich_pair = front_swaps.iter().find_map(|fs| {
+                        let fp = if fs.token0 <= fs.token1 {
+                            (fs.token0.as_str(), fs.token1.as_str())
+                        } else {
+                            (fs.token1.as_str(), fs.token0.as_str())
+                        };
+                        back_swaps.iter().find_map(|bs| {
+                            let bp = if bs.token0 <= bs.token1 {
+                                (bs.token0.as_str(), bs.token1.as_str())
+                            } else {
+                                (bs.token1.as_str(), bs.token0.as_str())
+                            };
+                            let same_pair = fp == bp;
+                            let opposite_dir =
+                                !(fs.token0 == bs.token0 && fs.token1 == bs.token1);
+                            if same_pair && opposite_dir {
+                                Some((fs.clone(), bs.clone()))
+                            } else {
+                                None
+                            }
+                        })
+                    });
 
-                    let front_pair = if front_swap.token0 < front_swap.token1 {
-                        (&front_swap.token0, &front_swap.token1)
-                    } else {
-                        (&front_swap.token1, &front_swap.token0)
+                    let (front_swap, back_swap) = match sandwich_pair {
+                        Some(pair) => pair,
+                        None => continue,
                     };
-                    let back_pair = if back_swap.token0 < back_swap.token1 {
-                        (&back_swap.token0, &back_swap.token1)
+
+                    // Confirm at least one victim between the two legs is actually
+                    // trading the same token pair — rules out coincidental same-signer
+                    // pairs surrounding an unrelated transaction.
+                    let norm_pair = if front_swap.token0 <= front_swap.token1 {
+                        (front_swap.token0.as_str(), front_swap.token1.as_str())
                     } else {
-                        (&back_swap.token1, &back_swap.token0)
+                        (front_swap.token1.as_str(), front_swap.token0.as_str())
                     };
+                    let victim_trades_same_pair = transactions
+                        .iter()
+                        .filter(|tx| {
+                            tx.index > front_run_tx.index
+                                && tx.index < back_run_tx.index
+                                && tx.is_success()
+                        })
+                        .filter(|tx| tx.signer().map(|s| s != *signer).unwrap_or(false))
+                        .any(|tx| {
+                            swap_parser.extract_swaps(tx).iter().any(|swap| {
+                                let vp = if swap.token0 <= swap.token1 {
+                                    (swap.token0.as_str(), swap.token1.as_str())
+                                } else {
+                                    (swap.token1.as_str(), swap.token0.as_str())
+                                };
+                                vp == norm_pair
+                            })
+                        });
 
-                    if front_pair != back_pair {
-                        continue;
-                    }
-
-                    let same_direction = front_swap.token0 == back_swap.token0
-                        && front_swap.token1 == back_swap.token1;
-                    if same_direction {
+                    if !victim_trades_same_pair {
                         continue;
                     }
 
@@ -515,6 +559,8 @@ impl MevInspector {
                     candidates.push(OwnedSandwich {
                         front_run_tx,
                         back_run_tx,
+                        front_sandwich_swap: front_swap,
+                        back_sandwich_swap: back_swap,
                         front_run_swaps: front_swaps,
                         back_run_swaps: back_swaps,
                         front_run_changes: front_changes,
@@ -551,8 +597,8 @@ impl MevInspector {
                 &candidate.back_run_tx.signature[..12]
             );
 
-            let front_swap = &candidate.front_run_swaps[0];
-            let back_swap = &candidate.back_run_swaps[0];
+            let front_swap = &candidate.front_sandwich_swap;
+            let back_swap = &candidate.back_sandwich_swap;
 
             tracing::debug!(
                 "    front swap: token0={} amount0={}, token1={} amount1={}",
@@ -608,13 +654,16 @@ impl MevInspector {
                 profit_in_token
             );
 
-            let token_price = price_map.get(payment_token).copied().unwrap_or_else(|| {
-                if payment_token == "So11111111111111111111111111111111111111112" {
-                    130.0 // default?
-                } else {
-                    1.0 // probably a stable
+            let (token_price, unsupported_profit_tokens) = {
+                const SOL_MINT: &str = "So11111111111111111111111111111111111111112";
+                match price_map.get(payment_token).copied() {
+                    Some(p) => (p, vec![]),
+                    None if payment_token == SOL_MINT => (130.0, vec![]),
+                    // Unknown token: assume $1 (likely a stablecoin) but flag it so
+                    // callers know the profit figure may be wrong for volatile tokens.
+                    None => (1.0, vec![payment_token.to_string()]),
                 }
-            });
+            };
 
             let revenue_usd = profit_in_token.max(0.0) * token_price;
 
@@ -626,10 +675,9 @@ impl MevInspector {
             let sol_price = price_map
                 .get("So11111111111111111111111111111111111111112")
                 .copied()
-                .unwrap_or(127.0);
+                .unwrap_or(130.0);
             let fees_usd = (total_fees + total_jito_tips) as f64 / 1_000_000_000.0 * sol_price;
             let profit_usd = revenue_usd - fees_usd;
-            let unsupported_profit_tokens: Vec<String> = vec![];
 
             tracing::debug!(
                 "  profitability: revenue=${:.4}, fees=${:.4}, profit=${:.4}",
