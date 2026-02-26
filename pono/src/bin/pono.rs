@@ -199,6 +199,9 @@ async fn analyze_slot_summary(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Load .env if present — silently ignored if the file doesn't exist
+    let _ = dotenvy::dotenv();
+
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),

@@ -1,75 +1,25 @@
 use anyhow::Result;
 use dashmap::DashMap;
 use serde::Deserialize;
-use std::collections::HashMap;
 use std::sync::Arc;
 
-// claude wrote this because i cannot pay for an oracle atm
-// revisit
-
-/// Pyth Benchmarks API symbols for major Solana tokens
-/// Source: https://benchmarks.pyth.network/docs
-///
-/// NOTE: This list only covers tokens with Pyth price feeds. For comprehensive
-/// historical pricing across all SPL / Token-2022 tokens, consider switching to
-/// Birdeye (GET /defi/history_price) which covers the full long-tail.
-const PYTH_FEEDS: &[(&str, &str)] = &[
-    // (Mint Address, Benchmarks Symbol)
-    (
-        "So11111111111111111111111111111111111111112",
-        "Crypto.SOL/USD",
-    ),
-    (
-        "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-        "Crypto.USDC/USD",
-    ),
-    (
-        "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
-        "Crypto.USDT/USD",
-    ),
-    (
-        "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
-        "Crypto.BONK/USD",
-    ),
-    (
-        "jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL",
-        "Crypto.JTO/USD",
-    ),
-    (
-        "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3",
-        "Crypto.PYTH/USD",
-    ),
-    (
-        "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
-        "Crypto.JUP/USD",
-    ),
-    (
-        "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm",
-        "Crypto.WIF/USD",
-    ),
-    // Additional major MEV targets
-    (
-        "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So",
-        "Crypto.MSOL/USD",
-    ),
-    (
-        "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
-        "Crypto.RAY/USD",
-    ),
-    (
-        "orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE",
-        "Crypto.ORCA/USD",
-    ),
-];
-
-/// Response from Pyth Benchmarks TradingView history API
+/// Birdeye /defi/history_price response
 #[derive(Debug, Deserialize)]
-struct BenchmarksResponse {
-    #[serde(rename = "c")]
-    close: Vec<f64>,
-    #[serde(rename = "t")]
-    time: Vec<i64>,
-    s: String, // status: "ok" or "no_data"
+struct BirdeyeResponse {
+    success: bool,
+    data: BirdeyeData,
+}
+
+#[derive(Debug, Deserialize)]
+struct BirdeyeData {
+    items: Vec<BirdeyePricePoint>,
+}
+
+#[derive(Debug, Deserialize)]
+struct BirdeyePricePoint {
+    #[serde(rename = "unixTime")]
+    unix_time: i64,
+    value: f64,
 }
 
 /// Price data from oracle
@@ -79,54 +29,52 @@ pub struct PriceData {
     pub timestamp: i64,
 }
 
-/// Oracle client for fetching historical token prices via Pyth Benchmarks API
+/// Oracle client — fetches historical token prices from Birdeye.
+///
+/// Requires the environment variable `BIRDEYE_API_KEY` to be set.
+/// Covers any SPL or Token-2022 token; no hardcoded symbol list needed.
 pub struct OracleClient {
     http_client: reqwest::Client,
     price_cache: Arc<DashMap<String, PriceData>>,
     timestamp: i64,
-    symbol_map: HashMap<String, String>, // mint -> Benchmarks symbol
+    api_key: String,
 }
 
 impl OracleClient {
     pub fn new(_slot: u64, timestamp: i64, _rpc_url: String) -> Self {
-        // Build the symbol map (mint -> Benchmarks symbol)
-        let symbol_map: HashMap<String, String> = PYTH_FEEDS
-            .iter()
-            .map(|(mint, symbol)| (mint.to_string(), symbol.to_string()))
-            .collect();
+        let api_key = std::env::var("BIRDEYE_API_KEY").unwrap_or_default();
+        if api_key.is_empty() {
+            tracing::warn!("BIRDEYE_API_KEY not set — token prices will be unavailable");
+        }
 
         Self {
             http_client: reqwest::Client::new(),
             price_cache: Arc::new(DashMap::new()),
             timestamp,
-            symbol_map,
+            api_key,
         }
     }
 
-    /// Batch fetch historical prices for multiple mints using Pyth Benchmarks API
+    /// Batch-fetch historical prices for multiple mints in parallel.
     pub async fn batch_get_prices(&self, mints: &[&str]) -> Vec<(String, f64)> {
         if mints.is_empty() {
             return Vec::new();
         }
 
-        // Separate cached and uncached mints
         let mut results = Vec::with_capacity(mints.len());
-        let mut uncached_mints = Vec::new();
+        let mut uncached = Vec::new();
 
         for &mint in mints {
             if let Some(cached) = self.price_cache.get(mint) {
                 results.push((mint.to_string(), cached.price_usd));
             } else {
-                uncached_mints.push(mint);
+                uncached.push(mint);
             }
         }
 
-        // Fetch uncached prices from Pyth Benchmarks API at the specific timestamp
-        if !uncached_mints.is_empty() {
-            let fetched = self.fetch_benchmarks_prices(&uncached_mints).await;
-
+        if !uncached.is_empty() {
+            let fetched = self.fetch_birdeye_prices(&uncached).await;
             for (mint, price) in fetched {
-                // Cache the price
                 self.price_cache.insert(
                     mint.clone(),
                     PriceData {
@@ -141,19 +89,15 @@ impl OracleClient {
         results
     }
 
-    /// Get USD price for a token at the slot timestamp (single fetch)
+    /// Get USD price for a single token at the slot timestamp.
     pub async fn get_price_usd(&self, mint: &str) -> Result<f64> {
-        // Check cache first
         if let Some(cached) = self.price_cache.get(mint) {
             return Ok(cached.price_usd);
         }
 
-        // Fetch from Pyth Benchmarks API (single token, historical price)
-        let prices = self.fetch_benchmarks_prices(&[mint]).await;
-
+        let prices = self.fetch_birdeye_prices(&[mint]).await;
         let price = prices.first().map(|(_, p)| *p).unwrap_or(0.0);
 
-        // Cache the price
         self.price_cache.insert(
             mint.to_string(),
             PriceData {
@@ -165,110 +109,112 @@ impl OracleClient {
         Ok(price)
     }
 
-    /// Fetch historical prices from Pyth Benchmarks API at specific timestamp
-    /// Uses TradingView-style history endpoint for accurate historical prices
-    /// Fetches all prices in parallel for better performance
-    async fn fetch_benchmarks_prices(&self, mints: &[&str]) -> Vec<(String, f64)> {
+    /// Fetch historical prices from Birdeye in parallel.
+    ///
+    /// Uses `GET /defi/history_price?address=<mint>&address_type=token&type=1m`
+    /// with a ±5 min window around the block timestamp, then picks the closest
+    /// data point. Works for any SPL or Token-2022 token.
+    async fn fetch_birdeye_prices(&self, mints: &[&str]) -> Vec<(String, f64)> {
+        if self.api_key.is_empty() {
+            return mints.iter().map(|m| (m.to_string(), 0.0)).collect();
+        }
+
         tracing::debug!(
-            "Fetching historical prices for {} tokens from Pyth Benchmarks at timestamp {}",
+            "Fetching historical prices for {} tokens from Birdeye at timestamp {}",
             mints.len(),
             self.timestamp
         );
 
-        // Create parallel futures for all mints
-        let futures: Vec<_> = mints.iter().map(|&mint| {
-            let symbol = self.symbol_map.get(mint).cloned();
-            let http_client = self.http_client.clone();
-            let timestamp = self.timestamp;
-            let mint_owned = mint.to_string();
+        let from = self.timestamp - 300;
+        let to = self.timestamp + 300;
+        let target = self.timestamp;
 
-            async move {
-                // Check if we have a Benchmarks symbol for this mint
-                let symbol = match symbol {
-                    Some(s) => s,
-                    None => {
-                        tracing::debug!("No Pyth Benchmarks symbol for token: {}", mint_owned);
+        let futures: Vec<_> = mints
+            .iter()
+            .map(|&mint| {
+                let http_client = self.http_client.clone();
+                let api_key = self.api_key.clone();
+                let mint_owned = mint.to_string();
+
+                async move {
+                    let url = format!(
+                        "https://public-api.birdeye.so/defi/history_price\
+                         ?address={}&address_type=token&type=1m&time_from={}&time_to={}",
+                        mint_owned, from, to
+                    );
+
+                    let resp = match http_client
+                        .get(&url)
+                        .header("X-API-KEY", &api_key)
+                        .header("x-chain", "solana")
+                        .send()
+                        .await
+                    {
+                        Ok(r) => r,
+                        Err(e) => {
+                            tracing::error!("Birdeye request failed for {}: {:?}", mint_owned, e);
+                            return (mint_owned, 0.0);
+                        }
+                    };
+
+                    let body: BirdeyeResponse = match resp.json().await {
+                        Ok(b) => b,
+                        Err(e) => {
+                            tracing::error!(
+                                "Birdeye parse failed for {}: {:?}",
+                                mint_owned,
+                                e
+                            );
+                            return (mint_owned, 0.0);
+                        }
+                    };
+
+                    if !body.success || body.data.items.is_empty() {
+                        tracing::warn!(
+                            "No Birdeye price data for {} at timestamp {}",
+                            mint_owned,
+                            target
+                        );
                         return (mint_owned, 0.0);
                     }
-                };
 
-                // Query a small time window around the target timestamp (±5 minutes)
-                let from = timestamp - 300;
-                let to = timestamp + 300;
+                    // Pick the data point closest to the block timestamp
+                    let best = body
+                        .data
+                        .items
+                        .iter()
+                        .min_by_key(|p| (p.unix_time - target).abs())
+                        .map(|p| p.value)
+                        .unwrap_or(0.0);
 
-                // Build the Benchmarks API URL
-                let url = format!(
-                    "https://benchmarks.pyth.network/v1/shims/tradingview/history?symbol={}&resolution=1&from={}&to={}",
-                    symbol, from, to
-                );
+                    tracing::debug!(
+                        "Birdeye price for {} at {}: ${}",
+                        mint_owned,
+                        target,
+                        best
+                    );
 
-                tracing::debug!("Requesting historical price from: {}", url);
-
-                // Make HTTP request
-                let response = match http_client.get(&url).send().await {
-                    Ok(resp) => resp,
-                    Err(e) => {
-                        tracing::error!("Failed to fetch price for {} ({}): {:?}", mint_owned, symbol, e);
-                        return (mint_owned, 0.0);
-                    }
-                };
-
-                // Parse JSON response
-                let benchmarks_data: BenchmarksResponse = match response.json().await {
-                    Ok(data) => data,
-                    Err(e) => {
-                        tracing::error!("Failed to parse response for {} ({}): {:?}", mint_owned, symbol, e);
-                        return (mint_owned, 0.0);
-                    }
-                };
-
-                // Check status and extract price
-                if benchmarks_data.s != "ok" || benchmarks_data.close.is_empty() {
-                    tracing::warn!("No price data available for {} ({}) at timestamp {}", mint_owned, symbol, timestamp);
-                    return (mint_owned, 0.0);
+                    (mint_owned, best)
                 }
+            })
+            .collect();
 
-                // Find the price closest to our target timestamp
-                let mut best_price = benchmarks_data.close[0];
-                let mut best_diff = (benchmarks_data.time[0] - timestamp).abs();
-
-                for i in 1..benchmarks_data.close.len() {
-                    let diff = (benchmarks_data.time[i] - timestamp).abs();
-                    if diff < best_diff {
-                        best_diff = diff;
-                        best_price = benchmarks_data.close[i];
-                    }
-                }
-
-                tracing::debug!(
-                    "Historical price for {} ({}) at timestamp {}: ${}",
-                    mint_owned,
-                    symbol,
-                    timestamp,
-                    best_price
-                );
-
-                (mint_owned, best_price)
-            }
-        }).collect();
-
-        // Execute all futures in parallel
         let results = futures::future::join_all(futures).await;
 
-        let successful_prices = results.iter().filter(|(_, p)| *p > 0.0).count();
+        let n_ok = results.iter().filter(|(_, p)| *p > 0.0).count();
         tracing::debug!(
-            "Fetched {}/{} historical prices successfully from Pyth Benchmarks",
-            successful_prices,
+            "Birdeye: fetched {}/{} prices successfully",
+            n_ok,
             mints.len()
         );
 
         results
     }
 
-    /// Calculate USD value from token amount
+    /// Calculate USD value from a raw token amount.
     pub async fn calculate_usd_value(&self, mint: &str, amount: f64, decimals: u8) -> Result<f64> {
         let price = self.get_price_usd(mint).await?;
-        let adjusted_amount = amount / 10_f64.powi(decimals as i32);
-        Ok(adjusted_amount * price)
+        let adjusted = amount / 10_f64.powi(decimals as i32);
+        Ok(adjusted * price)
     }
 }
